@@ -1,0 +1,62 @@
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+count.txt
+.env
+.nitro
+.tanstack
+.wrangler
+.output
+.vinxi
+todos.json
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+.output/
+dist/
+build/
+
+# Environment variables - IMPORTANT: keeps API keys private
+.env
+.env.local
+.env.development
+.env.production
+.env*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# claude
+CLAUDE.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Cache
+.cache/
+.turbo/
+*.tsbuildinfo
+
+# Testing
+coverage/
+
+# Misc
+.nitro/
+
+# Database
+*.sql
+
