@@ -23,7 +23,7 @@ export const registerAttendee = createServerFn({ method: 'POST' })
     const supabase = getSupabase()
 
     const { data: attendee, error } = await supabase
-      .from('attendees')
+      .from('event_registrations')
       .insert({
         name: data.name,
         age: data.age,
@@ -57,7 +57,7 @@ export const getAttendees = createServerFn({ method: 'GET' })
     const supabase = getSupabase()
 
     let query = supabase
-      .from('attendees')
+      .from('event_registrations')
       .select('*')
       .order('registered_at', { ascending: false })
 
@@ -90,7 +90,7 @@ export const getAttendee = createServerFn({ method: 'GET' })
     const supabase = getSupabase()
 
     const { data: attendee, error } = await supabase
-      .from('attendees')
+      .from('event_registrations')
       .select('*')
       .eq('id', id)
       .single()
@@ -118,7 +118,7 @@ export const updateAttendeeAI = createServerFn({ method: 'POST' })
     const supabase = getSupabase()
 
     const { data: attendee, error } = await supabase
-      .from('attendees')
+      .from('event_registrations')
       .update({
         spiritual_score: data.spiritual_score,
         spiritual_sentiment: data.spiritual_sentiment,
@@ -149,7 +149,7 @@ export const purgeAllAttendees = createServerFn({ method: 'POST' })
     const supabase = getSupabase()
 
     // Use gt (greater than) with a null UUID to delete all rows
-    const { error } = await supabase.from('attendees').delete().gte('created_at', '1970-01-01')
+    const { error } = await supabase.from('event_registrations').delete().gte('created_at', '1970-01-01')
 
     if (error) {
       console.error('Purge error:', error)
@@ -165,7 +165,7 @@ export const getAttendeeCount = createServerFn({ method: 'GET' }).handler(
     const supabase = getSupabase()
 
     const { count, error } = await supabase
-      .from('attendees')
+      .from('event_registrations')
       .select('*', { count: 'exact', head: true })
 
     if (error) {
@@ -183,7 +183,7 @@ export const getLatestRegistrant = createServerFn({ method: 'GET' }).handler(
     const supabase = getSupabase()
 
     const { data, error } = await supabase
-      .from('attendees')
+      .from('event_registrations')
       .select('name')
       .order('registered_at', { ascending: false })
       .limit(1)
@@ -208,7 +208,7 @@ export const getRecentRegistrants = createServerFn({ method: 'GET' })
     const supabase = getSupabase()
 
     const { data, error } = await supabase
-      .from('attendees')
+      .from('event_registrations')
       .select('name, registered_at')
       .order('registered_at', { ascending: false })
       .limit(count)
@@ -228,6 +228,7 @@ export const getRecentRegistrants = createServerFn({ method: 'GET' })
 const seedDataSchema = z.object({
   pin: z.string(),
   count: z.number().min(1).max(100).default(30),
+  eventId: z.string().uuid().optional(),
 })
 
 export const seedTestData = createServerFn({ method: 'POST' })
@@ -341,11 +342,12 @@ export const seedTestData = createServerFn({ method: 'POST' })
         discipleship_stage: stage,
         spiritual_description: description,
         registered_at: registeredAt,
+        ...(data.eventId ? { event_id: data.eventId } : {}),
       }
     })
 
     const { data: inserted, error } = await supabase
-      .from('attendees')
+      .from('event_registrations')
       .insert(testAttendees)
       .select()
 

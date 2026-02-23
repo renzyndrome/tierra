@@ -12,7 +12,28 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as DisplayRouteImport } from './routes/display'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ProfileIndexRouteImport } from './routes/profile/index'
+import { Route as EventIndexRouteImport } from './routes/event/index'
+import { Route as DirectoryIndexRouteImport } from './routes/directory/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as ProfileSettingsRouteImport } from './routes/profile/settings'
+import { Route as EventOldIndexBackupRouteImport } from './routes/event/old-index-backup'
+import { Route as EventEventIdRouteImport } from './routes/event/$eventId'
+import { Route as AuthRegisterRouteImport } from './routes/auth/register'
+import { Route as AuthLoginRouteImport } from './routes/auth/login'
+import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as DirectoryMinistriesIndexRouteImport } from './routes/directory/ministries/index'
+import { Route as DirectoryMembersIndexRouteImport } from './routes/directory/members/index'
+import { Route as DirectoryCellGroupsIndexRouteImport } from './routes/directory/cell-groups/index'
+import { Route as AdminMembersIndexRouteImport } from './routes/admin/members/index'
+import { Route as DirectoryMinistriesMinistryIdRouteImport } from './routes/directory/ministries/$ministryId'
+import { Route as DirectoryMembersMemberIdRouteImport } from './routes/directory/members/$memberId'
+import { Route as DirectoryCellGroupsGroupIdRouteImport } from './routes/directory/cell-groups/$groupId'
+import { Route as AdminMinistriesMinistryIdRouteImport } from './routes/admin/ministries/$ministryId'
+import { Route as AdminMembersNewRouteImport } from './routes/admin/members/new'
+import { Route as AdminCellGroupsGroupIdRouteImport } from './routes/admin/cell-groups/$groupId'
+import { Route as AdminMembersMemberIdEditRouteImport } from './routes/admin/members/$memberId/edit'
 
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
@@ -29,44 +50,316 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfileIndexRoute = ProfileIndexRouteImport.update({
+  id: '/profile/',
+  path: '/profile/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventIndexRoute = EventIndexRouteImport.update({
+  id: '/event/',
+  path: '/event/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DirectoryIndexRoute = DirectoryIndexRouteImport.update({
+  id: '/directory/',
+  path: '/directory/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfileSettingsRoute = ProfileSettingsRouteImport.update({
+  id: '/profile/settings',
+  path: '/profile/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventOldIndexBackupRoute = EventOldIndexBackupRouteImport.update({
+  id: '/event/old-index-backup',
+  path: '/event/old-index-backup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventEventIdRoute = EventEventIdRouteImport.update({
+  id: '/event/$eventId',
+  path: '/event/$eventId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRegisterRoute = AuthRegisterRouteImport.update({
+  id: '/auth/register',
+  path: '/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthLoginRoute = AuthLoginRouteImport.update({
+  id: '/auth/login',
+  path: '/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
+  id: '/auth/forgot-password',
+  path: '/auth/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DirectoryMinistriesIndexRoute =
+  DirectoryMinistriesIndexRouteImport.update({
+    id: '/directory/ministries/',
+    path: '/directory/ministries/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DirectoryMembersIndexRoute = DirectoryMembersIndexRouteImport.update({
+  id: '/directory/members/',
+  path: '/directory/members/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DirectoryCellGroupsIndexRoute =
+  DirectoryCellGroupsIndexRouteImport.update({
+    id: '/directory/cell-groups/',
+    path: '/directory/cell-groups/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminMembersIndexRoute = AdminMembersIndexRouteImport.update({
+  id: '/admin/members/',
+  path: '/admin/members/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DirectoryMinistriesMinistryIdRoute =
+  DirectoryMinistriesMinistryIdRouteImport.update({
+    id: '/directory/ministries/$ministryId',
+    path: '/directory/ministries/$ministryId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DirectoryMembersMemberIdRoute =
+  DirectoryMembersMemberIdRouteImport.update({
+    id: '/directory/members/$memberId',
+    path: '/directory/members/$memberId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DirectoryCellGroupsGroupIdRoute =
+  DirectoryCellGroupsGroupIdRouteImport.update({
+    id: '/directory/cell-groups/$groupId',
+    path: '/directory/cell-groups/$groupId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminMinistriesMinistryIdRoute =
+  AdminMinistriesMinistryIdRouteImport.update({
+    id: '/admin/ministries/$ministryId',
+    path: '/admin/ministries/$ministryId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminMembersNewRoute = AdminMembersNewRouteImport.update({
+  id: '/admin/members/new',
+  path: '/admin/members/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCellGroupsGroupIdRoute = AdminCellGroupsGroupIdRouteImport.update({
+  id: '/admin/cell-groups/$groupId',
+  path: '/admin/cell-groups/$groupId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminMembersMemberIdEditRoute =
+  AdminMembersMemberIdEditRouteImport.update({
+    id: '/admin/members/$memberId/edit',
+    path: '/admin/members/$memberId/edit',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/display': typeof DisplayRoute
   '/register': typeof RegisterRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
+  '/auth/login': typeof AuthLoginRoute
+  '/auth/register': typeof AuthRegisterRoute
+  '/event/$eventId': typeof EventEventIdRoute
+  '/event/old-index-backup': typeof EventOldIndexBackupRoute
+  '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
+  '/directory': typeof DirectoryIndexRoute
+  '/event': typeof EventIndexRoute
+  '/profile': typeof ProfileIndexRoute
+  '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
+  '/admin/members/new': typeof AdminMembersNewRoute
+  '/admin/ministries/$ministryId': typeof AdminMinistriesMinistryIdRoute
+  '/directory/cell-groups/$groupId': typeof DirectoryCellGroupsGroupIdRoute
+  '/directory/members/$memberId': typeof DirectoryMembersMemberIdRoute
+  '/directory/ministries/$ministryId': typeof DirectoryMinistriesMinistryIdRoute
+  '/admin/members': typeof AdminMembersIndexRoute
+  '/directory/cell-groups': typeof DirectoryCellGroupsIndexRoute
+  '/directory/members': typeof DirectoryMembersIndexRoute
+  '/directory/ministries': typeof DirectoryMinistriesIndexRoute
+  '/admin/members/$memberId/edit': typeof AdminMembersMemberIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/display': typeof DisplayRoute
   '/register': typeof RegisterRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
+  '/auth/login': typeof AuthLoginRoute
+  '/auth/register': typeof AuthRegisterRoute
+  '/event/$eventId': typeof EventEventIdRoute
+  '/event/old-index-backup': typeof EventOldIndexBackupRoute
+  '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
+  '/directory': typeof DirectoryIndexRoute
+  '/event': typeof EventIndexRoute
+  '/profile': typeof ProfileIndexRoute
+  '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
+  '/admin/members/new': typeof AdminMembersNewRoute
+  '/admin/ministries/$ministryId': typeof AdminMinistriesMinistryIdRoute
+  '/directory/cell-groups/$groupId': typeof DirectoryCellGroupsGroupIdRoute
+  '/directory/members/$memberId': typeof DirectoryMembersMemberIdRoute
+  '/directory/ministries/$ministryId': typeof DirectoryMinistriesMinistryIdRoute
+  '/admin/members': typeof AdminMembersIndexRoute
+  '/directory/cell-groups': typeof DirectoryCellGroupsIndexRoute
+  '/directory/members': typeof DirectoryMembersIndexRoute
+  '/directory/ministries': typeof DirectoryMinistriesIndexRoute
+  '/admin/members/$memberId/edit': typeof AdminMembersMemberIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/display': typeof DisplayRoute
   '/register': typeof RegisterRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
+  '/auth/login': typeof AuthLoginRoute
+  '/auth/register': typeof AuthRegisterRoute
+  '/event/$eventId': typeof EventEventIdRoute
+  '/event/old-index-backup': typeof EventOldIndexBackupRoute
+  '/profile/settings': typeof ProfileSettingsRoute
   '/admin/': typeof AdminIndexRoute
+  '/directory/': typeof DirectoryIndexRoute
+  '/event/': typeof EventIndexRoute
+  '/profile/': typeof ProfileIndexRoute
+  '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
+  '/admin/members/new': typeof AdminMembersNewRoute
+  '/admin/ministries/$ministryId': typeof AdminMinistriesMinistryIdRoute
+  '/directory/cell-groups/$groupId': typeof DirectoryCellGroupsGroupIdRoute
+  '/directory/members/$memberId': typeof DirectoryMembersMemberIdRoute
+  '/directory/ministries/$ministryId': typeof DirectoryMinistriesMinistryIdRoute
+  '/admin/members/': typeof AdminMembersIndexRoute
+  '/directory/cell-groups/': typeof DirectoryCellGroupsIndexRoute
+  '/directory/members/': typeof DirectoryMembersIndexRoute
+  '/directory/ministries/': typeof DirectoryMinistriesIndexRoute
+  '/admin/members/$memberId/edit': typeof AdminMembersMemberIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/display' | '/register' | '/admin'
+  fullPaths:
+    | '/'
+    | '/display'
+    | '/register'
+    | '/auth/callback'
+    | '/auth/forgot-password'
+    | '/auth/login'
+    | '/auth/register'
+    | '/event/$eventId'
+    | '/event/old-index-backup'
+    | '/profile/settings'
+    | '/admin'
+    | '/directory'
+    | '/event'
+    | '/profile'
+    | '/admin/cell-groups/$groupId'
+    | '/admin/members/new'
+    | '/admin/ministries/$ministryId'
+    | '/directory/cell-groups/$groupId'
+    | '/directory/members/$memberId'
+    | '/directory/ministries/$ministryId'
+    | '/admin/members'
+    | '/directory/cell-groups'
+    | '/directory/members'
+    | '/directory/ministries'
+    | '/admin/members/$memberId/edit'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/display' | '/register' | '/admin'
-  id: '__root__' | '/' | '/display' | '/register' | '/admin/'
+  to:
+    | '/'
+    | '/display'
+    | '/register'
+    | '/auth/callback'
+    | '/auth/forgot-password'
+    | '/auth/login'
+    | '/auth/register'
+    | '/event/$eventId'
+    | '/event/old-index-backup'
+    | '/profile/settings'
+    | '/admin'
+    | '/directory'
+    | '/event'
+    | '/profile'
+    | '/admin/cell-groups/$groupId'
+    | '/admin/members/new'
+    | '/admin/ministries/$ministryId'
+    | '/directory/cell-groups/$groupId'
+    | '/directory/members/$memberId'
+    | '/directory/ministries/$ministryId'
+    | '/admin/members'
+    | '/directory/cell-groups'
+    | '/directory/members'
+    | '/directory/ministries'
+    | '/admin/members/$memberId/edit'
+  id:
+    | '__root__'
+    | '/'
+    | '/display'
+    | '/register'
+    | '/auth/callback'
+    | '/auth/forgot-password'
+    | '/auth/login'
+    | '/auth/register'
+    | '/event/$eventId'
+    | '/event/old-index-backup'
+    | '/profile/settings'
+    | '/admin/'
+    | '/directory/'
+    | '/event/'
+    | '/profile/'
+    | '/admin/cell-groups/$groupId'
+    | '/admin/members/new'
+    | '/admin/ministries/$ministryId'
+    | '/directory/cell-groups/$groupId'
+    | '/directory/members/$memberId'
+    | '/directory/ministries/$ministryId'
+    | '/admin/members/'
+    | '/directory/cell-groups/'
+    | '/directory/members/'
+    | '/directory/ministries/'
+    | '/admin/members/$memberId/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DisplayRoute: typeof DisplayRoute
   RegisterRoute: typeof RegisterRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
+  AuthLoginRoute: typeof AuthLoginRoute
+  AuthRegisterRoute: typeof AuthRegisterRoute
+  EventEventIdRoute: typeof EventEventIdRoute
+  EventOldIndexBackupRoute: typeof EventOldIndexBackupRoute
+  ProfileSettingsRoute: typeof ProfileSettingsRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  DirectoryIndexRoute: typeof DirectoryIndexRoute
+  EventIndexRoute: typeof EventIndexRoute
+  ProfileIndexRoute: typeof ProfileIndexRoute
+  AdminCellGroupsGroupIdRoute: typeof AdminCellGroupsGroupIdRoute
+  AdminMembersNewRoute: typeof AdminMembersNewRoute
+  AdminMinistriesMinistryIdRoute: typeof AdminMinistriesMinistryIdRoute
+  DirectoryCellGroupsGroupIdRoute: typeof DirectoryCellGroupsGroupIdRoute
+  DirectoryMembersMemberIdRoute: typeof DirectoryMembersMemberIdRoute
+  DirectoryMinistriesMinistryIdRoute: typeof DirectoryMinistriesMinistryIdRoute
+  AdminMembersIndexRoute: typeof AdminMembersIndexRoute
+  DirectoryCellGroupsIndexRoute: typeof DirectoryCellGroupsIndexRoute
+  DirectoryMembersIndexRoute: typeof DirectoryMembersIndexRoute
+  DirectoryMinistriesIndexRoute: typeof DirectoryMinistriesIndexRoute
+  AdminMembersMemberIdEditRoute: typeof AdminMembersMemberIdEditRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -92,11 +385,158 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profile/': {
+      id: '/profile/'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/event/': {
+      id: '/event/'
+      path: '/event'
+      fullPath: '/event'
+      preLoaderRoute: typeof EventIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory/': {
+      id: '/directory/'
+      path: '/directory'
+      fullPath: '/directory'
+      preLoaderRoute: typeof DirectoryIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile/settings': {
+      id: '/profile/settings'
+      path: '/profile/settings'
+      fullPath: '/profile/settings'
+      preLoaderRoute: typeof ProfileSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/event/old-index-backup': {
+      id: '/event/old-index-backup'
+      path: '/event/old-index-backup'
+      fullPath: '/event/old-index-backup'
+      preLoaderRoute: typeof EventOldIndexBackupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/event/$eventId': {
+      id: '/event/$eventId'
+      path: '/event/$eventId'
+      fullPath: '/event/$eventId'
+      preLoaderRoute: typeof EventEventIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/register': {
+      id: '/auth/register'
+      path: '/auth/register'
+      fullPath: '/auth/register'
+      preLoaderRoute: typeof AuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/login': {
+      id: '/auth/login'
+      path: '/auth/login'
+      fullPath: '/auth/login'
+      preLoaderRoute: typeof AuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/forgot-password': {
+      id: '/auth/forgot-password'
+      path: '/auth/forgot-password'
+      fullPath: '/auth/forgot-password'
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory/ministries/': {
+      id: '/directory/ministries/'
+      path: '/directory/ministries'
+      fullPath: '/directory/ministries'
+      preLoaderRoute: typeof DirectoryMinistriesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory/members/': {
+      id: '/directory/members/'
+      path: '/directory/members'
+      fullPath: '/directory/members'
+      preLoaderRoute: typeof DirectoryMembersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory/cell-groups/': {
+      id: '/directory/cell-groups/'
+      path: '/directory/cell-groups'
+      fullPath: '/directory/cell-groups'
+      preLoaderRoute: typeof DirectoryCellGroupsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/members/': {
+      id: '/admin/members/'
+      path: '/admin/members'
+      fullPath: '/admin/members'
+      preLoaderRoute: typeof AdminMembersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory/ministries/$ministryId': {
+      id: '/directory/ministries/$ministryId'
+      path: '/directory/ministries/$ministryId'
+      fullPath: '/directory/ministries/$ministryId'
+      preLoaderRoute: typeof DirectoryMinistriesMinistryIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory/members/$memberId': {
+      id: '/directory/members/$memberId'
+      path: '/directory/members/$memberId'
+      fullPath: '/directory/members/$memberId'
+      preLoaderRoute: typeof DirectoryMembersMemberIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory/cell-groups/$groupId': {
+      id: '/directory/cell-groups/$groupId'
+      path: '/directory/cell-groups/$groupId'
+      fullPath: '/directory/cell-groups/$groupId'
+      preLoaderRoute: typeof DirectoryCellGroupsGroupIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/ministries/$ministryId': {
+      id: '/admin/ministries/$ministryId'
+      path: '/admin/ministries/$ministryId'
+      fullPath: '/admin/ministries/$ministryId'
+      preLoaderRoute: typeof AdminMinistriesMinistryIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/members/new': {
+      id: '/admin/members/new'
+      path: '/admin/members/new'
+      fullPath: '/admin/members/new'
+      preLoaderRoute: typeof AdminMembersNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/cell-groups/$groupId': {
+      id: '/admin/cell-groups/$groupId'
+      path: '/admin/cell-groups/$groupId'
+      fullPath: '/admin/cell-groups/$groupId'
+      preLoaderRoute: typeof AdminCellGroupsGroupIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/members/$memberId/edit': {
+      id: '/admin/members/$memberId/edit'
+      path: '/admin/members/$memberId/edit'
+      fullPath: '/admin/members/$memberId/edit'
+      preLoaderRoute: typeof AdminMembersMemberIdEditRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -106,7 +546,28 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DisplayRoute: DisplayRoute,
   RegisterRoute: RegisterRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
+  AuthForgotPasswordRoute: AuthForgotPasswordRoute,
+  AuthLoginRoute: AuthLoginRoute,
+  AuthRegisterRoute: AuthRegisterRoute,
+  EventEventIdRoute: EventEventIdRoute,
+  EventOldIndexBackupRoute: EventOldIndexBackupRoute,
+  ProfileSettingsRoute: ProfileSettingsRoute,
   AdminIndexRoute: AdminIndexRoute,
+  DirectoryIndexRoute: DirectoryIndexRoute,
+  EventIndexRoute: EventIndexRoute,
+  ProfileIndexRoute: ProfileIndexRoute,
+  AdminCellGroupsGroupIdRoute: AdminCellGroupsGroupIdRoute,
+  AdminMembersNewRoute: AdminMembersNewRoute,
+  AdminMinistriesMinistryIdRoute: AdminMinistriesMinistryIdRoute,
+  DirectoryCellGroupsGroupIdRoute: DirectoryCellGroupsGroupIdRoute,
+  DirectoryMembersMemberIdRoute: DirectoryMembersMemberIdRoute,
+  DirectoryMinistriesMinistryIdRoute: DirectoryMinistriesMinistryIdRoute,
+  AdminMembersIndexRoute: AdminMembersIndexRoute,
+  DirectoryCellGroupsIndexRoute: DirectoryCellGroupsIndexRoute,
+  DirectoryMembersIndexRoute: DirectoryMembersIndexRoute,
+  DirectoryMinistriesIndexRoute: DirectoryMinistriesIndexRoute,
+  AdminMembersMemberIdEditRoute: AdminMembersMemberIdEditRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

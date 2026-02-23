@@ -1,299 +1,117 @@
-Welcome to your new TanStack app! 
+# Quest Laguna Directory (Tierra)
 
-# Getting Started
+Church directory and member management system for Quest Laguna's 10th Anniversary.
 
-To run this application:
+## Features
+
+- **Member Directory** - 300+ members with profiles, discipleship stages, and contact info
+- **Cell Groups** - Group management with leaders, co-leaders, meeting schedules, and member assignments
+- **Ministries** - Ministry teams with department organization and volunteer tracking
+- **Satellites** - Multi-location satellite management with per-satellite member views
+- **Events** - Event creation with QR-based registration, attendance tracking, and live display
+- **Admin Dashboard** - Overview stats, charts, CRUD operations, and data management tools
+- **Auth System** - Supabase Auth with role-based access (Super Admin, Satellite Leader, Cell Leader, Member)
+- **AI Insights** - OpenAI-powered spiritual analysis and mentorship matching
+
+## Tech Stack
+
+- **Framework:** [TanStack Start](https://tanstack.com/start) (React 19, SSR)
+- **Styling:** Tailwind CSS v4 + [shadcn/ui](https://ui.shadcn.com/)
+- **Database:** [Supabase](https://supabase.com/) (PostgreSQL + Realtime + Auth)
+- **Charts:** Recharts
+- **AI:** OpenAI API (GPT-4o)
+- **Validation:** Zod
+- **QR Code:** qrcode.react
+- **Testing:** Vitest
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm
+
+### Setup
 
 ```bash
 pnpm install
+```
+
+Create a `.env` file:
+
+```env
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+OPENAI_API_KEY=your_openai_api_key
+VITE_ADMIN_PIN=quest2026
+```
+
+### Development
+
+```bash
 pnpm dev
 ```
 
-# Building For Production
-
-To build this application for production:
+### Build
 
 ```bash
 pnpm build
 ```
 
-## Testing
-
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+### Tests
 
 ```bash
 pnpm test
 ```
 
-## Styling
+## Project Structure
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-
-
-## Shadcn
-
-Add components using the latest version of [Shadcn](https://ui.shadcn.com/).
-
-```bash
-pnpm dlx shadcn@latest add button
+```
+src/
+  routes/
+    __root.tsx            # Root layout with AuthProvider
+    index.tsx             # Home redirect
+    register.tsx          # Public event registration
+    display.tsx           # Public display screen (QR + live stats)
+    auth/                 # Login, register, forgot password
+    admin/
+      index.tsx           # Admin dashboard (all tabs)
+      members/            # Member CRUD pages
+      cell-groups/        # Cell group detail pages
+      ministries/         # Ministry detail pages
+    directory/            # Public directory views
+    event/                # Event management
+    profile/              # User profile & settings
+  components/
+    ui/                   # shadcn/ui components
+    AuthProvider.tsx       # Auth context
+    MemberCard.tsx         # Member card component
+    CellGroupCard.tsx      # Cell group card component
+    MinistryCard.tsx       # Ministry card component
+  server/
+    functions/            # Server functions (Supabase queries)
+  lib/
+    supabase.ts           # Supabase client setup
+    types.ts              # TypeScript type definitions
+    constants.ts          # App constants
 ```
 
-
-
-## Routing
-This project uses [TanStack Router](https://tanstack.com/router). The initial setup is a file based router. Which means that the routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add another a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
-```
-
-Then anywhere in your JSX you can use it like so:
-
-```tsx
-<Link to="/about">About</Link>
-```
-
-This will create a link that will navigate to the `/about` route.
-
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
-
-### Using A Layout
-
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you use the `<Outlet />` component.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { Outlet, createRootRoute } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
-
-import { Link } from "@tanstack/react-router";
-
-export const Route = createRootRoute({
-  component: () => (
-    <>
-      <header>
-        <nav>
-          <Link to="/">Home</Link>
-          <Link to="/about">About</Link>
-        </nav>
-      </header>
-      <Outlet />
-      <TanStackRouterDevtools />
-    </>
-  ),
-})
-```
-
-The `<TanStackRouterDevtools />` component is not required so you can remove it if you don't want it in your layout.
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-const peopleRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/people",
-  loader: async () => {
-    const response = await fetch("https://swapi.dev/api/people");
-    return response.json() as Promise<{
-      results: {
-        name: string;
-      }[];
-    }>;
-  },
-  component: () => {
-    const data = peopleRoute.useLoaderData();
-    return (
-      <ul>
-        {data.results.map((person) => (
-          <li key={person.name}>{person.name}</li>
-        ))}
-      </ul>
-    );
-  },
-});
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-### React-Query
-
-React-Query is an excellent addition or alternative to route loading and integrating it into you application is a breeze.
-
-First add your dependencies:
-
-```bash
-pnpm add @tanstack/react-query @tanstack/react-query-devtools
-```
-
-Next we'll need to create a query client and provider. We recommend putting those in `main.tsx`.
-
-```tsx
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-
-// ...
-
-const queryClient = new QueryClient();
-
-// ...
-
-if (!rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement);
-
-  root.render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
-  );
-}
-```
-
-You can also add TanStack Query Devtools to the root route (optional).
-
-```tsx
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-
-const rootRoute = createRootRoute({
-  component: () => (
-    <>
-      <Outlet />
-      <ReactQueryDevtools buttonPosition="top-right" />
-      <TanStackRouterDevtools />
-    </>
-  ),
-});
-```
-
-Now you can use `useQuery` to fetch your data.
-
-```tsx
-import { useQuery } from "@tanstack/react-query";
-
-import "./App.css";
-
-function App() {
-  const { data } = useQuery({
-    queryKey: ["people"],
-    queryFn: () =>
-      fetch("https://swapi.dev/api/people")
-        .then((res) => res.json())
-        .then((data) => data.results as { name: string }[]),
-    initialData: [],
-  });
-
-  return (
-    <div>
-      <ul>
-        {data.map((person) => (
-          <li key={person.name}>{person.name}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-export default App;
-```
-
-You can find out everything you need to know on how to use React-Query in the [React-Query documentation](https://tanstack.com/query/latest/docs/framework/react/overview).
-
-## State Management
-
-Another common requirement for React applications is state management. There are many options for state management in React. TanStack Store provides a great starting point for your project.
-
-First you need to add TanStack Store as a dependency:
-
-```bash
-pnpm add @tanstack/store
-```
-
-Now let's create a simple counter in the `src/App.tsx` file as a demonstration.
-
-```tsx
-import { useStore } from "@tanstack/react-store";
-import { Store } from "@tanstack/store";
-import "./App.css";
-
-const countStore = new Store(0);
-
-function App() {
-  const count = useStore(countStore);
-  return (
-    <div>
-      <button onClick={() => countStore.setState((n) => n + 1)}>
-        Increment - {count}
-      </button>
-    </div>
-  );
-}
-
-export default App;
-```
-
-One of the many nice features of TanStack Store is the ability to derive state from other state. That derived state will update when the base state updates.
-
-Let's check this out by doubling the count using derived state.
-
-```tsx
-import { useStore } from "@tanstack/react-store";
-import { Store, Derived } from "@tanstack/store";
-import "./App.css";
-
-const countStore = new Store(0);
-
-const doubledStore = new Derived({
-  fn: () => countStore.state * 2,
-  deps: [countStore],
-});
-doubledStore.mount();
-
-function App() {
-  const count = useStore(countStore);
-  const doubledCount = useStore(doubledStore);
-
-  return (
-    <div>
-      <button onClick={() => countStore.setState((n) => n + 1)}>
-        Increment - {count}
-      </button>
-      <div>Doubled - {doubledCount}</div>
-    </div>
-  );
-}
-
-export default App;
-```
-
-We use the `Derived` class to create a new store that is derived from another store. The `Derived` class has a `mount` method that will start the derived store updating.
-
-Once we've created the derived store we can use it in the `App` component just like we would any other store using the `useStore` hook.
-
-You can find out everything you need to know on how to use TanStack Store in the [TanStack Store documentation](https://tanstack.com/store/latest).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
+## Data Import
+
+Source data files (spreadsheets, raw JSON) live outside this repo in `../data/`. To use the import tools in the admin Settings tab:
+
+1. Place `spreadsheet-raw.json` in `public/data/`
+2. Use the Import, Re-link, or Generate Cell Groups tools from the Settings tab
+
+## Admin Dashboard Tabs
+
+| Tab | Description |
+|-----|-------------|
+| Overview | Stats cards, discipleship chart, satellite breakdown |
+| Satellites | Satellite list with member counts, click for detail view |
+| Members | Full directory with search, filters (stage/status/city/satellite), sorting |
+| Cell Groups | Group cards with CRUD, member management |
+| Ministries | Ministry cards with CRUD, member management |
+| Events | Event creation and management |
+| Settings | Data import, re-link relationships, purge tools |

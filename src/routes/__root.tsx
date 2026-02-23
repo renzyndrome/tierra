@@ -8,6 +8,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import appCss from '../styles.css?url'
+import { AuthProvider } from '../components/AuthProvider'
 
 export const Route = createRootRoute({
   head: () => ({
@@ -20,12 +21,12 @@ export const Route = createRootRoute({
         content: 'width=device-width, initial-scale=1',
       },
       {
-        title: 'Quest Laguna 10th Anniversary - NXTLEVEL Stronger 2026',
+        title: 'Quest Laguna Directory',
       },
       {
         name: 'description',
         content:
-          'Registration system for Quest Laguna 10th Anniversary celebration',
+          'Church directory and member management system for Quest Laguna',
       },
     ],
     links: [
@@ -51,7 +52,9 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
-        <Outlet />
+        <AuthProvider>
+          <Outlet />
+        </AuthProvider>
         {process.env.NODE_ENV === 'development' && (
           <TanStackDevtools
             config={{

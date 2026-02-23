@@ -60,3 +60,7 @@ coverage/
 # Database
 *.sql
 
+# Data files (source data lives in ../data/ outside repo)
+public/data/
+danang.jpg
+
