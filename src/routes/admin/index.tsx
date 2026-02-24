@@ -619,6 +619,30 @@ function AdminDashboard() {
   const growing = members.filter((m) => m.discipleship_stage === 'Growing').length
   const leaders = members.filter((m) => m.discipleship_stage === 'Leader').length
 
+  // Discipleship journey breakdown
+  const journeyCounts = {
+    'Consolidations': members.filter(m => m.discipleship_journey === 'Consolidations').length,
+    'Pre Encounter': members.filter(m => m.discipleship_journey === 'Pre Encounter').length,
+    'Encounter': members.filter(m => m.discipleship_journey === 'Encounter').length,
+    'Post-Encounter': members.filter(m => m.discipleship_journey === 'Post-Encounter').length,
+    'SOD1': members.filter(m => m.discipleship_journey === 'SOD1').length,
+    'SOD2': members.filter(m => m.discipleship_journey === 'SOD2').length,
+    'SOD3': members.filter(m => m.discipleship_journey === 'SOD3').length,
+    'QBS Theology 101': members.filter(m => m.discipleship_journey === 'QBS Theology 101').length,
+    'QBS Preaching 101': members.filter(m => m.discipleship_journey === 'QBS Preaching 101').length,
+  }
+  const noJourney = members.filter(m => !m.discipleship_journey).length
+
+  // Follow-through breakdown
+  const followThroughCounts = {
+    'Salvation': members.filter(m => m.follow_through === 'Salvation').length,
+    'Prayer': members.filter(m => m.follow_through === 'Prayer').length,
+    'Bible and Devotion': members.filter(m => m.follow_through === 'Bible and Devotion').length,
+    'Transformation': members.filter(m => m.follow_through === 'Transformation').length,
+    'Cell and Church': members.filter(m => m.follow_through === 'Cell and Church').length,
+  }
+  const noFollowThrough = members.filter(m => !m.follow_through).length
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -682,45 +706,179 @@ function AdminDashboard() {
           {/* Overview Tab */}
           <TabsContent value="overview">
             <div className="space-y-6">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {/* Stats Overview */}
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                 <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-[#8B1538]">{totalMembers}</p>
-                    <p className="text-sm text-gray-500">Total Members</p>
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold text-[#8B1538]">{totalMembers}</p>
+                    <p className="text-xs text-gray-500">Members</p>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-teal-600">{totalCellGroups}</p>
-                    <p className="text-sm text-gray-500">Cell Groups</p>
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold text-teal-600">{totalCellGroups}</p>
+                    <p className="text-xs text-gray-500">Cell Groups</p>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-amber-600">{totalMinistries}</p>
-                    <p className="text-sm text-gray-500">Ministries</p>
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold text-amber-600">{totalMinistries}</p>
+                    <p className="text-xs text-gray-500">Ministries</p>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-amber-600">{newbies}</p>
-                    <p className="text-sm text-gray-500">Newbies</p>
+                <Card className="bg-purple-50 border-purple-200">
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold text-purple-600">{newbies}</p>
+                    <p className="text-xs text-purple-500">Newbie</p>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-yellow-600">{growing}</p>
-                    <p className="text-sm text-gray-500">Growing</p>
+                <Card className="bg-yellow-50 border-yellow-200">
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold text-yellow-600">{growing}</p>
+                    <p className="text-xs text-yellow-600">Growing</p>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-orange-600">{leaders}</p>
-                    <p className="text-sm text-gray-500">Leaders</p>
+                <Card className="bg-orange-50 border-orange-200">
+                  <CardContent className="p-3 text-center">
+                    <p className="text-2xl font-bold text-orange-600">{leaders}</p>
+                    <p className="text-xs text-orange-500">Leader</p>
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Discipleship Journey Breakdown */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Discipleship Journey</CardTitle>
+                  <CardDescription>Detailed breakdown by journey stage</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Newbie Journey */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="w-3 h-3 rounded-full bg-purple-500" />
+                        <span className="font-semibold text-sm">Newbie ({newbies})</span>
+                      </div>
+                      <div className="space-y-2">
+                        {([
+                          { label: 'Consolidations', count: journeyCounts['Consolidations'] },
+                          { label: 'Pre Encounter', count: journeyCounts['Pre Encounter'] },
+                        ] as const).map((item) => (
+                          <div key={item.label} className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">{item.label}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-purple-400 rounded-full" style={{ width: `${newbies > 0 ? (item.count / newbies) * 100 : 0}%` }} />
+                              </div>
+                              <span className="text-sm font-medium w-8 text-right">{item.count}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {newbies - journeyCounts['Consolidations'] - journeyCounts['Pre Encounter'] > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-400 italic">Not assigned</span>
+                            <span className="text-sm text-gray-400 w-8 text-right">{newbies - journeyCounts['Consolidations'] - journeyCounts['Pre Encounter']}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Growing Journey */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="w-3 h-3 rounded-full bg-yellow-500" />
+                        <span className="font-semibold text-sm">Growing ({growing})</span>
+                      </div>
+                      <div className="space-y-2">
+                        {([
+                          { label: 'Encounter', count: journeyCounts['Encounter'] },
+                          { label: 'Post-Encounter', count: journeyCounts['Post-Encounter'] },
+                          { label: 'SOD 1', count: journeyCounts['SOD1'] },
+                          { label: 'SOD 2', count: journeyCounts['SOD2'] },
+                        ] as const).map((item) => (
+                          <div key={item.label} className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">{item.label}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${growing > 0 ? (item.count / growing) * 100 : 0}%` }} />
+                              </div>
+                              <span className="text-sm font-medium w-8 text-right">{item.count}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {growing - journeyCounts['Encounter'] - journeyCounts['Post-Encounter'] - journeyCounts['SOD1'] - journeyCounts['SOD2'] > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-400 italic">Not assigned</span>
+                            <span className="text-sm text-gray-400 w-8 text-right">{growing - journeyCounts['Encounter'] - journeyCounts['Post-Encounter'] - journeyCounts['SOD1'] - journeyCounts['SOD2']}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Leader Journey */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="w-3 h-3 rounded-full bg-orange-500" />
+                        <span className="font-semibold text-sm">Leader ({leaders})</span>
+                      </div>
+                      <div className="space-y-2">
+                        {([
+                          { label: 'SOD 3', count: journeyCounts['SOD3'] },
+                          { label: 'QBS Theology 101', count: journeyCounts['QBS Theology 101'] },
+                          { label: 'QBS Preaching 101', count: journeyCounts['QBS Preaching 101'] },
+                        ] as const).map((item) => (
+                          <div key={item.label} className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">{item.label}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-orange-400 rounded-full" style={{ width: `${leaders > 0 ? (item.count / leaders) * 100 : 0}%` }} />
+                              </div>
+                              <span className="text-sm font-medium w-8 text-right">{item.count}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {leaders - journeyCounts['SOD3'] - journeyCounts['QBS Theology 101'] - journeyCounts['QBS Preaching 101'] > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-400 italic">Not assigned</span>
+                            <span className="text-sm text-gray-400 w-8 text-right">{leaders - journeyCounts['SOD3'] - journeyCounts['QBS Theology 101'] - journeyCounts['QBS Preaching 101']}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Follow-Through Stages */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Follow-Through Stages</CardTitle>
+                  <CardDescription>Member engagement in follow-through process</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {([
+                      { label: 'Salvation', count: followThroughCounts['Salvation'], bg: 'bg-red-50', text: 'text-red-700', bar: 'bg-red-400' },
+                      { label: 'Prayer', count: followThroughCounts['Prayer'], bg: 'bg-blue-50', text: 'text-blue-700', bar: 'bg-blue-400' },
+                      { label: 'Bible & Devotion', count: followThroughCounts['Bible and Devotion'], bg: 'bg-green-50', text: 'text-green-700', bar: 'bg-green-400' },
+                      { label: 'Transformation', count: followThroughCounts['Transformation'], bg: 'bg-amber-50', text: 'text-amber-700', bar: 'bg-amber-400' },
+                      { label: 'Cell & Church', count: followThroughCounts['Cell and Church'], bg: 'bg-purple-50', text: 'text-purple-700', bar: 'bg-purple-400' },
+                    ] as const).map((stage) => (
+                      <div key={stage.label} className={`rounded-lg p-3 ${stage.bg} border`}>
+                        <p className={`text-2xl font-bold ${stage.text}`}>{stage.count}</p>
+                        <p className="text-xs font-medium text-gray-600 mb-2">{stage.label}</p>
+                        <div className="w-full h-1.5 bg-white/60 rounded-full overflow-hidden">
+                          <div className={`h-full ${stage.bar} rounded-full`} style={{ width: `${totalMembers > 0 ? (stage.count / totalMembers) * 100 : 0}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {noFollowThrough > 0 && (
+                    <p className="text-xs text-gray-400 mt-3">{noFollowThrough} members with no follow-through data</p>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Quick Links */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
