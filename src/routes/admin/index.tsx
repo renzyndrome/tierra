@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
 import { Textarea } from '../../components/ui/textarea'
-import { purgeAllData } from '../../server/functions/seedData'
+import { purgeAllData, seedTestAccounts } from '../../server/functions/seedData'
 import { importSpreadsheetData, relinkMemberRelationships, generateCellGroupsFromDisciplers } from '../../server/functions/importMembers'
 import { createCellGroup, updateCellGroup, deleteCellGroup } from '../../server/functions/cellGroups'
 import { createMinistry, updateMinistry, deleteMinistry } from '../../server/functions/ministries'
@@ -68,6 +68,10 @@ function AdminDashboard() {
 
   // Satellite detail view
   const [selectedSatelliteId, setSelectedSatelliteId] = useState<string | null>(null)
+
+  // Admin setup
+  const [isSettingUpAdmin, setIsSettingUpAdmin] = useState(false)
+  const [adminSetupResult, setAdminSetupResult] = useState<string | null>(null)
 
   // Dialogs
   const [showPurgeDialog, setShowPurgeDialog] = useState(false)
@@ -207,6 +211,21 @@ function AdminDashboard() {
 
   // Check admin access
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'satellite_leader'
+
+  // Handle setup admin account
+  const handleSetupAdmin = async () => {
+    setIsSettingUpAdmin(true)
+    setAdminSetupResult(null)
+    try {
+      const result = await seedTestAccounts({ data: { adminPin: ADMIN_PIN } })
+      const admin = result.accounts[0]
+      setAdminSetupResult(admin ? `${admin.email}: ${admin.status}` : 'No result')
+    } catch (error) {
+      setAdminSetupResult(error instanceof Error ? error.message : 'Failed')
+    } finally {
+      setIsSettingUpAdmin(false)
+    }
+  }
 
   // Handle purge directory
   const handlePurgeDirectory = async () => {
@@ -1589,6 +1608,22 @@ function AdminDashboard() {
           {/* Settings Tab */}
           <TabsContent value="settings">
               <div className="space-y-6">
+                {/* Admin Account Setup */}
+                <Card className="border-blue-200">
+                  <CardHeader>
+                    <CardTitle className="text-blue-700">Admin Account</CardTitle>
+                    <CardDescription>Create or update the admin login account (admin@questlaguna.org)</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex items-center gap-4">
+                    <Button onClick={handleSetupAdmin} disabled={isSettingUpAdmin} className="bg-blue-600 hover:bg-blue-700">
+                      {isSettingUpAdmin ? 'Setting up...' : 'Setup Admin Account'}
+                    </Button>
+                    {adminSetupResult && (
+                      <span className="text-sm text-gray-600">{adminSetupResult}</span>
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* Import Spreadsheet Data */}
                 <Card className="border-amber-200">
                   <CardHeader>

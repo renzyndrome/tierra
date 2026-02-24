@@ -6,13 +6,15 @@ import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
 // Note: All seed functions use adminClient to bypass RLS policies
 
-// Test accounts to create
-const testAccounts = [
-  { email: 'admin@quest.test', password: 'admin123', role: 'super_admin' as const, name: 'Super Admin' },
-  { email: 'leader@quest.test', password: 'leader123', role: 'satellite_leader' as const, name: 'Satellite Leader' },
-  { email: 'cell@quest.test', password: 'cell123', role: 'cell_leader' as const, name: 'Cell Leader' },
-  { email: 'member@quest.test', password: 'member123', role: 'member' as const, name: 'Test Member' },
-]
+// Admin account - credentials from env vars, never hardcoded
+function getAdminAccount() {
+  const email = process.env.ADMIN_EMAIL
+  const password = process.env.ADMIN_PASSWORD
+  if (!email || !password) {
+    throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be set in .env')
+  }
+  return { email, password, role: 'super_admin' as const, name: 'Quest Admin' }
+}
 
 // Seed data for satellites (9 real locations from church spreadsheet)
 const seedSatellites = [
@@ -218,7 +220,7 @@ export const seedAllData = createServerFn({ method: 'POST' })
     }
   })
 
-// Seed test accounts
+// Setup admin account
 export const seedTestAccounts = createServerFn({ method: 'POST' })
   .inputValidator((input: { adminPin: string }) => z.object({
     adminPin: z.string(),
@@ -232,7 +234,7 @@ export const seedTestAccounts = createServerFn({ method: 'POST' })
 
     // Check if service role key is available
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('SUPABASE_SERVICE_ROLE_KEY is required to create test accounts. Add it to your .env file.')
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY is required. Add it to your .env file.')
     }
 
     // Use admin client for all operations to bypass RLS
@@ -247,7 +249,7 @@ export const seedTestAccounts = createServerFn({ method: 'POST' })
 
     const satelliteId = satellites?.[0]?.id
 
-    for (const account of testAccounts) {
+    for (const account of [getAdminAccount()]) {
       try {
         // Check if user already exists
         const { data: existingUsers } = await adminClient.auth.admin.listUsers()
