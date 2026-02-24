@@ -30,6 +30,7 @@ import {
   Legend,
 } from 'recharts'
 import { MemberCard, MemberCardSkeleton } from '../../components/MemberCard'
+import { MembersTabContent } from '../../components/MembersTabContent'
 import { CellGroupCard, CellGroupCardSkeleton } from '../../components/CellGroupCard'
 import { MinistryCard, MinistryCardSkeleton } from '../../components/MinistryCard'
 import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, EventWithStats } from '../../lib/types'
@@ -58,11 +59,7 @@ function AdminDashboard() {
   // Filters
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedSatellite, setSelectedSatellite] = useState('')
-  const [filterStage, setFilterStage] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterCity, setFilterCity] = useState('')
-  const [memberSortBy, setMemberSortBy] = useState('name')
-  const [memberSortOrder, setMemberSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const { tab: searchTab } = Route.useSearch()
   const [activeTab, setActiveTab] = useState(searchTab || 'overview')
 
@@ -207,7 +204,7 @@ function AdminDashboard() {
       clearTimeout(timer)
       window.removeEventListener('focus', onFocus)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, refreshTrigger])
 
   // Check admin access
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'satellite_leader'
@@ -555,46 +552,6 @@ function AdminDashboard() {
       setIsSavingSat(false)
     }
   }
-
-  // Unique cities for filter dropdown
-  const uniqueCities = [...new Set(members.map(m => m.city).filter(Boolean))].sort()
-
-  const hasActiveFilters = selectedSatellite || filterStage || filterStatus || filterCity || memberSortBy !== 'name' || memberSortOrder !== 'asc'
-
-  const clearMemberFilters = () => {
-    setSelectedSatellite('')
-    setFilterStage('')
-    setFilterStatus('')
-    setFilterCity('')
-    setMemberSortBy('name')
-    setMemberSortOrder('asc')
-  }
-
-  // Filter data
-  const filteredMembers = members
-    .filter((member) => {
-      const matchesSearch = !searchQuery ||
-        member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        member.email?.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesSatellite = !selectedSatellite || member.satellite_id === selectedSatellite
-      const matchesStage = !filterStage || member.discipleship_stage === filterStage
-      const matchesStatus = !filterStatus || member.membership_status === filterStatus
-      const matchesCity = !filterCity || member.city === filterCity
-      return matchesSearch && matchesSatellite && matchesStage && matchesStatus && matchesCity
-    })
-    .sort((a, b) => {
-      let cmp = 0
-      switch (memberSortBy) {
-        case 'name': cmp = a.name.localeCompare(b.name); break
-        case 'age': cmp = (a.age || 0) - (b.age || 0); break
-        case 'city': cmp = a.city.localeCompare(b.city); break
-        case 'stage': cmp = a.discipleship_stage.localeCompare(b.discipleship_stage); break
-        case 'status': cmp = (a.membership_status || '').localeCompare(b.membership_status || ''); break
-        case 'newest': cmp = new Date(b.created_at).getTime() - new Date(a.created_at).getTime(); break
-      }
-      return memberSortOrder === 'desc' ? -cmp : cmp
-    })
 
   const filteredCellGroups = cellGroups.filter((group) => {
     const matchesSearch = !searchQuery ||
@@ -1408,123 +1365,12 @@ function AdminDashboard() {
 
           {/* Members Tab */}
           <TabsContent value="members">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <CardTitle>Members Directory</CardTitle>
-                    <CardDescription>{filteredMembers.length} members found</CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    <Link to="/admin/members/new">
-                      <Button size="sm">Add Member</Button>
-                    </Link>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Search and Sort */}
-                <div className="flex flex-col md:flex-row gap-3 mb-3">
-                  <div className="flex-1">
-                    <Input
-                      placeholder="Search by name, city, or email..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <select
-                      value={memberSortBy}
-                      onChange={(e) => setMemberSortBy(e.target.value)}
-                      className="px-3 py-2 border rounded-lg text-sm bg-white"
-                    >
-                      <option value="name">Sort: Name</option>
-                      <option value="age">Sort: Age</option>
-                      <option value="city">Sort: City</option>
-                      <option value="stage">Sort: Stage</option>
-                      <option value="status">Sort: Status</option>
-                      <option value="newest">Sort: Newest</option>
-                    </select>
-                    <button
-                      onClick={() => setMemberSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
-                      className="px-3 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50"
-                      title={memberSortOrder === 'asc' ? 'Ascending' : 'Descending'}
-                    >
-                      {memberSortOrder === 'asc' ? '↑' : '↓'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Filters */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                  <select
-                    value={selectedSatellite}
-                    onChange={(e) => setSelectedSatellite(e.target.value)}
-                    className="px-3 py-1.5 border rounded-md text-sm bg-white"
-                  >
-                    <option value="">All Satellites</option>
-                    {satellites.filter(s => s.is_active).map((sat) => (
-                      <option key={sat.id} value={sat.id}>{sat.name}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={filterStage}
-                    onChange={(e) => setFilterStage(e.target.value)}
-                    className="px-3 py-1.5 border rounded-md text-sm bg-white"
-                  >
-                    <option value="">All Stages</option>
-                    <option value="Newbie">Newbie</option>
-                    <option value="Growing">Growing</option>
-                    <option value="Leader">Leader</option>
-                  </select>
-                  <select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-3 py-1.5 border rounded-md text-sm bg-white"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="visitor">Visitor</option>
-                    <option value="regular">Regular</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                  <select
-                    value={filterCity}
-                    onChange={(e) => setFilterCity(e.target.value)}
-                    className="px-3 py-1.5 border rounded-md text-sm bg-white"
-                  >
-                    <option value="">All Cities</option>
-                    {uniqueCities.map((city) => (
-                      <option key={city} value={city}>{city}</option>
-                    ))}
-                  </select>
-                  {hasActiveFilters && (
-                    <button
-                      onClick={clearMemberFilters}
-                      className="px-3 py-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md border border-red-200"
-                    >
-                      Clear Filters
-                    </button>
-                  )}
-                </div>
-
-                {isLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[...Array(6)].map((_, i) => <MemberCardSkeleton key={i} />)}
-                  </div>
-                ) : filteredMembers.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
-                    <p>No members found</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredMembers.map((member) => (
-                      <MemberCard key={member.id} member={member} />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <MembersTabContent
+              members={members}
+              satellites={satellites}
+              isLoading={isLoading}
+              onDataChanged={() => setRefreshTrigger(p => p + 1)}
+            />
           </TabsContent>
 
           {/* Cell Groups Tab */}

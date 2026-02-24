@@ -6,7 +6,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 export const Route = createFileRoute('/directory/')({
   beforeLoad: () => {
     // Redirect to admin (directory is now protected)
-    throw redirect({ to: '/admin' })
+    throw redirect({ to: '/admin', search: {} })
   },
   component: () => null,
 })

@@ -123,7 +123,7 @@ function NewMemberForm() {
 
     try {
       await createMember({ data })
-      navigate({ to: '/admin/members' })
+      navigate({ to: '/admin', search: { tab: 'members' } })
     } catch (err) {
       console.error('Error creating member:', err)
       setError(err instanceof Error ? err.message : 'Failed to create member')
@@ -133,7 +133,7 @@ function NewMemberForm() {
   }
 
   const handleCancel = () => {
-    navigate({ to: '/admin/members' })
+    navigate({ to: '/admin', search: { tab: 'members' } })
   }
 
   if (isLoading) {
@@ -154,7 +154,8 @@ function NewMemberForm() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link
-              to="/admin/members"
+              to="/admin"
+              search={{ tab: 'members' }}
               className="text-white/80 hover:text-white transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

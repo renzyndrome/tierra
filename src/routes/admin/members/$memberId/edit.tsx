@@ -136,7 +136,7 @@ function EditMemberForm({ memberId }: { memberId: string }) {
 
     try {
       await updateMember({ data: { id: memberId, updates: data } })
-      navigate({ to: '/admin/members' })
+      navigate({ to: '/admin', search: { tab: 'members' } })
     } catch (err) {
       console.error('Error updating member:', err)
       setError(err instanceof Error ? err.message : 'Failed to update member')
@@ -146,7 +146,7 @@ function EditMemberForm({ memberId }: { memberId: string }) {
   }
 
   const handleCancel = () => {
-    navigate({ to: '/admin/members' })
+    navigate({ to: '/admin', search: { tab: 'members' } })
   }
 
   if (isLoading) {
@@ -167,7 +167,8 @@ function EditMemberForm({ memberId }: { memberId: string }) {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Member Not Found</h1>
           <p className="text-gray-500 mb-4">The member you're looking for doesn't exist.</p>
           <Link
-            to="/admin/members"
+            to="/admin"
+            search={{ tab: 'members' }}
             className="px-4 py-2 bg-[#8B1538] text-white rounded-lg hover:bg-[#6B0F2B] transition-colors"
           >
             Back to Members
@@ -184,7 +185,8 @@ function EditMemberForm({ memberId }: { memberId: string }) {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link
-              to="/admin/members"
+              to="/admin"
+              search={{ tab: 'members' }}
               className="text-white/80 hover:text-white transition-colors"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
