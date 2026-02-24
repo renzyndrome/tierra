@@ -1,6 +1,11 @@
 services:
   tierra:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_ADMIN_PIN: ${VITE_ADMIN_PIN}
     container_name: tierra-app
     restart: unless-stopped
     ports:

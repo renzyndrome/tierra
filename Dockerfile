@@ -7,8 +7,11 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
-# Build
+# Build (VITE_* vars must be present at build time — Vite bakes them into the client bundle)
 FROM deps AS build
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_ADMIN_PIN
 COPY . .
 RUN pnpm build
 
