@@ -1,0 +1,14 @@
+node_modules
+.output
+.git
+.gitignore
+.env
+*.md
+.claude
+.tanstack
+.vinxi
+.nitro
+coverage
+src/tests
+vitest.config.ts
+danang.jpg
