@@ -3,13 +3,12 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../../../components/AuthProvider'
-import { supabase } from '../../../lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Button } from '../../../components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../components/ui/dialog'
 import { Input } from '../../../components/ui/input'
 import { getPlaceholderAvatar } from '../../../lib/storage'
-import { addMemberToCellGroup, removeMemberFromCellGroup, updateMemberCellGroupRole } from '../../../server/functions/cellGroups'
+import { getCellGroupWithRelations, addMemberToCellGroup, removeMemberFromCellGroup, updateMemberCellGroupRole } from '../../../server/functions/cellGroups'
 import { searchMembers } from '../../../server/functions/members'
 import type { CellGroupWithRelations, Member } from '../../../lib/types'
 
@@ -72,33 +71,12 @@ function CellGroupDetailPage() {
     setError(null)
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from('cell_groups')
-        .select(`
-          *,
-          satellite:satellites(id, name),
-          leader:members!cell_groups_leader_id_fkey(id, name, photo_url, phone, email),
-          co_leader:members!cell_groups_co_leader_id_fkey(id, name, photo_url, phone, email),
-          members:member_cell_groups(
-            id,
-            role,
-            joined_at,
-            is_active,
-            member:members(id, name, photo_url, phone, email, discipleship_stage)
-          )
-        `)
-        .eq('id', groupId)
-        .single()
+      const group = await getCellGroupWithRelations({ data: { id: groupId } })
 
-      if (fetchError) {
-        if (fetchError.code === 'PGRST116') {
-          setError('Cell group not found')
-        } else {
-          console.error('Error fetching cell group:', fetchError)
-          setError('Failed to load cell group')
-        }
+      if (!group) {
+        setError('Cell group not found')
       } else {
-        setCellGroup(data as CellGroupDetail)
+        setCellGroup(group as CellGroupDetail)
       }
     } catch (err) {
       console.error('Error fetching cell group:', err)

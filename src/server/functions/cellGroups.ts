@@ -150,21 +150,21 @@ export const getCellGroup = createServerFn({ method: 'GET' })
 export const getCellGroupWithRelations = createServerFn({ method: 'GET' })
   .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }) => {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerAdminClient()
 
     const { data: group, error } = await supabase
       .from('cell_groups')
       .select(`
         *,
         satellite:satellites(id, name),
-        leader:members!cell_groups_leader_id_fkey(id, name, photo_url),
-        co_leader:members!cell_groups_co_leader_id_fkey(id, name, photo_url),
+        leader:members!cell_groups_leader_id_fkey(id, name, photo_url, phone, email),
+        co_leader:members!cell_groups_co_leader_id_fkey(id, name, photo_url, phone, email),
         members:member_cell_groups(
           id,
           role,
           joined_at,
           is_active,
-          member:members(id, name, photo_url, phone, email)
+          member:members(id, name, photo_url, phone, email, discipleship_stage)
         )
       `)
       .eq('id', data.id)
