@@ -253,7 +253,7 @@ export const updateMember = createServerFn({ method: 'POST' })
 export const archiveMember = createServerFn({ method: 'POST' })
   .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerAdminClient()
 
     const { error } = await supabase
       .from('members')
@@ -275,7 +275,7 @@ export const archiveMember = createServerFn({ method: 'POST' })
 export const restoreMember = createServerFn({ method: 'POST' })
   .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerAdminClient()
 
     const { error } = await supabase
       .from('members')
@@ -297,7 +297,7 @@ export const restoreMember = createServerFn({ method: 'POST' })
 export const deleteMember = createServerFn({ method: 'POST' })
   .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerAdminClient()
 
     const { error } = await supabase
       .from('members')
