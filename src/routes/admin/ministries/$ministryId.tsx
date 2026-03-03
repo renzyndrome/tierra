@@ -68,6 +68,8 @@ function MinistryDetailPage() {
   const [addRole, setAddRole] = useState<'head' | 'coordinator' | 'volunteer'>('volunteer')
   const [memberToRemove, setMemberToRemove] = useState<MinistryMember | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [selectedMembers, setSelectedMembers] = useState<Map<string, string>>(new Map()) // id → name
+  const [isBulkAdding, setIsBulkAdding] = useState(false)
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -198,6 +200,41 @@ function MinistryDetailPage() {
       alert(err.message || 'Failed to update role')
     }
     setIsUpdating(false)
+  }
+
+  // Bulk add handlers
+  const toggleMemberSelection = (memberId: string, memberName: string) => {
+    setSelectedMembers(prev => {
+      const next = new Map(prev)
+      if (next.has(memberId)) {
+        next.delete(memberId)
+      } else {
+        next.set(memberId, memberName)
+      }
+      return next
+    })
+  }
+
+  const handleBulkAddMembers = async () => {
+    if (selectedMembers.size === 0) return
+    setIsBulkAdding(true)
+
+    const errors: string[] = []
+    for (const [memberId, memberName] of selectedMembers) {
+      try {
+        await addMemberToMinistry({ data: { memberId, ministryId, role: addRole } })
+      } catch (err: any) {
+        errors.push(`${memberName}: ${err.message || 'Failed'}`)
+      }
+    }
+
+    setSelectedMembers(new Map())
+    setIsBulkAdding(false)
+    await fetchMinistry(false)
+
+    if (errors.length > 0) {
+      alert(`Some members could not be added:\n${errors.join('\n')}`)
+    }
   }
 
   // Safety timeout: stop loading after 10 seconds
@@ -385,7 +422,7 @@ function MinistryDetailPage() {
                     <CardTitle>Volunteers ({volunteers.length})</CardTitle>
                     <CardDescription>Active ministry volunteers</CardDescription>
                   </div>
-                  <Button size="sm" onClick={() => { setShowAddDialog(true); setSearchQuery(''); setSearchResults([]) }}>
+                  <Button size="sm" onClick={() => { setShowAddDialog(true); setSearchQuery(''); setSearchResults([]); setSelectedMembers(new Map()) }}>
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
@@ -496,11 +533,14 @@ function MinistryDetailPage() {
       </div>
 
       {/* Add Member Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+      <Dialog open={showAddDialog} onOpenChange={(open) => {
+        setShowAddDialog(open)
+        if (!open) setSelectedMembers(new Map())
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Member</DialogTitle>
-            <DialogDescription>Search for a member to add to {ministry.name}</DialogDescription>
+            <DialogTitle>Add Members</DialogTitle>
+            <DialogDescription>Search for members to add to {ministry.name}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <Input
@@ -521,6 +561,28 @@ function MinistryDetailPage() {
                 <option value="head">Head</option>
               </select>
             </div>
+            {/* Selected members chips */}
+            {selectedMembers.size > 0 && (
+              <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-lg border">
+                {Array.from(selectedMembers).map(([id, name]) => (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-[#8B1538]/10 text-[#8B1538] rounded-full"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      onClick={() => toggleMemberSelection(id, name)}
+                      className="hover:text-red-700"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="max-h-64 overflow-y-auto space-y-2">
               {isSearching && (
                 <div className="flex items-center justify-center py-4">
@@ -532,10 +594,19 @@ function MinistryDetailPage() {
               )}
               {!isSearching && searchResults.map((member) => {
                 const alreadyAdded = activeMemberIds.has(member.id)
+                const isSelected = selectedMembers.has(member.id)
                 const avatar = member.photo_url || getPlaceholderAvatar(member.name)
                 return (
                   <div key={member.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
                     <div className="flex items-center gap-3 min-w-0">
+                      {!alreadyAdded && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleMemberSelection(member.id, member.name)}
+                          className="w-4 h-4 text-[#8B1538] rounded border-gray-300 focus:ring-[#8B1538] flex-shrink-0"
+                        />
+                      )}
                       <img src={avatar} alt={member.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{member.name}</p>
@@ -551,7 +622,7 @@ function MinistryDetailPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleAddMember(member.id)}
-                        disabled={isUpdating}
+                        disabled={isUpdating || isBulkAdding}
                         className="flex-shrink-0"
                       >
                         Add
@@ -562,8 +633,22 @@ function MinistryDetailPage() {
               })}
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>Close</Button>
+          <DialogFooter className="flex justify-between sm:justify-between">
+            <div className="text-sm text-gray-500">
+              {selectedMembers.size > 0 && `${selectedMembers.size} selected`}
+            </div>
+            <div className="flex gap-2">
+              {selectedMembers.size > 0 && (
+                <Button
+                  onClick={handleBulkAddMembers}
+                  disabled={isBulkAdding || isUpdating}
+                  className="bg-[#8B1538] hover:bg-[#6B0F2B]"
+                >
+                  {isBulkAdding ? 'Adding...' : `Add Selected (${selectedMembers.size})`}
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setShowAddDialog(false)}>Close</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

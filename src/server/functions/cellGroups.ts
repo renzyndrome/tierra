@@ -96,7 +96,7 @@ export const getAllCellGroups = createServerFn({ method: 'GET' })
     z.object({ activeOnly: z.boolean().optional().default(true) }).parse(data)
   )
   .handler(async ({ data }): Promise<CellGroup[]> => {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerAdminClient()
 
     let query = supabase
       .from('cell_groups')

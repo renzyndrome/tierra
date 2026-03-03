@@ -226,7 +226,7 @@ export const updateMember = createServerFn({ method: 'POST' })
     }).parse(data)
   )
   .handler(async ({ data }): Promise<Member> => {
-    const supabase = createServerSupabaseClient()
+    const supabase = createServerAdminClient()
 
     const { data: member, error } = await supabase
       .from('members')

@@ -1,14 +1,16 @@
 // Quest Laguna Directory - Member Form Component
 
 import { useState, useEffect } from 'react'
-import type { Member, MemberInsert, SatelliteRow } from '../lib/types'
+import type { Member, MemberInsert, SatelliteRow, CellGroup } from '../lib/types'
 import { uploadMemberPhoto, getPlaceholderAvatar } from '../lib/storage'
 import { CIVIL_STATUSES, MEMBER_CATEGORIES, FOLLOW_THROUGH_STAGES, DISCIPLESHIP_JOURNEY_STAGES, LEADERSHIP_LEVELS } from '../lib/constants'
 
 interface MemberFormProps {
   member?: Member | null
   satellites: SatelliteRow[]
-  onSubmit: (data: MemberInsert) => Promise<void>
+  cellGroups?: CellGroup[]
+  currentCellGroupId?: string | null
+  onSubmit: (data: MemberInsert, cellGroupId?: string | null) => Promise<void>
   onCancel: () => void
   isSubmitting?: boolean
 }
@@ -16,6 +18,8 @@ interface MemberFormProps {
 export function MemberForm({
   member,
   satellites,
+  cellGroups,
+  currentCellGroupId,
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -54,6 +58,7 @@ export function MemberForm({
     is_full_time: false,
   })
 
+  const [selectedCellGroupId, setSelectedCellGroupId] = useState<string | null>(currentCellGroupId ?? null)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -192,7 +197,7 @@ export function MemberForm({
     await onSubmit({
       ...formData,
       photo_url: photoUrl,
-    })
+    }, cellGroups ? selectedCellGroupId : undefined)
   }
 
   const avatarUrl = photoPreview || getPlaceholderAvatar(formData.name || 'New Member')
@@ -387,6 +392,15 @@ export function MemberForm({
               ))}
             </select>
           </div>
+
+          {/* Cell Group (searchable) */}
+          {cellGroups && cellGroups.length > 0 && (
+            <CellGroupSearch
+              cellGroups={cellGroups}
+              selectedId={selectedCellGroupId}
+              onChange={setSelectedCellGroupId}
+            />
+          )}
 
           {/* Discipleship Stage */}
           <div>
@@ -710,5 +724,93 @@ export function MemberForm({
         </button>
       </div>
     </form>
+  )
+}
+
+// ============================================
+// CELL GROUP SEARCH (typeahead)
+// ============================================
+
+function CellGroupSearch({
+  cellGroups,
+  selectedId,
+  onChange,
+}: {
+  cellGroups: CellGroup[]
+  selectedId: string | null
+  onChange: (id: string | null) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
+
+  const selectedGroup = selectedId ? cellGroups.find(cg => cg.id === selectedId) : null
+
+  const filtered = query.trim()
+    ? cellGroups.filter(cg => cg.name.toLowerCase().includes(query.toLowerCase()))
+    : cellGroups
+
+  const handleSelect = (id: string | null) => {
+    onChange(id)
+    setQuery('')
+    setIsOpen(false)
+  }
+
+  return (
+    <div className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-1">Cell Group</label>
+      {selectedGroup ? (
+        <div className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+          <span className="text-sm text-gray-900 truncate">{selectedGroup.name}</span>
+          <button
+            type="button"
+            onClick={() => handleSelect(null)}
+            className="ml-2 text-gray-400 hover:text-red-500 flex-shrink-0"
+            title="Remove cell group"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setIsOpen(true) }}
+          onFocus={() => setIsOpen(true)}
+          placeholder="Search cell group..."
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none"
+        />
+      )}
+      {isOpen && !selectedGroup && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          <button
+            type="button"
+            onClick={() => handleSelect(null)}
+            className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-50"
+          >
+            No cell group
+          </button>
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-400">No matches</div>
+          ) : (
+            filtered.map(cg => (
+              <button
+                key={cg.id}
+                type="button"
+                onClick={() => handleSelect(cg.id)}
+                className="w-full text-left px-3 py-2 text-sm text-gray-900 hover:bg-[#8B1538]/5 hover:text-[#8B1538]"
+              >
+                {cg.name}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      {/* Close dropdown on outside click */}
+      {isOpen && !selectedGroup && (
+        <div className="fixed inset-0 z-0" onClick={() => setIsOpen(false)} />
+      )}
+    </div>
   )
 }

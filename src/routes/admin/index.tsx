@@ -600,6 +600,15 @@ function AdminDashboard() {
   }
   const noFollowThrough = members.filter(m => !m.follow_through).length
 
+  // Leadership level breakdown
+  const leadershipCounts = {
+    'Member': members.filter(m => m.leadership_level === 'Member').length,
+    'Disciple Maker': members.filter(m => m.leadership_level === 'Disciple Maker').length,
+    'Eagle': members.filter(m => m.leadership_level === 'Eagle').length,
+    'Pastor': members.filter(m => m.leadership_level === 'Pastor').length,
+    'Head Pastor': members.filter(m => m.leadership_level === 'Head Pastor').length,
+  }
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -834,6 +843,33 @@ function AdminDashboard() {
                   {noFollowThrough > 0 && (
                     <p className="text-xs text-gray-400 mt-3">{noFollowThrough} members with no follow-through data</p>
                   )}
+                </CardContent>
+              </Card>
+
+              {/* Leadership Breakdown */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Leadership Breakdown</CardTitle>
+                  <CardDescription>Distribution of members by leadership level</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {([
+                      { label: 'Member', count: leadershipCounts['Member'], bg: 'bg-gray-50', text: 'text-gray-700', bar: 'bg-gray-400' },
+                      { label: 'Disciple Maker', count: leadershipCounts['Disciple Maker'], bg: 'bg-blue-50', text: 'text-blue-700', bar: 'bg-blue-400' },
+                      { label: 'Eagle', count: leadershipCounts['Eagle'], bg: 'bg-amber-50', text: 'text-amber-700', bar: 'bg-amber-400' },
+                      { label: 'Pastor', count: leadershipCounts['Pastor'], bg: 'bg-purple-50', text: 'text-purple-700', bar: 'bg-purple-400' },
+                      { label: 'Head Pastor', count: leadershipCounts['Head Pastor'], bg: 'bg-red-50', text: 'text-red-700', bar: 'bg-red-400' },
+                    ] as const).map((level) => (
+                      <div key={level.label} className={`rounded-lg p-3 ${level.bg} border`}>
+                        <p className={`text-2xl font-bold ${level.text}`}>{level.count}</p>
+                        <p className="text-xs font-medium text-gray-600 mb-2">{level.label}</p>
+                        <div className="w-full h-1.5 bg-white/60 rounded-full overflow-hidden">
+                          <div className={`h-full ${level.bar} rounded-full`} style={{ width: `${totalMembers > 0 ? (level.count / totalMembers) * 100 : 0}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
 

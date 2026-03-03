@@ -171,7 +171,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <CardTitle>Members Directory</CardTitle>
-              <CardDescription>{filteredMembers.length} members found</CardDescription>
+              <CardDescription>{isLoading ? 'Loading members...' : `${filteredMembers.length} members found`}</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               {/* View Toggle */}

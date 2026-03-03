@@ -2,10 +2,11 @@
 
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { getMember, updateMember } from '../../../../server/functions/members'
+import { getMemberWithRelations, updateMember } from '../../../../server/functions/members'
 import { getSatellites } from '../../../../server/functions/satellites'
+import { getAllCellGroups, addMemberToCellGroup, removeMemberFromCellGroup } from '../../../../server/functions/cellGroups'
 import { MemberForm } from '../../../../components/MemberForm'
-import type { Member, MemberInsert, SatelliteRow } from '../../../../lib/types'
+import type { Member, MemberInsert, SatelliteRow, CellGroup } from '../../../../lib/types'
 import { ADMIN_PIN } from '../../../../lib/constants'
 
 // shadcn/ui components
@@ -100,6 +101,8 @@ function EditMemberForm({ memberId }: { memberId: string }) {
   const navigate = useNavigate()
   const [member, setMember] = useState<Member | null>(null)
   const [satellites, setSatellites] = useState<SatelliteRow[]>([])
+  const [cellGroups, setCellGroups] = useState<CellGroup[]>([])
+  const [currentCellGroupId, setCurrentCellGroupId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -108,17 +111,24 @@ function EditMemberForm({ memberId }: { memberId: string }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [memberData, sats] = await Promise.all([
-          getMember({ data: { id: memberId } }),
-          getSatellites({ data: false }), // Only active satellites
+        const [memberData, sats, cgs] = await Promise.all([
+          getMemberWithRelations({ data: { id: memberId } }),
+          getSatellites({ data: false }),
+          getAllCellGroups({ data: { activeOnly: true } }),
         ])
 
         if (!memberData) {
           setNotFound(true)
         } else {
-          setMember(memberData)
+          setMember(memberData as Member)
+          // Extract current active cell group from relations
+          const activeCG = (memberData as any).cell_groups?.find(
+            (cg: any) => cg.is_active
+          )
+          setCurrentCellGroupId(activeCG?.cell_group?.id ?? null)
         }
         setSatellites(sats)
+        setCellGroups(cgs)
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load member data')
@@ -130,12 +140,23 @@ function EditMemberForm({ memberId }: { memberId: string }) {
     fetchData()
   }, [memberId])
 
-  const handleSubmit = async (data: MemberInsert) => {
+  const handleSubmit = async (data: MemberInsert, newCellGroupId?: string | null) => {
     setIsSubmitting(true)
     setError(null)
 
     try {
       await updateMember({ data: { id: memberId, updates: data } })
+
+      // Handle cell group change if needed
+      if (newCellGroupId !== undefined && newCellGroupId !== currentCellGroupId) {
+        if (currentCellGroupId) {
+          await removeMemberFromCellGroup({ data: { memberId, cellGroupId: currentCellGroupId } })
+        }
+        if (newCellGroupId) {
+          await addMemberToCellGroup({ data: { memberId, cellGroupId: newCellGroupId, role: 'member' } })
+        }
+      }
+
       navigate({ to: '/admin', search: { tab: 'members' } })
     } catch (err) {
       console.error('Error updating member:', err)
@@ -217,6 +238,8 @@ function EditMemberForm({ memberId }: { memberId: string }) {
             <MemberForm
               member={member}
               satellites={satellites}
+              cellGroups={cellGroups}
+              currentCellGroupId={currentCellGroupId}
               onSubmit={handleSubmit}
               onCancel={handleCancel}
               isSubmitting={isSubmitting}
