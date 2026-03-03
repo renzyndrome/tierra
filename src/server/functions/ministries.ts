@@ -263,16 +263,32 @@ export const addMemberToMinistry = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<MemberMinistry> => {
     const supabase = createServerAdminClient()
 
-    // Check if already a member
+    // Check if already a member (active or inactive)
     const { data: existing } = await supabase
       .from('member_ministries')
-      .select('id')
+      .select('id, is_active')
       .eq('member_id', data.memberId)
       .eq('ministry_id', data.ministryId)
       .single()
 
     if (existing) {
-      throw new Error('Member is already in this ministry')
+      if (existing.is_active) {
+        throw new Error('Member is already in this ministry')
+      }
+      // Reactivate previously removed member
+      const { data: membership, error } = await supabase
+        .from('member_ministries')
+        .update({ is_active: true, role: data.role, left_at: null })
+        .eq('id', existing.id)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Error reactivating member in ministry:', error)
+        throw new Error('Failed to add member to ministry')
+      }
+
+      return membership as MemberMinistry
     }
 
     const { data: membership, error } = await supabase

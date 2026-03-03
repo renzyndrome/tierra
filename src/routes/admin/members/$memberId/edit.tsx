@@ -2,7 +2,7 @@
 
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { getMemberWithRelations, updateMember } from '../../../../server/functions/members'
+import { getMemberWithRelations, updateMember, getAllMembersLite } from '../../../../server/functions/members'
 import { getSatellites } from '../../../../server/functions/satellites'
 import { getAllCellGroups, addMemberToCellGroup, removeMemberFromCellGroup } from '../../../../server/functions/cellGroups'
 import { MemberForm } from '../../../../components/MemberForm'
@@ -103,6 +103,7 @@ function EditMemberForm({ memberId }: { memberId: string }) {
   const [satellites, setSatellites] = useState<SatelliteRow[]>([])
   const [cellGroups, setCellGroups] = useState<CellGroup[]>([])
   const [currentCellGroupId, setCurrentCellGroupId] = useState<string | null>(null)
+  const [allMembers, setAllMembers] = useState<{ id: string; name: string }[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -111,10 +112,11 @@ function EditMemberForm({ memberId }: { memberId: string }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [memberData, sats, cgs] = await Promise.all([
+        const [memberData, sats, cgs, membersLite] = await Promise.all([
           getMemberWithRelations({ data: { id: memberId } }),
           getSatellites({ data: false }),
           getAllCellGroups({ data: { activeOnly: true } }),
+          getAllMembersLite(),
         ])
 
         if (!memberData) {
@@ -129,6 +131,7 @@ function EditMemberForm({ memberId }: { memberId: string }) {
         }
         setSatellites(sats)
         setCellGroups(cgs)
+        setAllMembers(membersLite)
       } catch (err) {
         console.error('Error fetching data:', err)
         setError('Failed to load member data')
@@ -240,6 +243,8 @@ function EditMemberForm({ memberId }: { memberId: string }) {
               satellites={satellites}
               cellGroups={cellGroups}
               currentCellGroupId={currentCellGroupId}
+              allMembers={allMembers}
+              currentDisciplerId={member?.discipler_id ?? null}
               onSubmit={handleSubmit}
               onCancel={handleCancel}
               isSubmitting={isSubmitting}

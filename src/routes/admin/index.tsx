@@ -9,6 +9,7 @@ import { Button } from '../../components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { Label } from '../../components/ui/label'
 import { Textarea } from '../../components/ui/textarea'
 import { purgeAllData, seedTestAccounts } from '../../server/functions/seedData'
@@ -608,6 +609,7 @@ function AdminDashboard() {
     'Pastor': members.filter(m => m.leadership_level === 'Pastor').length,
     'Head Pastor': members.filter(m => m.leadership_level === 'Head Pastor').length,
   }
+  const fullTimeCount = members.filter(m => m.is_full_time).length
 
   if (authLoading) {
     return (
@@ -853,13 +855,14 @@ function AdminDashboard() {
                   <CardDescription>Distribution of members by leadership level</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     {([
                       { label: 'Member', count: leadershipCounts['Member'], bg: 'bg-gray-50', text: 'text-gray-700', bar: 'bg-gray-400' },
                       { label: 'Disciple Maker', count: leadershipCounts['Disciple Maker'], bg: 'bg-blue-50', text: 'text-blue-700', bar: 'bg-blue-400' },
                       { label: 'Eagle', count: leadershipCounts['Eagle'], bg: 'bg-amber-50', text: 'text-amber-700', bar: 'bg-amber-400' },
                       { label: 'Pastor', count: leadershipCounts['Pastor'], bg: 'bg-purple-50', text: 'text-purple-700', bar: 'bg-purple-400' },
                       { label: 'Head Pastor', count: leadershipCounts['Head Pastor'], bg: 'bg-red-50', text: 'text-red-700', bar: 'bg-red-400' },
+                      { label: 'Full Time', count: fullTimeCount, bg: 'bg-emerald-50', text: 'text-emerald-700', bar: 'bg-emerald-400' },
                     ] as const).map((level) => (
                       <div key={level.label} className={`rounded-lg p-3 ${level.bg} border`}>
                         <p className={`text-2xl font-bold ${level.text}`}>{level.count}</p>
@@ -1086,6 +1089,38 @@ function AdminDashboard() {
                 const satNewbies = satMembers.filter(m => m.discipleship_stage === 'Newbie').length
                 const satGrowing = satMembers.filter(m => m.discipleship_stage === 'Growing').length
                 const satLeaders = satMembers.filter(m => m.discipleship_stage === 'Leader').length
+                const satFullTime = satMembers.filter(m => m.is_full_time).length
+
+                // Leadership breakdown per satellite
+                const satLeadershipCounts = {
+                  'Member': satMembers.filter(m => m.leadership_level === 'Member').length,
+                  'Disciple Maker': satMembers.filter(m => m.leadership_level === 'Disciple Maker').length,
+                  'Eagle': satMembers.filter(m => m.leadership_level === 'Eagle').length,
+                  'Pastor': satMembers.filter(m => m.leadership_level === 'Pastor').length,
+                  'Head Pastor': satMembers.filter(m => m.leadership_level === 'Head Pastor').length,
+                }
+
+                // Discipleship journey per satellite
+                const satJourneyCounts = {
+                  'Consolidations': satMembers.filter(m => m.discipleship_journey === 'Consolidations').length,
+                  'Pre Encounter': satMembers.filter(m => m.discipleship_journey === 'Pre Encounter').length,
+                  'Encounter': satMembers.filter(m => m.discipleship_journey === 'Encounter').length,
+                  'Post-Encounter': satMembers.filter(m => m.discipleship_journey === 'Post-Encounter').length,
+                  'SOD1': satMembers.filter(m => m.discipleship_journey === 'SOD1').length,
+                  'SOD2': satMembers.filter(m => m.discipleship_journey === 'SOD2').length,
+                  'SOD3': satMembers.filter(m => m.discipleship_journey === 'SOD3').length,
+                  'QBS Theology 101': satMembers.filter(m => m.discipleship_journey === 'QBS Theology 101').length,
+                  'QBS Preaching 101': satMembers.filter(m => m.discipleship_journey === 'QBS Preaching 101').length,
+                }
+
+                // Follow-through per satellite
+                const satFollowThroughCounts = {
+                  'Salvation': satMembers.filter(m => m.follow_through === 'Salvation').length,
+                  'Prayer': satMembers.filter(m => m.follow_through === 'Prayer').length,
+                  'Bible and Devotion': satMembers.filter(m => m.follow_through === 'Bible and Devotion').length,
+                  'Transformation': satMembers.filter(m => m.follow_through === 'Transformation').length,
+                  'Cell and Church': satMembers.filter(m => m.follow_through === 'Cell and Church').length,
+                }
 
                 return (
                   <div className="space-y-6">
@@ -1148,35 +1183,41 @@ function AdminDashboard() {
                     )}
 
                     {/* Analytics */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                       <Card>
-                        <CardContent className="p-4 text-center">
-                          <p className="text-3xl font-bold text-[#8B1538]">{satMembers.length}</p>
+                        <CardContent className="p-3 text-center">
+                          <p className="text-2xl font-bold text-[#8B1538]">{satMembers.length}</p>
                           <p className="text-xs text-gray-500">Members</p>
                         </CardContent>
                       </Card>
                       <Card>
-                        <CardContent className="p-4 text-center">
-                          <p className="text-3xl font-bold text-teal-600">{satCellGroups.length}</p>
+                        <CardContent className="p-3 text-center">
+                          <p className="text-2xl font-bold text-teal-600">{satCellGroups.length}</p>
                           <p className="text-xs text-gray-500">Cell Groups</p>
                         </CardContent>
                       </Card>
-                      <Card>
-                        <CardContent className="p-4 text-center">
-                          <p className="text-3xl font-bold text-amber-600">{satNewbies}</p>
-                          <p className="text-xs text-gray-500">Newbies</p>
+                      <Card className="bg-emerald-50 border-emerald-200">
+                        <CardContent className="p-3 text-center">
+                          <p className="text-2xl font-bold text-emerald-600">{satFullTime}</p>
+                          <p className="text-xs text-emerald-500">Full Time</p>
                         </CardContent>
                       </Card>
-                      <Card>
-                        <CardContent className="p-4 text-center">
-                          <p className="text-3xl font-bold text-yellow-600">{satGrowing}</p>
-                          <p className="text-xs text-gray-500">Growing</p>
+                      <Card className="bg-purple-50 border-purple-200">
+                        <CardContent className="p-3 text-center">
+                          <p className="text-2xl font-bold text-purple-600">{satNewbies}</p>
+                          <p className="text-xs text-purple-500">Newbie</p>
                         </CardContent>
                       </Card>
-                      <Card>
-                        <CardContent className="p-4 text-center">
-                          <p className="text-3xl font-bold text-slate-600">{satLeaders}</p>
-                          <p className="text-xs text-gray-500">Leaders</p>
+                      <Card className="bg-yellow-50 border-yellow-200">
+                        <CardContent className="p-3 text-center">
+                          <p className="text-2xl font-bold text-yellow-600">{satGrowing}</p>
+                          <p className="text-xs text-yellow-600">Growing</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-orange-50 border-orange-200">
+                        <CardContent className="p-3 text-center">
+                          <p className="text-2xl font-bold text-orange-600">{satLeaders}</p>
+                          <p className="text-xs text-orange-500">Leader</p>
                         </CardContent>
                       </Card>
                     </div>
@@ -1249,6 +1290,146 @@ function AdminDashboard() {
                       </Card>
                     </div>
 
+                    {/* Leadership Breakdown */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg">Leadership Breakdown</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                          {([
+                            { label: 'Member', count: satLeadershipCounts['Member'], bg: 'bg-gray-50', text: 'text-gray-700', bar: 'bg-gray-400' },
+                            { label: 'Disciple Maker', count: satLeadershipCounts['Disciple Maker'], bg: 'bg-blue-50', text: 'text-blue-700', bar: 'bg-blue-400' },
+                            { label: 'Eagle', count: satLeadershipCounts['Eagle'], bg: 'bg-amber-50', text: 'text-amber-700', bar: 'bg-amber-400' },
+                            { label: 'Pastor', count: satLeadershipCounts['Pastor'], bg: 'bg-purple-50', text: 'text-purple-700', bar: 'bg-purple-400' },
+                            { label: 'Head Pastor', count: satLeadershipCounts['Head Pastor'], bg: 'bg-red-50', text: 'text-red-700', bar: 'bg-red-400' },
+                            { label: 'Full Time', count: satFullTime, bg: 'bg-emerald-50', text: 'text-emerald-700', bar: 'bg-emerald-400' },
+                          ] as const).map((level) => (
+                            <div key={level.label} className={`rounded-lg p-3 ${level.bg} border`}>
+                              <p className={`text-2xl font-bold ${level.text}`}>{level.count}</p>
+                              <p className="text-xs font-medium text-gray-600 mb-2">{level.label}</p>
+                              <div className="w-full h-1.5 bg-white/60 rounded-full overflow-hidden">
+                                <div className={`h-full ${level.bar} rounded-full`} style={{ width: `${satMembers.length > 0 ? (level.count / satMembers.length) * 100 : 0}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Discipleship Journey Breakdown */}
+                    {satMembers.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg">Discipleship Journey</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {/* Newbie Journey */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="w-3 h-3 rounded-full bg-purple-500" />
+                                <span className="font-semibold text-sm">Newbie ({satNewbies})</span>
+                              </div>
+                              <div className="space-y-2">
+                                {([
+                                  { label: 'Consolidations', count: satJourneyCounts['Consolidations'] },
+                                  { label: 'Pre Encounter', count: satJourneyCounts['Pre Encounter'] },
+                                ] as const).map((item) => (
+                                  <div key={item.label} className="flex items-center justify-between">
+                                    <span className="text-sm text-gray-600">{item.label}</span>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-purple-400 rounded-full" style={{ width: `${satNewbies > 0 ? (item.count / satNewbies) * 100 : 0}%` }} />
+                                      </div>
+                                      <span className="text-sm font-medium w-6 text-right">{item.count}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            {/* Growing Journey */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="w-3 h-3 rounded-full bg-yellow-500" />
+                                <span className="font-semibold text-sm">Growing ({satGrowing})</span>
+                              </div>
+                              <div className="space-y-2">
+                                {([
+                                  { label: 'Encounter', count: satJourneyCounts['Encounter'] },
+                                  { label: 'Post-Encounter', count: satJourneyCounts['Post-Encounter'] },
+                                  { label: 'SOD 1', count: satJourneyCounts['SOD1'] },
+                                  { label: 'SOD 2', count: satJourneyCounts['SOD2'] },
+                                ] as const).map((item) => (
+                                  <div key={item.label} className="flex items-center justify-between">
+                                    <span className="text-sm text-gray-600">{item.label}</span>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${satGrowing > 0 ? (item.count / satGrowing) * 100 : 0}%` }} />
+                                      </div>
+                                      <span className="text-sm font-medium w-6 text-right">{item.count}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            {/* Leader Journey */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="w-3 h-3 rounded-full bg-orange-500" />
+                                <span className="font-semibold text-sm">Leader ({satLeaders})</span>
+                              </div>
+                              <div className="space-y-2">
+                                {([
+                                  { label: 'SOD 3', count: satJourneyCounts['SOD3'] },
+                                  { label: 'QBS Theology', count: satJourneyCounts['QBS Theology 101'] },
+                                  { label: 'QBS Preaching', count: satJourneyCounts['QBS Preaching 101'] },
+                                ] as const).map((item) => (
+                                  <div key={item.label} className="flex items-center justify-between">
+                                    <span className="text-sm text-gray-600">{item.label}</span>
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                        <div className="h-full bg-orange-400 rounded-full" style={{ width: `${satLeaders > 0 ? (item.count / satLeaders) * 100 : 0}%` }} />
+                                      </div>
+                                      <span className="text-sm font-medium w-6 text-right">{item.count}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Follow-Through Breakdown */}
+                    {satMembers.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg">Follow-Through Stages</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            {([
+                              { label: 'Salvation', count: satFollowThroughCounts['Salvation'], color: 'text-red-600' },
+                              { label: 'Prayer', count: satFollowThroughCounts['Prayer'], color: 'text-blue-600' },
+                              { label: 'Bible & Devotion', count: satFollowThroughCounts['Bible and Devotion'], color: 'text-amber-600' },
+                              { label: 'Transformation', count: satFollowThroughCounts['Transformation'], color: 'text-purple-600' },
+                              { label: 'Cell & Church', count: satFollowThroughCounts['Cell and Church'], color: 'text-teal-600' },
+                            ] as const).map((item) => (
+                              <div key={item.label} className="text-center p-3 bg-gray-50 rounded-lg border">
+                                <p className={`text-2xl font-bold ${item.color}`}>{item.count}</p>
+                                <p className="text-xs font-medium text-gray-600 mt-1">{item.label}</p>
+                                <div className="w-full h-1.5 bg-white rounded-full overflow-hidden mt-2">
+                                  <div className="h-full bg-gray-400 rounded-full" style={{ width: `${satMembers.length > 0 ? (item.count / satMembers.length) * 100 : 0}%` }} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
                     {/* Members List */}
                     <Card>
                       <CardHeader>
@@ -1280,33 +1461,163 @@ function AdminDashboard() {
                 </div>
 
                 {/* Summary Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                   <Card>
-                    <CardContent className="p-4 text-center">
-                      <p className="text-3xl font-bold text-[#8B1538]">{satellites.length}</p>
-                      <p className="text-sm text-gray-500">Total Satellites</p>
+                    <CardContent className="p-3 text-center">
+                      <p className="text-2xl font-bold text-[#8B1538]">{satellites.filter(s => s.is_active).length}</p>
+                      <p className="text-xs text-gray-500">Satellites</p>
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardContent className="p-4 text-center">
-                      <p className="text-3xl font-bold text-teal-600">{satellites.filter(s => s.is_active).length}</p>
-                      <p className="text-sm text-gray-500">Active</p>
+                    <CardContent className="p-3 text-center">
+                      <p className="text-2xl font-bold text-teal-600">{members.length}</p>
+                      <p className="text-xs text-gray-500">Total Members</p>
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardContent className="p-4 text-center">
-                      <p className="text-3xl font-bold text-amber-600">{members.length}</p>
-                      <p className="text-sm text-gray-500">Total Members</p>
+                    <CardContent className="p-3 text-center">
+                      <p className="text-2xl font-bold text-blue-600">{cellGroups.length}</p>
+                      <p className="text-xs text-gray-500">Cell Groups</p>
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardContent className="p-4 text-center">
-                      <p className="text-3xl font-bold text-slate-600">
-                        {members.length > 0 && satellites.filter(s => s.is_active).length > 0
-                          ? Math.round(members.length / satellites.filter(s => s.is_active).length)
-                          : 0}
-                      </p>
-                      <p className="text-sm text-gray-500">Avg per Satellite</p>
+                    <CardContent className="p-3 text-center">
+                      <p className="text-2xl font-bold text-purple-600">{members.filter(m => m.discipleship_stage === 'Newbie').length}</p>
+                      <p className="text-xs text-gray-500">Newbie</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-3 text-center">
+                      <p className="text-2xl font-bold text-yellow-600">{members.filter(m => m.discipleship_stage === 'Growing').length}</p>
+                      <p className="text-xs text-gray-500">Growing</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-3 text-center">
+                      <p className="text-2xl font-bold text-orange-600">{members.filter(m => m.discipleship_stage === 'Leader').length}</p>
+                      <p className="text-xs text-gray-500">Leader</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Satellite Comparison Table */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Satellite Comparison</CardTitle>
+                    <CardDescription>Side-by-side overview of all satellites</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="font-semibold">Satellite</TableHead>
+                            <TableHead className="text-center">Members</TableHead>
+                            <TableHead className="text-center">Cell Groups</TableHead>
+                            <TableHead className="text-center">Newbie</TableHead>
+                            <TableHead className="text-center">Growing</TableHead>
+                            <TableHead className="text-center">Leader</TableHead>
+                            <TableHead className="text-center">Disciple Makers</TableHead>
+                            <TableHead className="text-center">Full Time</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {satellites.filter(s => s.is_active).map(sat => {
+                            const sm = members.filter(m => m.satellite_id === sat.id)
+                            return (
+                              <TableRow key={sat.id} className="cursor-pointer hover:bg-gray-50" onClick={() => setSelectedSatelliteId(sat.id)}>
+                                <TableCell className="font-medium">{sat.name.replace('Quest ', '')}</TableCell>
+                                <TableCell className="text-center font-semibold text-[#8B1538]">{sm.length}</TableCell>
+                                <TableCell className="text-center">{cellGroups.filter(g => g.satellite_id === sat.id).length}</TableCell>
+                                <TableCell className="text-center text-purple-600">{sm.filter(m => m.discipleship_stage === 'Newbie').length}</TableCell>
+                                <TableCell className="text-center text-yellow-600">{sm.filter(m => m.discipleship_stage === 'Growing').length}</TableCell>
+                                <TableCell className="text-center text-orange-600">{sm.filter(m => m.discipleship_stage === 'Leader').length}</TableCell>
+                                <TableCell className="text-center text-blue-600">{sm.filter(m => m.leadership_level === 'Disciple Maker' || m.leadership_level === 'Eagle').length}</TableCell>
+                                <TableCell className="text-center text-emerald-600">{sm.filter(m => m.is_full_time).length}</TableCell>
+                              </TableRow>
+                            )
+                          })}
+                          {/* Totals row */}
+                          <TableRow className="bg-gray-50 font-semibold border-t-2">
+                            <TableCell>Total</TableCell>
+                            <TableCell className="text-center text-[#8B1538]">{members.length}</TableCell>
+                            <TableCell className="text-center">{cellGroups.length}</TableCell>
+                            <TableCell className="text-center text-purple-600">{members.filter(m => m.discipleship_stage === 'Newbie').length}</TableCell>
+                            <TableCell className="text-center text-yellow-600">{members.filter(m => m.discipleship_stage === 'Growing').length}</TableCell>
+                            <TableCell className="text-center text-orange-600">{members.filter(m => m.discipleship_stage === 'Leader').length}</TableCell>
+                            <TableCell className="text-center text-blue-600">{members.filter(m => m.leadership_level === 'Disciple Maker' || m.leadership_level === 'Eagle').length}</TableCell>
+                            <TableCell className="text-center text-emerald-600">{members.filter(m => m.is_full_time).length}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Members Distribution Bar Chart */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">Members per Satellite</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {satellites
+                          .filter(s => s.is_active)
+                          .map(sat => {
+                            const count = members.filter(m => m.satellite_id === sat.id).length
+                            const maxCount = Math.max(...satellites.filter(s => s.is_active).map(s => members.filter(m => m.satellite_id === s.id).length), 1)
+                            return (
+                              <div key={sat.id} className="cursor-pointer hover:bg-gray-50 rounded p-1 -m-1" onClick={() => setSelectedSatelliteId(sat.id)}>
+                                <div className="flex justify-between text-sm mb-1">
+                                  <span className="font-medium text-gray-700">{sat.name.replace('Quest ', '')}</span>
+                                  <span className="font-semibold text-[#8B1538]">{count}</span>
+                                </div>
+                                <div className="w-full bg-gray-100 rounded-full h-3">
+                                  <div className="bg-[#8B1538] h-3 rounded-full transition-all" style={{ width: `${(count / maxCount) * 100}%` }} />
+                                </div>
+                              </div>
+                            )
+                          })
+                          .sort((a, b) => 0)}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">Stage Distribution per Satellite</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {satellites
+                          .filter(s => s.is_active)
+                          .map(sat => {
+                            const sm = members.filter(m => m.satellite_id === sat.id)
+                            const n = sm.filter(m => m.discipleship_stage === 'Newbie').length
+                            const g = sm.filter(m => m.discipleship_stage === 'Growing').length
+                            const l = sm.filter(m => m.discipleship_stage === 'Leader').length
+                            const total = sm.length || 1
+                            return (
+                              <div key={sat.id} className="cursor-pointer hover:bg-gray-50 rounded p-1 -m-1" onClick={() => setSelectedSatelliteId(sat.id)}>
+                                <div className="flex justify-between text-sm mb-1">
+                                  <span className="font-medium text-gray-700">{sat.name.replace('Quest ', '')}</span>
+                                  <span className="text-xs text-gray-400">{sm.length} members</span>
+                                </div>
+                                <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
+                                  {n > 0 && <div className="bg-purple-400" style={{ width: `${(n / total) * 100}%` }} title={`${n} Newbie`} />}
+                                  {g > 0 && <div className="bg-yellow-400" style={{ width: `${(g / total) * 100}%` }} title={`${g} Growing`} />}
+                                  {l > 0 && <div className="bg-orange-400" style={{ width: `${(l / total) * 100}%` }} title={`${l} Leader`} />}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        <div className="flex gap-4 mt-2 text-xs text-gray-500 justify-center">
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-400" /> Newbie</span>
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400" /> Growing</span>
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-400" /> Leader</span>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 </div>

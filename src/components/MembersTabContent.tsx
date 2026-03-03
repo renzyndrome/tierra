@@ -5,7 +5,7 @@ import { Link } from '@tanstack/react-router'
 import { MemberCard, MemberCardSkeleton } from './MemberCard'
 import { archiveMember, restoreMember, deleteMember } from '../server/functions/members'
 import { getPlaceholderAvatar } from '../lib/storage'
-import { MEMBER_CATEGORIES, LEADERSHIP_LEVELS } from '../lib/constants'
+import { MEMBER_CATEGORIES, LEADERSHIP_LEVELS, DISCIPLESHIP_JOURNEY_STAGES } from '../lib/constants'
 import type { Member, Satellite } from '../lib/types'
 
 // shadcn/ui
@@ -64,6 +64,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
   const [filterCity, setFilterCity] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterLeadership, setFilterLeadership] = useState('')
+  const [filterJourney, setFilterJourney] = useState('')
 
   // Sort
   const [sortBy, setSortBy] = useState('name')
@@ -77,7 +78,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
   // Derived data
   const uniqueCities = [...new Set(members.map(m => m.city).filter(Boolean))].sort()
 
-  const hasFilters = filterSatellite || filterStage || filterStatus || filterCity || filterCategory || filterLeadership || sortBy !== 'name' || sortOrder !== 'asc'
+  const hasFilters = filterSatellite || filterStage || filterStatus || filterCity || filterCategory || filterLeadership || filterJourney || sortBy !== 'name' || sortOrder !== 'asc'
 
   const clearFilters = () => {
     setFilterSatellite('')
@@ -86,6 +87,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
     setFilterCity('')
     setFilterCategory('')
     setFilterLeadership('')
+    setFilterJourney('')
     setSortBy('name')
     setSortOrder('asc')
   }
@@ -106,6 +108,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
       if (filterCity && member.city !== filterCity) return false
       if (filterCategory && member.member_category !== filterCategory) return false
       if (filterLeadership && member.leadership_level !== filterLeadership) return false
+      if (filterJourney && member.discipleship_journey !== filterJourney) return false
       return true
     })
     .sort((a, b) => {
@@ -295,6 +298,16 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
               <option value="">All Leadership</option>
               {LEADERSHIP_LEVELS.map((level) => (
                 <option key={level.value} value={level.value}>{level.label}</option>
+              ))}
+            </select>
+            <select
+              value={filterJourney}
+              onChange={(e) => setFilterJourney(e.target.value)}
+              className="px-3 py-1.5 border rounded-md text-sm bg-white"
+            >
+              <option value="">All Journey Stages</option>
+              {DISCIPLESHIP_JOURNEY_STAGES.map((stage) => (
+                <option key={stage.value} value={stage.value}>{stage.label}</option>
               ))}
             </select>
             {hasFilters && (

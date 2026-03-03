@@ -334,6 +334,28 @@ export const getMemberCount = createServerFn({ method: 'GET' })
   })
 
 // ============================================
+// GET ALL MEMBERS (lightweight: id + name only)
+// ============================================
+
+export const getAllMembersLite = createServerFn({ method: 'GET' })
+  .handler(async (): Promise<{ id: string; name: string }[]> => {
+    const supabase = createServerAdminClient()
+
+    const { data: members, error } = await supabase
+      .from('members')
+      .select('id, name')
+      .eq('is_archived', false)
+      .order('name')
+
+    if (error) {
+      console.error('Error fetching members lite:', error)
+      throw new Error('Failed to fetch members')
+    }
+
+    return members || []
+  })
+
+// ============================================
 // GET MEMBERS BY SATELLITE
 // ============================================
 
