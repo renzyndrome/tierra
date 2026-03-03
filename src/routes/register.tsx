@@ -20,8 +20,8 @@ export const Route = createFileRoute('/register')({
   validateSearch: (search: Record<string, unknown>) => ({
     event: (search.event as string) || undefined,
   }),
-  loader: async ({ search }) => {
-    const eventId = (search as { event?: string }).event
+  loader: async ({ location }) => {
+    const eventId = (location.search as { event?: string })?.event
     if (!eventId) return { event: null }
     try {
       const ev = await getEventPublic({ data: { id: eventId } })
