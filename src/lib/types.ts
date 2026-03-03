@@ -5,6 +5,7 @@
 // ============================================
 
 export type DiscipleshipStage = 'Newbie' | 'Growing' | 'Leader'
+export type EventMemberStatus = 'First Timer' | 'Newbie' | 'Regular' | 'Leader'
 export type MembershipStatus = 'visitor' | 'regular' | 'active' | 'inactive'
 export type SpiritualSentiment = 'struggling' | 'stable' | 'thriving'
 export type Gender = 'male' | 'female'
@@ -484,11 +485,15 @@ export interface EventRegistration {
   event_id: string | null
   member_id: string | null
   name: string
+  email: string | null
+  contact_number: string | null
   age: number
   city: string
   satellite: string
-  discipleship_stage: DiscipleshipStage
-  spiritual_description: string
+  member_status: EventMemberStatus
+  invited_by: string | null
+  discipleship_stage: DiscipleshipStage | null
+  spiritual_description: string | null
   spiritual_score: number | null
   spiritual_sentiment: SpiritualSentiment | null
   needs_support: boolean
@@ -502,11 +507,15 @@ export interface EventRegistrationInsert {
   event_id?: string | null
   member_id?: string | null
   name: string
+  email?: string | null
+  contact_number?: string | null
   age: number
   city: string
   satellite: string
-  discipleship_stage: DiscipleshipStage
-  spiritual_description: string
+  member_status?: EventMemberStatus
+  invited_by?: string | null
+  discipleship_stage?: DiscipleshipStage | null
+  spiritual_description?: string | null
   event_name?: string
 }
 

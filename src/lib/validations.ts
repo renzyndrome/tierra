@@ -6,6 +6,19 @@ export const registrationSchema = z.object({
     .min(2, 'Name must be at least 2 characters')
     .max(100, 'Name must be less than 100 characters')
     .transform((val) => val.trim()),
+  email: z
+    .string()
+    .email('Please enter a valid email address')
+    .max(200)
+    .transform((val) => val.trim().toLowerCase())
+    .optional()
+    .or(z.literal('')),
+  contact_number: z
+    .string()
+    .max(20, 'Contact number is too long')
+    .transform((val) => val.trim())
+    .optional()
+    .or(z.literal('')),
   age: z
     .number({ message: 'Age must be a number' })
     .int('Age must be a whole number')
@@ -19,14 +32,15 @@ export const registrationSchema = z.object({
   satellite: z
     .string({ message: 'Please select a satellite' })
     .min(1, 'Please select a satellite'),
-  discipleship_stage: z.enum(['Newbie', 'Growing', 'Leader'], {
-    message: 'Please select your discipleship stage',
+  member_status: z.enum(['First Timer', 'Newbie', 'Regular', 'Leader'], {
+    message: 'Please select your member status',
   }),
-  spiritual_description: z
-    .string({ message: 'Spiritual description is required' })
-    .min(10, 'Please share at least 10 characters about your spiritual journey')
-    .max(500, 'Please keep your description under 500 characters')
-    .transform((val) => val.trim()),
+  invited_by: z
+    .string()
+    .max(100, 'Name is too long')
+    .transform((val) => val.trim())
+    .optional()
+    .or(z.literal('')),
   event_id: z.string().uuid().optional(),
 })
 

@@ -5,7 +5,7 @@ import { getEventPublic } from '../server/functions/events'
 import { getSatellites } from '../server/functions/satellites'
 import { registrationSchema } from '../lib/validations'
 import {
-  DISCIPLESHIP_STAGES,
+  EVENT_MEMBER_STATUSES,
   EVENT_NAME,
   EVENT_TITLE,
   EVENT_DATES,
@@ -13,7 +13,7 @@ import {
   LOGO_PATH,
   REGISTRATION_SUCCESS_MESSAGE,
 } from '../lib/constants'
-import type { DiscipleshipStage, SatelliteRecord } from '../lib/types'
+import type { EventMemberStatus, SatelliteRecord } from '../lib/types'
 import type { RegistrationStatus } from '../server/functions/events'
 
 export const Route = createFileRoute('/register')({
@@ -91,11 +91,13 @@ function RegisterPage() {
 
   // Form state
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [contactNumber, setContactNumber] = useState('')
   const [age, setAge] = useState('')
   const [city, setCity] = useState('')
   const [satellite, setSatellite] = useState('')
-  const [stage, setStage] = useState<DiscipleshipStage | ''>('')
-  const [description, setDescription] = useState('')
+  const [memberStatus, setMemberStatus] = useState<EventMemberStatus | ''>('')
+  const [invitedBy, setInvitedBy] = useState('')
 
   // Fetch satellites on mount
   useEffect(() => {
@@ -116,11 +118,13 @@ function RegisterPage() {
 
     const formData = {
       name,
+      email: email || undefined,
+      contact_number: contactNumber || undefined,
       age: parseInt(age, 10) || 0,
       city,
       satellite,
-      discipleship_stage: stage as DiscipleshipStage,
-      spiritual_description: description,
+      member_status: memberStatus as EventMemberStatus,
+      invited_by: invitedBy || undefined,
       ...(eventInfo ? { event_id: eventInfo.id } : {}),
     }
 
@@ -277,7 +281,7 @@ function RegisterPage() {
           {/* Name */}
           <div className="mb-4">
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-              Full Name
+              Full Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -290,10 +294,42 @@ function RegisterPage() {
             {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
           </div>
 
+          {/* Email */}
+          <div className="mb-4">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              Email Address
+            </label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={`w-full px-4 py-3 rounded-lg border ${errors.email ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition`}
+              placeholder="juan@email.com"
+            />
+            {errors.email && <p className="mt-1 text-sm text-red-500">{errors.email}</p>}
+          </div>
+
+          {/* Contact Number */}
+          <div className="mb-4">
+            <label htmlFor="contact_number" className="block text-sm font-medium text-gray-700 mb-1">
+              Contact Number
+            </label>
+            <input
+              type="tel"
+              id="contact_number"
+              value={contactNumber}
+              onChange={(e) => setContactNumber(e.target.value)}
+              className={`w-full px-4 py-3 rounded-lg border ${errors.contact_number ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition`}
+              placeholder="09171234567"
+            />
+            {errors.contact_number && <p className="mt-1 text-sm text-red-500">{errors.contact_number}</p>}
+          </div>
+
           {/* Age */}
           <div className="mb-4">
             <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">
-              Age
+              Age <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -311,7 +347,7 @@ function RegisterPage() {
           {/* City */}
           <div className="mb-4">
             <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-              City/Municipality
+              City/Municipality <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -327,7 +363,7 @@ function RegisterPage() {
           {/* Satellite */}
           <div className="mb-4">
             <label htmlFor="satellite" className="block text-sm font-medium text-gray-700 mb-1">
-              Satellite Location
+              Satellite Location <span className="text-red-500">*</span>
             </label>
             <select
               id="satellite"
@@ -343,31 +379,31 @@ function RegisterPage() {
             {errors.satellite && <p className="mt-1 text-sm text-red-500">{errors.satellite}</p>}
           </div>
 
-          {/* Discipleship Stage */}
+          {/* Member Status */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Discipleship Stage
+              Member Status <span className="text-red-500">*</span>
             </label>
             <div className="space-y-2">
-              {DISCIPLESHIP_STAGES.map((s) => (
+              {EVENT_MEMBER_STATUSES.map((s) => (
                 <label
                   key={s.value}
                   className={`flex items-start p-3 rounded-lg border cursor-pointer transition ${
-                    stage === s.value ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
+                    memberStatus === s.value ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
                   <input
                     type="radio"
-                    name="stage"
+                    name="member_status"
                     value={s.value}
-                    checked={stage === s.value}
-                    onChange={(e) => setStage(e.target.value as DiscipleshipStage)}
+                    checked={memberStatus === s.value}
+                    onChange={(e) => setMemberStatus(e.target.value as EventMemberStatus)}
                     className="sr-only"
                   />
                   <span className={`w-5 h-5 rounded-full border-2 mr-3 mt-0.5 flex-shrink-0 flex items-center justify-center ${
-                    stage === s.value ? 'border-red-500' : 'border-gray-300'
+                    memberStatus === s.value ? 'border-red-500' : 'border-gray-300'
                   }`}>
-                    {stage === s.value && <span className="w-2.5 h-2.5 bg-red-500 rounded-full" />}
+                    {memberStatus === s.value && <span className="w-2.5 h-2.5 bg-red-500 rounded-full" />}
                   </span>
                   <div>
                     <span className="text-gray-700 font-medium">{s.label}</span>
@@ -376,36 +412,25 @@ function RegisterPage() {
                 </label>
               ))}
             </div>
-            {errors.discipleship_stage && (
-              <p className="mt-1 text-sm text-red-500">{errors.discipleship_stage}</p>
+            {errors.member_status && (
+              <p className="mt-1 text-sm text-red-500">{errors.member_status}</p>
             )}
           </div>
 
-          {/* Spiritual Description */}
+          {/* Invited By */}
           <div className="mb-6">
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-              Share your spiritual journey
+            <label htmlFor="invited_by" className="block text-sm font-medium text-gray-700 mb-1">
+              Who invited you? <span className="text-gray-400 text-xs font-normal">(optional)</span>
             </label>
-            <p className="text-xs text-gray-500 mb-2">
-              Tell us about where you are in your faith walk. This helps us connect you with the right community.
-            </p>
-            <textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              maxLength={500}
-              className={`w-full px-4 py-3 rounded-lg border ${errors.spiritual_description ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition resize-none`}
-              placeholder="I've been attending church for 2 years and I'm excited to grow more in my faith..."
+            <input
+              type="text"
+              id="invited_by"
+              value={invitedBy}
+              onChange={(e) => setInvitedBy(e.target.value)}
+              className={`w-full px-4 py-3 rounded-lg border ${errors.invited_by ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition`}
+              placeholder="Name of the person who invited you"
             />
-            <div className="flex justify-between mt-1">
-              {errors.spiritual_description ? (
-                <p className="text-sm text-red-500">{errors.spiritual_description}</p>
-              ) : (
-                <span />
-              )}
-              <span className="text-xs text-gray-400">{description.length}/500</span>
-            </div>
+            {errors.invited_by && <p className="mt-1 text-sm text-red-500">{errors.invited_by}</p>}
           </div>
 
           {/* Submit Button */}

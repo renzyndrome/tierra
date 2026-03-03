@@ -314,14 +314,16 @@ function EventDetailPage() {
   const exportCSV = () => {
     if (!attendees.length) return
 
-    const headers = ['Name', 'Age', 'City', 'Satellite', 'Stage', 'Spiritual Description', 'Registered At']
+    const headers = ['Name', 'Email', 'Contact', 'Age', 'City', 'Satellite', 'Status', 'Invited By', 'Registered At']
     const rows = attendees.map((a) => [
       a.name,
+      a.email || '',
+      a.contact_number || '',
       a.age.toString(),
       a.city,
       a.satellite,
-      a.discipleship_stage,
-      `"${a.spiritual_description.replace(/"/g, '""')}"`,
+      a.member_status || '',
+      a.invited_by || '',
       new Date(a.registered_at).toLocaleString(),
     ])
 
@@ -385,10 +387,11 @@ function EventDetailPage() {
       return regTime < cutoff
     }).length,
     needsSupportCount: attendees.filter(a => a.needs_support).length,
-    byStage: {
-      Newbie: attendees.filter(a => a.discipleship_stage === 'Newbie').length,
-      Growing: attendees.filter(a => a.discipleship_stage === 'Growing').length,
-      Leader: attendees.filter(a => a.discipleship_stage === 'Leader').length,
+    byStatus: {
+      'First Timer': attendees.filter(a => a.member_status === 'First Timer').length,
+      'Newbie': attendees.filter(a => a.member_status === 'Newbie').length,
+      'Regular': attendees.filter(a => a.member_status === 'Regular').length,
+      'Leader': attendees.filter(a => a.member_status === 'Leader').length,
     },
     bySatellite: attendees.reduce((acc, a) => {
       acc[a.satellite] = (acc[a.satellite] || 0) + 1
@@ -402,7 +405,7 @@ function EventDetailPage() {
     value,
   }))
 
-  const stageData = Object.entries(stats.byStage).map(([name, value]) => ({
+  const statusData = Object.entries(stats.byStatus).map(([name, value]) => ({
     name,
     value,
   }))
@@ -411,7 +414,7 @@ function EventDetailPage() {
   const filteredAttendees = attendees.filter((a) => {
     if (filterSearch && !a.name.toLowerCase().includes(filterSearch.toLowerCase())) return false
     if (filterSatellite && a.satellite !== filterSatellite) return false
-    if (filterStage && a.discipleship_stage !== filterStage) return false
+    if (filterStage && a.member_status !== filterStage) return false
     return true
   })
 
@@ -540,14 +543,14 @@ function EventDetailPage() {
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardDescription>Newbies</CardDescription>
-                  <CardTitle className="text-3xl text-amber-600">{stats.byStage.Newbie}</CardTitle>
+                  <CardDescription>First Timers</CardDescription>
+                  <CardTitle className="text-3xl text-amber-600">{stats.byStatus['First Timer']}</CardTitle>
                 </CardHeader>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
                   <CardDescription>Leaders</CardDescription>
-                  <CardTitle className="text-3xl text-slate-600">{stats.byStage.Leader}</CardTitle>
+                  <CardTitle className="text-3xl text-slate-600">{stats.byStatus.Leader}</CardTitle>
                 </CardHeader>
               </Card>
             </div>
@@ -695,17 +698,17 @@ function EventDetailPage() {
                   </CardContent>
                 </Card>
 
-                {/* Stage Bar Chart */}
+                {/* Member Status Bar Chart */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">Discipleship Stage Distribution</CardTitle>
+                    <CardTitle className="text-lg">Member Status Distribution</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={stageData} layout="vertical">
+                      <BarChart data={statusData} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                         <XAxis type="number" />
-                        <YAxis type="category" dataKey="name" width={80} />
+                        <YAxis type="category" dataKey="name" width={90} />
                         <Tooltip />
                         <Bar dataKey="value" fill="#8B1538" radius={[0, 4, 4, 0]} />
                       </BarChart>
@@ -749,9 +752,10 @@ function EventDetailPage() {
                     onChange={(e) => setFilterStage(e.target.value)}
                     className="px-3 py-2 border rounded-md text-sm bg-white"
                   >
-                    <option value="">All Stages</option>
+                    <option value="">All Statuses</option>
+                    <option value="First Timer">First Timer</option>
                     <option value="Newbie">Newbie</option>
-                    <option value="Growing">Growing</option>
+                    <option value="Regular">Regular</option>
                     <option value="Leader">Leader</option>
                   </select>
                   {(filterSearch || filterSatellite || filterStage) && (
@@ -784,7 +788,7 @@ function EventDetailPage() {
                         <TableHead className="font-semibold">Age</TableHead>
                         <TableHead className="font-semibold">City</TableHead>
                         <TableHead className="font-semibold">Satellite</TableHead>
-                        <TableHead className="font-semibold">Stage</TableHead>
+                        <TableHead className="font-semibold">Status</TableHead>
                         <TableHead className="font-semibold">Registered</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -813,14 +817,16 @@ function EventDetailPage() {
                             <TableCell>
                               <span
                                 className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  attendee.discipleship_stage === 'Newbie'
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : attendee.discipleship_stage === 'Growing'
-                                      ? 'bg-teal-100 text-teal-800'
-                                      : 'bg-slate-200 text-slate-800'
+                                  attendee.member_status === 'First Timer'
+                                    ? 'bg-purple-100 text-purple-800'
+                                    : attendee.member_status === 'Newbie'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : attendee.member_status === 'Regular'
+                                        ? 'bg-teal-100 text-teal-800'
+                                        : 'bg-slate-200 text-slate-800'
                                 }`}
                               >
-                                {attendee.discipleship_stage}
+                                {attendee.member_status}
                               </span>
                             </TableCell>
                             <TableCell className="text-gray-600">
@@ -1434,28 +1440,28 @@ function EventDetailPage() {
                 <p className="font-medium">{selectedAttendee?.satellite}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-500">Discipleship Stage</p>
-                <p className="font-medium">{selectedAttendee?.discipleship_stage}</p>
+                <p className="text-sm font-medium text-gray-500">Member Status</p>
+                <p className="font-medium">{selectedAttendee?.member_status}</p>
               </div>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-2">Spiritual Journey</p>
-              <p className="text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg text-sm">
-                {selectedAttendee?.spiritual_description}
-              </p>
-            </div>
-            {selectedAttendee?.spiritual_score && (
-              <div className="flex gap-4 pt-2 border-t">
+              {selectedAttendee?.email && (
                 <div>
-                  <p className="text-sm font-medium text-gray-500">AI Score</p>
-                  <p className="text-2xl font-bold">{selectedAttendee.spiritual_score}/10</p>
+                  <p className="text-sm font-medium text-gray-500">Email</p>
+                  <p className="font-medium">{selectedAttendee.email}</p>
                 </div>
+              )}
+              {selectedAttendee?.contact_number && (
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Sentiment</p>
-                  <p className="capitalize font-medium">{selectedAttendee.spiritual_sentiment}</p>
+                  <p className="text-sm font-medium text-gray-500">Contact</p>
+                  <p className="font-medium">{selectedAttendee.contact_number}</p>
                 </div>
-              </div>
-            )}
+              )}
+              {selectedAttendee?.invited_by && (
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Invited By</p>
+                  <p className="font-medium">{selectedAttendee.invited_by}</p>
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

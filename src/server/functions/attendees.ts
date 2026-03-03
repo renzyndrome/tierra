@@ -26,11 +26,13 @@ export const registerAttendee = createServerFn({ method: 'POST' })
       .from('event_registrations')
       .insert({
         name: data.name,
+        ...(data.email ? { email: data.email } : {}),
+        ...(data.contact_number ? { contact_number: data.contact_number } : {}),
         age: data.age,
         city: data.city,
         satellite: data.satellite,
-        discipleship_stage: data.discipleship_stage,
-        spiritual_description: data.spiritual_description,
+        member_status: data.member_status,
+        ...(data.invited_by ? { invited_by: data.invited_by } : {}),
         ...(data.event_id ? { event_id: data.event_id } : {}),
       })
       .select()
@@ -297,24 +299,11 @@ export const seedTestData = createServerFn({ method: 'POST' })
       return weightedArray[Math.floor(Math.random() * weightedArray.length)]
     }
 
-    const stages = ['Newbie', 'Growing', 'Leader'] as const
+    const memberStatuses = ['First Timer', 'Newbie', 'Regular', 'Leader'] as const
 
-    const spiritualDescriptions = [
-      "I've been attending church for about a year now and I'm excited to learn more about my faith.",
-      "Just started my spiritual journey. Looking forward to growing with the community.",
-      "Been a believer for 5 years. Currently leading a small group in our area.",
-      "New to Quest but not new to faith. Excited to find a new church home.",
-      "I want to deepen my relationship with God and learn how to serve others better.",
-      "Recently rededicated my life to Christ. Ready for a fresh start.",
-      "Been through a lot lately but my faith keeps me going. Looking for support.",
-      "Grew up in the church but only recently started taking my faith seriously.",
-      "I lead worship at our satellite. Excited for the anniversary celebration!",
-      "First time attending. A friend invited me and I'm curious about faith.",
-      "Walking with God for 10+ years. Here to celebrate and encourage others.",
-      "Struggling with some things but believe God is working in my life.",
-      "Part of the discipleship program. Growing each day in my walk with Christ.",
-      "Youth leader here. Love seeing the next generation grow in faith.",
-      "New believer. Got baptized last month and ready to learn more!",
+    const inviters = [
+      'Pastor Mike', 'Sister Ana', 'Brother Carlos', 'Pastor Joy',
+      'Brother David', 'Sister Maria', 'Pastor Ben', null, null, null,
     ]
 
     // Generate test attendees
@@ -328,8 +317,8 @@ export const seedTestData = createServerFn({ method: 'POST' })
       const age = Math.floor(Math.random() * 45) + 15 // 15-60 years old
       const city = cities[Math.floor(Math.random() * cities.length)]
       const satellite = getWeightedSatellite()
-      const stage = stages[Math.floor(Math.random() * stages.length)]
-      const description = spiritualDescriptions[Math.floor(Math.random() * spiritualDescriptions.length)]
+      const status = memberStatuses[Math.floor(Math.random() * memberStatuses.length)]
+      const inviter = inviters[Math.floor(Math.random() * inviters.length)]
 
       // Random registration time within the last 7 days
       const hoursAgo = Math.floor(Math.random() * 168) // 0-168 hours (7 days)
@@ -337,11 +326,13 @@ export const seedTestData = createServerFn({ method: 'POST' })
 
       return {
         name: `${firstName} ${lastName}`,
+        email: `${firstName.toLowerCase()}.${lastName.toLowerCase().replace(' ', '')}@email.com`,
+        contact_number: `09${Math.floor(100000000 + Math.random() * 900000000)}`,
         age,
         city,
         satellite,
-        discipleship_stage: stage,
-        spiritual_description: description,
+        member_status: status,
+        ...(inviter ? { invited_by: inviter } : {}),
         registered_at: registeredAt,
         ...(data.eventId ? { event_id: data.eventId } : {}),
       }

@@ -1,4 +1,4 @@
-import type { DiscipleshipStage, CivilStatus, MemberCategory, FollowThrough, DiscipleshipJourney, LeadershipLevel } from './types'
+import type { DiscipleshipStage, EventMemberStatus, CivilStatus, MemberCategory, FollowThrough, DiscipleshipJourney, LeadershipLevel } from './types'
 
 // Discipleship stage options
 export const DISCIPLESHIP_STAGES: {
@@ -20,6 +20,34 @@ export const DISCIPLESHIP_STAGES: {
     value: 'Leader',
     label: 'Leader',
     description: 'Small group leader or ministry head',
+  },
+]
+
+// Event registration member status options
+export const EVENT_MEMBER_STATUSES: {
+  value: EventMemberStatus
+  label: string
+  description: string
+}[] = [
+  {
+    value: 'First Timer',
+    label: 'First Timer',
+    description: 'First time attending a Quest event',
+  },
+  {
+    value: 'Newbie',
+    label: 'Newbie',
+    description: 'New to Quest, attended a few times',
+  },
+  {
+    value: 'Regular',
+    label: 'Regular',
+    description: 'Regular attendee',
+  },
+  {
+    value: 'Leader',
+    label: 'Leader',
+    description: 'Cell group leader or ministry head',
   },
 ]
 
