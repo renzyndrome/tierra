@@ -1,14 +1,17 @@
 // Quest Laguna Directory - Event Detail Page
 
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../components/AuthProvider'
-import { getEvent, updateEvent, deleteEvent, getEventRegistrations } from '../../server/functions/events'
+import { getEvent, updateEvent, deleteEvent, getEventRegistrations, getRegistrationStatus } from '../../server/functions/events'
+import type { RegistrationStatus } from '../../server/functions/events'
 import { purgeAllAttendees, seedTestData } from '../../server/functions/attendees'
 import { getSatellites } from '../../server/functions/satellites'
 import { generateOverallInsights } from '../../server/functions/ai'
 import { ADMIN_PIN } from '../../lib/constants'
 import type { Event, Attendee, SatelliteRow, OverallInsights } from '../../lib/types'
+import { uploadEventBanner } from '../../lib/storage'
+import { QRCodeSVG } from 'qrcode.react'
 
 // shadcn/ui components
 import { Button } from '../../components/ui/button'
@@ -96,6 +99,8 @@ function EventDetailPage() {
     location: '',
     expected_attendees: 100,
     early_bird_cutoff: '09:00',
+    registration_start: '',
+    registration_end: '',
   })
   const [purgePin, setPurgePin] = useState('')
   const [seedCount, setSeedCount] = useState('30')
@@ -106,6 +111,39 @@ function EventDetailPage() {
   const [isPurging, setIsPurging] = useState(false)
   const [isSeeding, setIsSeeding] = useState(false)
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false)
+
+  // Banner upload (edit dialog)
+  const [editBannerFile, setEditBannerFile] = useState<File | null>(null)
+  const [editBannerPreview, setEditBannerPreview] = useState<string | null>(null)
+
+  // QR Code / Link sharing
+  const qrRef = useRef<HTMLDivElement>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
+
+  const handleDownloadQR = () => {
+    const svg = qrRef.current?.querySelector('svg')
+    if (!svg) return
+
+    const svgData = new XMLSerializer().serializeToString(svg)
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = new Image()
+
+    img.onload = () => {
+      canvas.width = img.width * 2
+      canvas.height = img.height * 2
+      ctx!.fillStyle = '#ffffff'
+      ctx!.fillRect(0, 0, canvas.width, canvas.height)
+      ctx!.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+      const a = document.createElement('a')
+      a.download = `${event?.name || 'event'}-qr-code.png`
+      a.href = canvas.toDataURL('image/png')
+      a.click()
+    }
+
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)))
+  }
 
   // Filter states
   const [filterSatellite, setFilterSatellite] = useState<string>('')
@@ -149,6 +187,8 @@ function EventDetailPage() {
         location: eventData.location || '',
         expected_attendees: eventData.expected_attendees,
         early_bird_cutoff: eventData.early_bird_cutoff || '09:00',
+        registration_start: eventData.registration_start ? eventData.registration_start.slice(0, 16) : '',
+        registration_end: eventData.registration_end ? eventData.registration_end.slice(0, 16) : '',
       })
     } catch (err) {
       console.error('Failed to fetch event data:', err)
@@ -168,6 +208,18 @@ function EventDetailPage() {
     if (!event) return
     setIsUpdating(true)
     try {
+      // Upload banner if a new file was selected
+      let bannerUrl: string | null | undefined
+      if (editBannerFile) {
+        const { url, error: uploadError } = await uploadEventBanner(event.id, editBannerFile)
+        if (uploadError) {
+          alert(`Banner upload failed: ${uploadError.message}`)
+          setIsUpdating(false)
+          return
+        }
+        bannerUrl = url
+      }
+
       await updateEvent({
         data: {
           id: event.id,
@@ -179,10 +231,15 @@ function EventDetailPage() {
             location: editForm.location || null,
             expected_attendees: editForm.expected_attendees,
             early_bird_cutoff: editForm.early_bird_cutoff || null,
+            registration_start: editForm.registration_start || null,
+            registration_end: editForm.registration_end || null,
+            ...(bannerUrl !== undefined ? { banner_url: bannerUrl } : {}),
           },
         },
       })
       setShowEditDialog(false)
+      setEditBannerFile(null)
+      setEditBannerPreview(null)
       fetchData()
     } catch (err) {
       console.error('Failed to update event:', err)
@@ -360,6 +417,17 @@ function EventDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Banner */}
+      {event.banner_url && (
+        <div className="w-full max-h-48 overflow-hidden">
+          <img
+            src={event.banner_url}
+            alt={`${event.name} banner`}
+            className="w-full h-48 object-cover"
+          />
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-gradient-to-r from-[#8B1538] to-[#B91C3C] text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 py-6">
@@ -502,19 +570,106 @@ function EventDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Satellite Pie Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Registrations by Satellite</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {satelliteData.length === 0 ? (
-                    <div className="h-[280px] flex items-center justify-center text-gray-500">
-                      No registrations yet
+            {/* Registration Link & QR Code */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Registration Link & QR Code</CardTitle>
+                <CardDescription>Share this link or QR code with members to register for this event</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col md:flex-row items-center gap-6">
+                  {/* QR Code */}
+                  <div className="flex flex-col items-center gap-2 shrink-0">
+                    <div ref={qrRef} className="bg-white p-4 rounded-lg border-2 border-gray-100">
+                      <QRCodeSVG
+                        value={`${typeof window !== 'undefined' ? window.location.origin : ''}/register?event=${eventId}`}
+                        size={180}
+                        level="H"
+                        includeMargin
+                        fgColor="#8B1538"
+                      />
                     </div>
-                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleDownloadQR}
+                      className="w-full"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download QR
+                    </Button>
+                  </div>
+                  {/* Link + Actions */}
+                  <div className="flex-1 space-y-4 w-full">
+                    <div>
+                      <Label className="text-sm text-gray-500 mb-1 block">Registration URL</Label>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm break-all">
+                          {typeof window !== 'undefined' ? window.location.origin : ''}/register?event={eventId}
+                        </code>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${window.location.origin}/register?event=${eventId}`)
+                            setLinkCopied(true)
+                            setTimeout(() => setLinkCopied(false), 2000)
+                          }}
+                        >
+                          {linkCopied ? 'Copied!' : 'Copy'}
+                        </Button>
+                      </div>
+                    </div>
+                    {/* Registration Status */}
+                    {(() => {
+                      const status = getRegistrationStatus({
+                        registration_open: event.registration_open,
+                        registration_start: event.registration_start,
+                        registration_end: event.registration_end,
+                      })
+                      const statusConfig: Record<string, { label: string; color: string }> = {
+                        open: { label: 'Open', color: 'bg-green-100 text-green-800' },
+                        not_started: { label: 'Not Yet Open', color: 'bg-blue-100 text-blue-800' },
+                        ended: { label: 'Ended', color: 'bg-gray-100 text-gray-800' },
+                        closed: { label: 'Closed', color: 'bg-red-100 text-red-800' },
+                      }
+                      const cfg = statusConfig[status]
+                      return (
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-gray-500">Registration Status:</span>
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${cfg.color}`}>
+                            {cfg.label}
+                          </span>
+                        </div>
+                      )
+                    })()}
+                    {/* Registration window info */}
+                    {(event.registration_start || event.registration_end) && (
+                      <div className="text-sm text-gray-500 space-y-1">
+                        {event.registration_start && (
+                          <p>Opens: {new Date(event.registration_start).toLocaleString()}</p>
+                        )}
+                        {event.registration_end && (
+                          <p>Closes: {new Date(event.registration_end).toLocaleString()}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Charts - only show when there are registrations */}
+            {attendees.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Satellite Pie Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Registrations by Satellite</CardTitle>
+                  </CardHeader>
+                  <CardContent>
                     <ResponsiveContainer width="100%" height={280}>
                       <PieChart>
                         <Pie
@@ -537,21 +692,15 @@ function EventDetailPage() {
                         <Legend />
                       </PieChart>
                     </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              {/* Stage Bar Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Discipleship Stage Distribution</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {stageData.every(d => d.value === 0) ? (
-                    <div className="h-[280px] flex items-center justify-center text-gray-500">
-                      No registrations yet
-                    </div>
-                  ) : (
+                {/* Stage Bar Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Discipleship Stage Distribution</CardTitle>
+                  </CardHeader>
+                  <CardContent>
                     <ResponsiveContainer width="100%" height={280}>
                       <BarChart data={stageData} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} />
@@ -561,10 +710,10 @@ function EventDetailPage() {
                         <Bar dataKey="value" fill="#8B1538" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </TabsContent>
 
           {/* Attendees Tab */}
@@ -901,15 +1050,54 @@ function EventDetailPage() {
                     <div>
                       <p className="font-medium">Registration Status</p>
                       <p className="text-sm text-gray-500">
-                        {event.registration_open ? 'Registration is open' : 'Registration is closed'}
+                        {(() => {
+                          const status = getRegistrationStatus({
+                            registration_open: event.registration_open,
+                            registration_start: event.registration_start,
+                            registration_end: event.registration_end,
+                          })
+                          const descriptions: Record<string, string> = {
+                            open: 'Registration is open and accepting submissions',
+                            not_started: `Registration opens ${event.registration_start ? new Date(event.registration_start).toLocaleString() : 'soon'}`,
+                            ended: `Registration ended ${event.registration_end ? new Date(event.registration_end).toLocaleString() : ''}`,
+                            closed: 'Registration has been manually closed',
+                          }
+                          return descriptions[status]
+                        })()}
                       </p>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      event.registration_open ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {event.registration_open ? 'Open' : 'Closed'}
-                    </span>
+                    {(() => {
+                      const status = getRegistrationStatus({
+                        registration_open: event.registration_open,
+                        registration_start: event.registration_start,
+                        registration_end: event.registration_end,
+                      })
+                      const cfg: Record<string, { label: string; color: string }> = {
+                        open: { label: 'Open', color: 'bg-green-100 text-green-800' },
+                        not_started: { label: 'Not Yet Open', color: 'bg-blue-100 text-blue-800' },
+                        ended: { label: 'Ended', color: 'bg-gray-100 text-gray-800' },
+                        closed: { label: 'Closed', color: 'bg-red-100 text-red-800' },
+                      }
+                      const c = cfg[status]
+                      return (
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${c.color}`}>
+                          {c.label}
+                        </span>
+                      )
+                    })()}
                   </div>
+                  {(event.registration_start || event.registration_end) && (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">Registration Window</p>
+                        <p className="text-sm text-gray-500">
+                          {event.registration_start ? `Opens: ${new Date(event.registration_start).toLocaleString()}` : 'Opens: Immediately'}
+                          {' — '}
+                          {event.registration_end ? `Closes: ${new Date(event.registration_end).toLocaleString()}` : 'No deadline'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium">Early Bird Cutoff</p>
@@ -965,13 +1153,81 @@ function EventDetailPage() {
       </main>
 
       {/* Edit Event Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={showEditDialog} onOpenChange={(open) => {
+        setShowEditDialog(open)
+        if (!open) { setEditBannerFile(null); setEditBannerPreview(null) }
+      }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Event</DialogTitle>
             <DialogDescription>Update event details</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Banner Upload */}
+            <div className="space-y-2">
+              <Label>Event Banner</Label>
+              {(editBannerPreview || event?.banner_url) && !editBannerFile ? (
+                <div className="relative">
+                  <img
+                    src={editBannerPreview || event?.banner_url || ''}
+                    alt="Banner"
+                    className="w-full h-32 object-cover rounded-lg border"
+                  />
+                  <label className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded cursor-pointer hover:bg-black/80">
+                    Change
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setEditBannerFile(file)
+                          setEditBannerPreview(URL.createObjectURL(file))
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              ) : editBannerFile ? (
+                <div className="relative">
+                  <img
+                    src={editBannerPreview || ''}
+                    alt="New banner"
+                    className="w-full h-32 object-cover rounded-lg border"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setEditBannerFile(null); setEditBannerPreview(null) }}
+                    className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1 hover:bg-black/80"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#8B1538] transition-colors">
+                  <svg className="w-8 h-8 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm text-gray-500">Click to upload banner</span>
+                  <span className="text-xs text-gray-400">JPEG, PNG, WebP (max 5MB)</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        setEditBannerFile(file)
+                        setEditBannerPreview(URL.createObjectURL(file))
+                      }
+                    }}
+                  />
+                </label>
+              )}
+            </div>
             <div className="space-y-2">
               <Label htmlFor="edit-name">Event Name</Label>
               <Input
@@ -1039,6 +1295,28 @@ function EventDetailPage() {
                   value={editForm.early_bird_cutoff}
                   onChange={(e) => setEditForm({ ...editForm, early_bird_cutoff: e.target.value })}
                 />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-reg-start">Registration Opens</Label>
+                <Input
+                  id="edit-reg-start"
+                  type="datetime-local"
+                  value={editForm.registration_start}
+                  onChange={(e) => setEditForm({ ...editForm, registration_start: e.target.value })}
+                />
+                <p className="text-xs text-gray-400">Leave empty for immediately</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-reg-end">Registration Closes</Label>
+                <Input
+                  id="edit-reg-end"
+                  type="datetime-local"
+                  value={editForm.registration_end}
+                  onChange={(e) => setEditForm({ ...editForm, registration_end: e.target.value })}
+                />
+                <p className="text-xs text-gray-400">Leave empty for no deadline</p>
               </div>
             </div>
           </div>

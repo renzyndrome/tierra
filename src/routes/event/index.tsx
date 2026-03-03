@@ -3,13 +3,15 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../components/AuthProvider'
-import { getEvents, createEvent, deleteEvent, toggleEventRegistration } from '../../server/functions/events'
+import { getEvents, createEvent, deleteEvent, toggleEventRegistration, getRegistrationStatus } from '../../server/functions/events'
 import type { EventWithStats, EventInsert } from '../../lib/types'
+import { uploadEventBanner } from '../../lib/storage'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
 import { Switch } from '../../components/ui/switch'
+import { Textarea } from '../../components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -36,6 +38,8 @@ function EventsDashboard() {
   const [isDeleting, setIsDeleting] = useState(false)
 
   // Form state
+  const [bannerFile, setBannerFile] = useState<File | null>(null)
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null)
   const [newEvent, setNewEvent] = useState<EventInsert>({
     name: '',
     description: '',
@@ -45,6 +49,8 @@ function EventsDashboard() {
     expected_attendees: 100,
     early_bird_cutoff: '09:00',
     registration_open: true,
+    registration_start: undefined,
+    registration_end: undefined,
   })
 
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'satellite_leader'
@@ -80,7 +86,25 @@ function EventsDashboard() {
   const handleCreateEvent = async () => {
     setIsCreating(true)
     try {
-      await createEvent({ data: newEvent })
+      // Upload banner if selected
+      let bannerUrl: string | undefined
+      if (bannerFile) {
+        const tempId = crypto.randomUUID()
+        const { url, error: uploadError } = await uploadEventBanner(tempId, bannerFile)
+        if (uploadError) {
+          alert(`Banner upload failed: ${uploadError.message}`)
+          setIsCreating(false)
+          return
+        }
+        bannerUrl = url
+      }
+
+      await createEvent({
+        data: {
+          ...newEvent,
+          ...(bannerUrl ? { banner_url: bannerUrl } : {}),
+        },
+      })
       setShowCreateDialog(false)
       setNewEvent({
         name: '',
@@ -91,7 +115,11 @@ function EventsDashboard() {
         expected_attendees: 100,
         early_bird_cutoff: '09:00',
         registration_open: true,
+        registration_start: undefined,
+        registration_end: undefined,
       })
+      setBannerFile(null)
+      setBannerPreview(null)
       fetchEvents()
     } catch (error) {
       console.error('Error creating event:', error)
@@ -252,7 +280,13 @@ function EventsDashboard() {
             {events.map((event) => {
               const isPast = new Date(event.event_date) < new Date()
               return (
-                <Card key={event.id} className={`hover:shadow-lg transition-shadow ${isPast ? 'opacity-75' : ''}`}>
+                <Card key={event.id} className={`hover:shadow-lg transition-shadow overflow-hidden ${isPast ? 'opacity-75' : ''}`}>
+                  {/* Banner thumbnail */}
+                  {event.banner_url && (
+                    <div className="w-full h-32 overflow-hidden">
+                      <img src={event.banner_url} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -260,15 +294,25 @@ function EventsDashboard() {
                         <CardDescription>{formatDate(event.event_date)}</CardDescription>
                       </div>
                       <div className="flex gap-1">
-                        {event.registration_open ? (
-                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                            Open
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                            Closed
-                          </span>
-                        )}
+                        {(() => {
+                          const status = getRegistrationStatus({
+                            registration_open: event.registration_open,
+                            registration_start: event.registration_start,
+                            registration_end: event.registration_end,
+                          })
+                          const cfg: Record<string, { label: string; color: string }> = {
+                            open: { label: 'Open', color: 'bg-green-100 text-green-800' },
+                            not_started: { label: 'Soon', color: 'bg-blue-100 text-blue-800' },
+                            ended: { label: 'Ended', color: 'bg-gray-100 text-gray-800' },
+                            closed: { label: 'Closed', color: 'bg-red-100 text-red-800' },
+                          }
+                          const c = cfg[status]
+                          return (
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${c.color}`}>
+                              {c.label}
+                            </span>
+                          )
+                        })()}
                         {isPast && (
                           <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
                             Past
@@ -364,12 +408,52 @@ function EventsDashboard() {
 
       {/* Create Event Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create New Event</DialogTitle>
             <DialogDescription>Add a new event for registration</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Banner Upload */}
+            <div>
+              <Label>Event Banner</Label>
+              <div className="mt-1">
+                {bannerPreview ? (
+                  <div className="relative">
+                    <img src={bannerPreview} alt="Banner preview" className="w-full h-32 object-cover rounded-lg border" />
+                    <button
+                      type="button"
+                      onClick={() => { setBannerFile(null); setBannerPreview(null) }}
+                      className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1 hover:bg-black/80"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#8B1538] transition-colors">
+                    <svg className="w-8 h-8 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm text-gray-500">Click to upload banner image</span>
+                    <span className="text-xs text-gray-400">JPEG, PNG, WebP (max 5MB)</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setBannerFile(file)
+                          setBannerPreview(URL.createObjectURL(file))
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
             <div>
               <Label htmlFor="name">Event Name *</Label>
               <Input
@@ -381,12 +465,11 @@ function EventsDashboard() {
             </div>
             <div>
               <Label htmlFor="description">Description</Label>
-              <textarea
+              <Textarea
                 id="description"
                 value={newEvent.description || ''}
                 onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
                 placeholder="Event description..."
-                className="w-full px-3 py-2 border rounded-md text-sm"
                 rows={3}
               />
             </div>
@@ -437,6 +520,29 @@ function EventsDashboard() {
                   value={newEvent.early_bird_cutoff || ''}
                   onChange={(e) => setNewEvent({ ...newEvent, early_bird_cutoff: e.target.value })}
                 />
+              </div>
+            </div>
+            {/* Registration Window */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="registration_start">Registration Opens</Label>
+                <Input
+                  id="registration_start"
+                  type="datetime-local"
+                  value={newEvent.registration_start || ''}
+                  onChange={(e) => setNewEvent({ ...newEvent, registration_start: e.target.value || undefined })}
+                />
+                <p className="text-xs text-gray-400 mt-1">Leave empty for immediately</p>
+              </div>
+              <div>
+                <Label htmlFor="registration_end">Registration Closes</Label>
+                <Input
+                  id="registration_end"
+                  type="datetime-local"
+                  value={newEvent.registration_end || ''}
+                  onChange={(e) => setNewEvent({ ...newEvent, registration_end: e.target.value || undefined })}
+                />
+                <p className="text-xs text-gray-400 mt-1">Leave empty for no deadline</p>
               </div>
             </div>
             <div className="flex items-center justify-between">

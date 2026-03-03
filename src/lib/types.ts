@@ -431,6 +431,9 @@ export interface Event {
   early_bird_cutoff: string | null
   registration_open: boolean
   is_active: boolean
+  banner_url: string | null
+  registration_start: string | null
+  registration_end: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -447,6 +450,9 @@ export interface EventInsert {
   early_bird_cutoff?: string | null
   registration_open?: boolean
   is_active?: boolean
+  banner_url?: string | null
+  registration_start?: string | null
+  registration_end?: string | null
 }
 
 export interface EventUpdate {
@@ -459,6 +465,9 @@ export interface EventUpdate {
   early_bird_cutoff?: string | null
   registration_open?: boolean
   is_active?: boolean
+  banner_url?: string | null
+  registration_start?: string | null
+  registration_end?: string | null
 }
 
 export interface EventWithStats extends Event {

@@ -31,6 +31,7 @@ export const registerAttendee = createServerFn({ method: 'POST' })
         satellite: data.satellite,
         discipleship_stage: data.discipleship_stage,
         spiritual_description: data.spiritual_description,
+        ...(data.event_id ? { event_id: data.event_id } : {}),
       })
       .select()
       .single()

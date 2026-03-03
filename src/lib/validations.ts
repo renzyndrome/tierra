@@ -27,6 +27,7 @@ export const registrationSchema = z.object({
     .min(10, 'Please share at least 10 characters about your spiritual journey')
     .max(500, 'Please keep your description under 500 characters')
     .transform((val) => val.trim()),
+  event_id: z.string().uuid().optional(),
 })
 
 export type RegistrationFormData = z.infer<typeof registrationSchema>

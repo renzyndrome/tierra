@@ -19,7 +19,28 @@ const eventInsertSchema = z.object({
   early_bird_cutoff: z.string().optional().nullable(),
   registration_open: z.boolean().optional(),
   is_active: z.boolean().optional(),
+  banner_url: z.string().url().optional().nullable(),
+  registration_start: z.string().optional().nullable(),
+  registration_end: z.string().optional().nullable(),
 })
+
+// ============================================
+// REGISTRATION STATUS HELPER
+// ============================================
+
+export type RegistrationStatus = 'open' | 'not_started' | 'ended' | 'closed'
+
+export function getRegistrationStatus(event: {
+  registration_open: boolean
+  registration_start?: string | null
+  registration_end?: string | null
+}): RegistrationStatus {
+  if (!event.registration_open) return 'closed'
+  const now = new Date()
+  if (event.registration_start && now < new Date(event.registration_start)) return 'not_started'
+  if (event.registration_end && now > new Date(event.registration_end)) return 'ended'
+  return 'open'
+}
 
 const eventUpdateSchema = eventInsertSchema.partial()
 
@@ -313,4 +334,46 @@ export const getEventRegistrations = createServerFn({ method: 'GET' })
     }
 
     return (registrations || []) as Attendee[]
+  })
+
+// ============================================
+// GET EVENT PUBLIC (for registration page)
+// ============================================
+
+export const getEventPublic = createServerFn({ method: 'GET' })
+  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) => {
+    const supabase = createServerAdminClient()
+
+    const { data: event, error } = await supabase
+      .from('events')
+      .select('id, name, description, event_date, event_time, location, banner_url, registration_open, registration_start, registration_end, is_active')
+      .eq('id', data.id)
+      .single()
+
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      console.error('Error fetching event for registration:', error)
+      throw new Error('Failed to fetch event')
+    }
+
+    if (!event || !event.is_active) return null
+
+    return {
+      ...event,
+      registration_status: getRegistrationStatus(event),
+    } as {
+      id: string
+      name: string
+      description: string | null
+      event_date: string
+      event_time: string | null
+      location: string | null
+      banner_url: string | null
+      registration_open: boolean
+      registration_start: string | null
+      registration_end: string | null
+      is_active: boolean
+      registration_status: RegistrationStatus
+    }
   })
