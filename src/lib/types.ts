@@ -678,6 +678,79 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 }
 
 // ============================================
+// FINANCIAL TYPES
+// ============================================
+
+export type TransactionType = 'income' | 'expense'
+export type IncomeCategory = 'Tithe' | 'Offering' | 'Missions'
+export type ExpenseCategory = 'Utilities' | 'Supplies' | 'Equipment' | 'Events' | 'Programs'
+export type FinancialCategory = IncomeCategory | ExpenseCategory
+
+export interface FinancialTransaction {
+  id: string
+  transaction_date: string
+  transaction_type: TransactionType
+  category: FinancialCategory
+  amount: number
+  description: string | null
+  reference_number: string | null
+  satellite_id: string
+  member_id: string | null
+  recorded_by: string | null
+  receipt_url: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface FinancialTransactionInsert {
+  transaction_date: string
+  transaction_type: TransactionType
+  category: FinancialCategory
+  amount: number
+  description?: string | null
+  reference_number?: string | null
+  satellite_id: string
+  member_id?: string | null
+  receipt_url?: string | null
+  notes?: string | null
+}
+
+export interface FinancialTransactionUpdate {
+  transaction_date?: string
+  transaction_type?: TransactionType
+  category?: FinancialCategory
+  amount?: number
+  description?: string | null
+  reference_number?: string | null
+  satellite_id?: string
+  member_id?: string | null
+  receipt_url?: string | null
+  notes?: string | null
+}
+
+export interface FinancialTransactionWithRelations extends FinancialTransaction {
+  satellite?: { id: string; name: string } | null
+  member?: { id: string; name: string } | null
+}
+
+export interface FinancialOverview {
+  currentBalance: number
+  totalIncome: number
+  totalExpenses: number
+  incomeByCategory: Record<string, number>
+  expensesByCategory: Record<string, number>
+  bySatellite: {
+    satelliteId: string
+    satelliteName: string
+    income: number
+    expenses: number
+    balance: number
+  }[]
+  recentTransactions: FinancialTransactionWithRelations[]
+}
+
+// ============================================
 // SUPABASE DATABASE TYPE (for type-safe queries)
 // ============================================
 
@@ -728,6 +801,11 @@ export type Database = {
         Row: EventRegistration
         Insert: EventRegistrationInsert
         Update: Partial<EventRegistrationInsert>
+      }
+      financial_transactions: {
+        Row: FinancialTransaction
+        Insert: FinancialTransactionInsert
+        Update: FinancialTransactionUpdate
       }
     }
   }

@@ -1,4 +1,4 @@
-import type { DiscipleshipStage, EventMemberStatus, CivilStatus, MemberCategory, FollowThrough, DiscipleshipJourney, LeadershipLevel } from './types'
+import type { DiscipleshipStage, EventMemberStatus, CivilStatus, MemberCategory, FollowThrough, DiscipleshipJourney, LeadershipLevel, IncomeCategory, ExpenseCategory, TransactionType } from './types'
 
 // Discipleship stage options
 export const DISCIPLESHIP_STAGES: {
@@ -160,3 +160,50 @@ export const FUN_FACTS = [
   'Quest has 17 active ministry teams serving the community.',
   'NEXTLEVEL Stronger 2026 - Going to the next level together!',
 ]
+
+// ============================================
+// FINANCIAL CONSTANTS
+// ============================================
+
+export const INCOME_CATEGORIES: {
+  value: IncomeCategory
+  label: string
+  description: string
+  color: string
+}[] = [
+  { value: 'Tithe', label: 'Tithe', description: '10% of income given to God', color: '#10B981' },
+  { value: 'Offering', label: 'Offering', description: 'General offerings and donations', color: '#3B82F6' },
+  { value: 'Missions', label: 'Missions', description: 'Special offerings for missions work', color: '#8B5CF6' },
+]
+
+export const EXPENSE_CATEGORIES: {
+  value: ExpenseCategory
+  label: string
+  description: string
+  color: string
+}[] = [
+  { value: 'Utilities', label: 'Utilities', description: 'Electricity, water, internet, etc.', color: '#F59E0B' },
+  { value: 'Supplies', label: 'Supplies', description: 'Office supplies, materials, etc.', color: '#EF4444' },
+  { value: 'Equipment', label: 'Equipment', description: 'Sound equipment, furniture, etc.', color: '#EC4899' },
+  { value: 'Events', label: 'Events', description: 'Costs for church events and gatherings', color: '#06B6D4' },
+  { value: 'Programs', label: 'Programs', description: 'Ministry programs and activities', color: '#6366F1' },
+]
+
+export function getCategoriesByType(type: TransactionType) {
+  return type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+}
+
+export function getCategoryColor(category: string): string {
+  const income = INCOME_CATEGORIES.find(c => c.value === category)
+  if (income) return income.color
+  const expense = EXPENSE_CATEGORIES.find(c => c.value === category)
+  return expense?.color || '#6B7280'
+}
+
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    minimumFractionDigits: 2,
+  }).format(amount)
+}

@@ -13,6 +13,7 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as DisplayRouteImport } from './routes/display'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProfileIndexRouteImport } from './routes/profile/index'
+import { Route as FinancesIndexRouteImport } from './routes/finances/index'
 import { Route as EventIndexRouteImport } from './routes/event/index'
 import { Route as DirectoryIndexRouteImport } from './routes/directory/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
@@ -53,6 +54,11 @@ const IndexRoute = IndexRouteImport.update({
 const ProfileIndexRoute = ProfileIndexRouteImport.update({
   id: '/profile/',
   path: '/profile/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinancesIndexRoute = FinancesIndexRouteImport.update({
+  id: '/finances/',
+  path: '/finances/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EventIndexRoute = EventIndexRouteImport.update({
@@ -182,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
   '/event': typeof EventIndexRoute
+  '/finances': typeof FinancesIndexRoute
   '/profile': typeof ProfileIndexRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
   '/admin/members/new': typeof AdminMembersNewRoute
@@ -209,6 +216,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
   '/event': typeof EventIndexRoute
+  '/finances': typeof FinancesIndexRoute
   '/profile': typeof ProfileIndexRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
   '/admin/members/new': typeof AdminMembersNewRoute
@@ -237,6 +245,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/directory/': typeof DirectoryIndexRoute
   '/event/': typeof EventIndexRoute
+  '/finances/': typeof FinancesIndexRoute
   '/profile/': typeof ProfileIndexRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
   '/admin/members/new': typeof AdminMembersNewRoute
@@ -266,6 +275,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/directory'
     | '/event'
+    | '/finances'
     | '/profile'
     | '/admin/cell-groups/$groupId'
     | '/admin/members/new'
@@ -293,6 +303,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/directory'
     | '/event'
+    | '/finances'
     | '/profile'
     | '/admin/cell-groups/$groupId'
     | '/admin/members/new'
@@ -320,6 +331,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/directory/'
     | '/event/'
+    | '/finances/'
     | '/profile/'
     | '/admin/cell-groups/$groupId'
     | '/admin/members/new'
@@ -348,6 +360,7 @@ export interface RootRouteChildren {
   AdminIndexRoute: typeof AdminIndexRoute
   DirectoryIndexRoute: typeof DirectoryIndexRoute
   EventIndexRoute: typeof EventIndexRoute
+  FinancesIndexRoute: typeof FinancesIndexRoute
   ProfileIndexRoute: typeof ProfileIndexRoute
   AdminCellGroupsGroupIdRoute: typeof AdminCellGroupsGroupIdRoute
   AdminMembersNewRoute: typeof AdminMembersNewRoute
@@ -390,6 +403,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof ProfileIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finances/': {
+      id: '/finances/'
+      path: '/finances'
+      fullPath: '/finances'
+      preLoaderRoute: typeof FinancesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/event/': {
@@ -556,6 +576,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminIndexRoute: AdminIndexRoute,
   DirectoryIndexRoute: DirectoryIndexRoute,
   EventIndexRoute: EventIndexRoute,
+  FinancesIndexRoute: FinancesIndexRoute,
   ProfileIndexRoute: ProfileIndexRoute,
   AdminCellGroupsGroupIdRoute: AdminCellGroupsGroupIdRoute,
   AdminMembersNewRoute: AdminMembersNewRoute,

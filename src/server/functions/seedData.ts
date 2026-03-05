@@ -458,3 +458,286 @@ export const purgeAllData = createServerFn({ method: 'POST' })
       throw error
     }
   })
+
+// ============================================
+// SEED FINANCIAL TEST DATA
+// ============================================
+
+export const seedFinancialData = createServerFn({ method: 'POST' })
+  .inputValidator((input: { adminPin: string }) => z.object({
+    adminPin: z.string(),
+  }).parse(input))
+  .handler(async ({ data }) => {
+    const expectedPin = process.env.VITE_ADMIN_PIN || 'quest2026'
+    if (data.adminPin !== expectedPin) {
+      throw new Error('Invalid admin PIN')
+    }
+
+    const supabase = createServerAdminClient()
+
+    // Get satellites
+    const { data: satellites } = await supabase
+      .from('satellites')
+      .select('id, name')
+      .eq('is_active', true)
+
+    if (!satellites?.length) {
+      throw new Error('No satellites found. Seed satellites first.')
+    }
+
+    // Get some members to link to income
+    const { data: members } = await supabase
+      .from('members')
+      .select('id, name')
+      .eq('is_archived', false)
+      .limit(10)
+
+    const mainSat = satellites.find(s => s.name === 'Quest Laguna Main') || satellites[0]
+    const binanSat = satellites.find(s => s.name === 'Quest Biñan')
+    const staRosaSat = satellites.find(s => s.name === 'Quest Sta. Rosa')
+
+    const satIds = [mainSat, binanSat, staRosaSat].filter(Boolean).map(s => s!.id)
+    const satNames: Record<string, string> = {}
+    for (const s of [mainSat, binanSat, staRosaSat].filter(Boolean)) {
+      satNames[s!.id] = s!.name
+    }
+
+    const memberIds = members?.map(m => m.id) || []
+
+    // Generate 6 months of realistic financial data
+    const transactions: {
+      transaction_date: string
+      transaction_type: 'income' | 'expense'
+      category: string
+      amount: number
+      description: string | null
+      reference_number: string | null
+      satellite_id: string
+      member_id: string | null
+      notes: string | null
+    }[] = []
+
+    const incomeCategories = ['Tithe', 'Offering', 'Missions']
+    const expenseCategories = ['Utilities', 'Supplies', 'Equipment', 'Events', 'Programs']
+
+    // Generate data for 6 months back
+    for (let monthsAgo = 5; monthsAgo >= 0; monthsAgo--) {
+      const now = new Date()
+      const year = now.getFullYear()
+      const month = now.getMonth() - monthsAgo
+
+      const targetDate = new Date(year, month, 1)
+      const targetYear = targetDate.getFullYear()
+      const targetMonth = targetDate.getMonth()
+
+      // 4 Sundays of tithes per month across satellites
+      for (let week = 1; week <= 4; week++) {
+        const sunday = new Date(targetYear, targetMonth, week * 7)
+        if (sunday.getMonth() !== targetMonth) continue
+        const dateStr = sunday.toISOString().split('T')[0]
+
+        for (const satId of satIds) {
+          const isMain = satId === mainSat.id
+
+          // Tithes (main satellite gets more)
+          const titheAmount = isMain
+            ? 8000 + Math.round(Math.random() * 7000)
+            : 2000 + Math.round(Math.random() * 4000)
+
+          transactions.push({
+            transaction_date: dateStr,
+            transaction_type: 'income',
+            category: 'Tithe',
+            amount: titheAmount,
+            description: `Sunday tithe - Week ${week}`,
+            reference_number: `TH-${targetYear}${String(targetMonth + 1).padStart(2, '0')}-W${week}`,
+            satellite_id: satId,
+            member_id: memberIds.length > 0 ? memberIds[Math.floor(Math.random() * memberIds.length)] : null,
+            notes: null,
+          })
+
+          // Offerings (most Sundays)
+          if (Math.random() > 0.2) {
+            const offeringAmount = isMain
+              ? 3000 + Math.round(Math.random() * 5000)
+              : 1000 + Math.round(Math.random() * 2500)
+
+            transactions.push({
+              transaction_date: dateStr,
+              transaction_type: 'income',
+              category: 'Offering',
+              amount: offeringAmount,
+              description: `Sunday offering - Week ${week}`,
+              reference_number: `OF-${targetYear}${String(targetMonth + 1).padStart(2, '0')}-W${week}`,
+              satellite_id: satId,
+              member_id: memberIds.length > 0 ? memberIds[Math.floor(Math.random() * memberIds.length)] : null,
+              notes: null,
+            })
+          }
+        }
+      }
+
+      // Missions giving (once per month, main satellite only)
+      const midMonth = new Date(targetYear, targetMonth, 15)
+      if (midMonth.getMonth() === targetMonth) {
+        transactions.push({
+          transaction_date: midMonth.toISOString().split('T')[0],
+          transaction_type: 'income',
+          category: 'Missions',
+          amount: 5000 + Math.round(Math.random() * 10000),
+          description: 'Monthly missions offering',
+          reference_number: `MS-${targetYear}${String(targetMonth + 1).padStart(2, '0')}`,
+          satellite_id: mainSat.id,
+          member_id: null,
+          notes: 'Collected during missions Sunday',
+        })
+      }
+
+      // Expenses throughout the month
+      // Utilities (monthly, per satellite)
+      for (const satId of satIds) {
+        const isMain = satId === mainSat.id
+        const utilDate = new Date(targetYear, targetMonth, 5 + Math.floor(Math.random() * 5))
+        if (utilDate.getMonth() === targetMonth) {
+          transactions.push({
+            transaction_date: utilDate.toISOString().split('T')[0],
+            transaction_type: 'expense',
+            category: 'Utilities',
+            amount: isMain ? 4500 + Math.round(Math.random() * 2000) : 1500 + Math.round(Math.random() * 1000),
+            description: `Electricity & water - ${new Date(targetYear, targetMonth).toLocaleDateString('en', { month: 'long' })}`,
+            reference_number: `UTIL-${targetYear}${String(targetMonth + 1).padStart(2, '0')}`,
+            satellite_id: satId,
+            member_id: null,
+            notes: null,
+          })
+        }
+      }
+
+      // Supplies (1-2 times per month, random satellite)
+      const supplyCount = 1 + Math.floor(Math.random() * 2)
+      for (let i = 0; i < supplyCount; i++) {
+        const supplyDate = new Date(targetYear, targetMonth, 10 + Math.floor(Math.random() * 15))
+        if (supplyDate.getMonth() === targetMonth) {
+          const descriptions = ['Communion supplies', 'Printing materials', 'Office supplies', 'Cleaning supplies', 'Paper and ink']
+          transactions.push({
+            transaction_date: supplyDate.toISOString().split('T')[0],
+            transaction_type: 'expense',
+            category: 'Supplies',
+            amount: 500 + Math.round(Math.random() * 2500),
+            description: descriptions[Math.floor(Math.random() * descriptions.length)],
+            reference_number: null,
+            satellite_id: satIds[Math.floor(Math.random() * satIds.length)],
+            member_id: null,
+            notes: null,
+          })
+        }
+      }
+
+      // Equipment (every other month, main satellite)
+      if (monthsAgo % 2 === 0) {
+        const equipDate = new Date(targetYear, targetMonth, 20 + Math.floor(Math.random() * 5))
+        if (equipDate.getMonth() === targetMonth) {
+          const equipItems = ['Mic cable replacement', 'Speaker stand', 'Projector bulb', 'Guitar strings', 'Keyboard stand']
+          transactions.push({
+            transaction_date: equipDate.toISOString().split('T')[0],
+            transaction_type: 'expense',
+            category: 'Equipment',
+            amount: 2000 + Math.round(Math.random() * 8000),
+            description: equipItems[Math.floor(Math.random() * equipItems.length)],
+            reference_number: `EQ-${targetYear}${String(targetMonth + 1).padStart(2, '0')}`,
+            satellite_id: mainSat.id,
+            member_id: null,
+            notes: 'Sound ministry request',
+          })
+        }
+      }
+
+      // Events expense (some months)
+      if (Math.random() > 0.4) {
+        const eventDate = new Date(targetYear, targetMonth, 22 + Math.floor(Math.random() * 5))
+        if (eventDate.getMonth() === targetMonth) {
+          const eventItems = ['Youth night food & drinks', 'Worship night setup', 'Guest speaker honorarium', 'Outreach materials', 'Cell group leaders fellowship']
+          transactions.push({
+            transaction_date: eventDate.toISOString().split('T')[0],
+            transaction_type: 'expense',
+            category: 'Events',
+            amount: 3000 + Math.round(Math.random() * 7000),
+            description: eventItems[Math.floor(Math.random() * eventItems.length)],
+            reference_number: null,
+            satellite_id: satIds[Math.floor(Math.random() * satIds.length)],
+            member_id: null,
+            notes: null,
+          })
+        }
+      }
+
+      // Programs expense (some months)
+      if (Math.random() > 0.5) {
+        const progDate = new Date(targetYear, targetMonth, 12 + Math.floor(Math.random() * 10))
+        if (progDate.getMonth() === targetMonth) {
+          const progItems = ['SOD materials printing', 'Encounter weekend food', 'Discipleship booklets', 'QBS module printing']
+          transactions.push({
+            transaction_date: progDate.toISOString().split('T')[0],
+            transaction_type: 'expense',
+            category: 'Programs',
+            amount: 2000 + Math.round(Math.random() * 5000),
+            description: progItems[Math.floor(Math.random() * progItems.length)],
+            reference_number: null,
+            satellite_id: mainSat.id,
+            member_id: null,
+            notes: 'Discipleship program',
+          })
+        }
+      }
+    }
+
+    // Insert all transactions
+    const { data: inserted, error } = await supabase
+      .from('financial_transactions')
+      .insert(transactions)
+      .select('id')
+
+    if (error) {
+      console.error('Seed financial data error:', error)
+      throw new Error(`Failed to seed financial data: ${error.message}`)
+    }
+
+    return {
+      success: true,
+      count: inserted?.length || 0,
+      summary: {
+        income: transactions.filter(t => t.transaction_type === 'income').length,
+        expenses: transactions.filter(t => t.transaction_type === 'expense').length,
+      },
+    }
+  })
+
+// ============================================
+// PURGE FINANCIAL DATA
+// ============================================
+
+export const purgeFinancialData = createServerFn({ method: 'POST' })
+  .inputValidator((input: { adminPin: string }) => z.object({
+    adminPin: z.string(),
+  }).parse(input))
+  .handler(async ({ data }) => {
+    const expectedPin = process.env.VITE_ADMIN_PIN || 'quest2026'
+    if (data.adminPin !== expectedPin) {
+      throw new Error('Invalid admin PIN')
+    }
+
+    const supabase = createServerAdminClient()
+
+    const { data: deleted, error } = await supabase
+      .from('financial_transactions')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000')
+      .select('id')
+
+    if (error) {
+      console.error('Purge financial data error:', error)
+      throw new Error(`Failed to purge financial data: ${error.message}`)
+    }
+
+    return { success: true, deleted: deleted?.length || 0 }
+  })

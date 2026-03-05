@@ -34,9 +34,10 @@ import { MemberCard, MemberCardSkeleton } from '../../components/MemberCard'
 import { MembersTabContent } from '../../components/MembersTabContent'
 import { CellGroupCard, CellGroupCardSkeleton } from '../../components/CellGroupCard'
 import { MinistryCard, MinistryCardSkeleton } from '../../components/MinistryCard'
-import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, EventWithStats } from '../../lib/types'
+import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, EventWithStats, FinancialOverview } from '../../lib/types'
 import { getEvents } from '../../server/functions/events'
-import { ADMIN_PIN } from '../../lib/constants'
+import { getFinancialOverview } from '../../server/functions/finances'
+import { ADMIN_PIN, formatCurrency } from '../../lib/constants'
 
 export const Route = createFileRoute('/admin/')({
   component: AdminDashboard,
@@ -55,6 +56,7 @@ function AdminDashboard() {
   const [ministries, setMinistries] = useState<MinistryWithRelations[]>([])
   const [satellites, setSatellites] = useState<Satellite[]>([])
   const [events, setEvents] = useState<EventWithStats[]>([])
+  const [financialOverview, setFinancialOverview] = useState<FinancialOverview | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   // Filters
@@ -171,12 +173,18 @@ function AdminDashboard() {
         }
         if (minsRes.data) setMinistries(minsRes.data as MinistryWithRelations[])
 
-        // Fetch events (server function, separate from supabase queries)
+        // Fetch events and financial overview (server functions, separate from supabase queries)
         try {
-          const eventsData = await getEvents({ data: { activeOnly: false } })
-          if (!cancelled) setEvents(eventsData)
+          const [eventsData, finOverview] = await Promise.all([
+            getEvents({ data: { activeOnly: false } }),
+            getFinancialOverview({ data: {} }),
+          ])
+          if (!cancelled) {
+            setEvents(eventsData)
+            setFinancialOverview(finOverview)
+          }
         } catch (evtErr) {
-          if (!cancelled) console.error('[Dashboard] events fetch error:', evtErr)
+          if (!cancelled) console.error('[Dashboard] events/finances fetch error:', evtErr)
         }
       } catch (err) {
         if (cancelled) return
@@ -364,10 +372,14 @@ function AdminDashboard() {
       if (minsRes.data) setMinistries(minsRes.data as MinistryWithRelations[])
 
       try {
-        const eventsData = await getEvents({ data: { activeOnly: false } })
+        const [eventsData, finOverview] = await Promise.all([
+          getEvents({ data: { activeOnly: false } }),
+          getFinancialOverview({ data: {} }),
+        ])
         setEvents(eventsData)
+        setFinancialOverview(finOverview)
       } catch (evtErr) {
-        console.error('[Dashboard] events fetch error:', evtErr)
+        console.error('[Dashboard] events/finances fetch error:', evtErr)
       }
     } catch (err) {
       console.error('[Dashboard] refreshData error:', err)
@@ -668,6 +680,7 @@ function AdminDashboard() {
             <TabsTrigger value="cell-groups">Cell Groups</TabsTrigger>
             <TabsTrigger value="ministries">Ministries</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="finances">Finances</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
@@ -877,7 +890,7 @@ function AdminDashboard() {
               </Card>
 
               {/* Quick Links */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <Link to="/admin/members/new">
                   <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
                     <CardContent className="p-4 flex flex-col items-center justify-center text-center">
@@ -895,6 +908,16 @@ function AdminDashboard() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                       <p className="font-medium">Event Dashboard</p>
+                    </CardContent>
+                  </Card>
+                </Link>
+                <Link to="/finances">
+                  <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+                    <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                      <svg className="w-8 h-8 text-[#8B1538] mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="font-medium">Finances</p>
                     </CardContent>
                   </Card>
                 </Link>
@@ -1953,6 +1976,150 @@ function AdminDashboard() {
                   )}
                 </CardContent>
               </Card>
+            </div>
+          </TabsContent>
+
+          {/* Finances Tab */}
+          <TabsContent value="finances">
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <p className={`text-3xl font-bold ${(financialOverview?.currentBalance ?? 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {formatCurrency(financialOverview?.currentBalance ?? 0)}
+                    </p>
+                    <p className="text-sm text-gray-500">Current Balance</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <p className="text-3xl font-bold text-emerald-600">
+                      {formatCurrency(financialOverview?.totalIncome ?? 0)}
+                    </p>
+                    <p className="text-sm text-gray-500">Total Income</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="p-4 text-center">
+                    <p className="text-3xl font-bold text-red-600">
+                      {formatCurrency(financialOverview?.totalExpenses ?? 0)}
+                    </p>
+                    <p className="text-sm text-gray-500">Total Expenses</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Recent Transactions + Full Dashboard Link */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Finances</CardTitle>
+                      <CardDescription>Track tithes, offerings, and expenses</CardDescription>
+                    </div>
+                    <Link to="/finances">
+                      <Button variant="outline" size="sm">
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        Full Finances Dashboard
+                      </Button>
+                    </Link>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <div className="space-y-3">
+                      {[...Array(5)].map((_, i) => (
+                        <div key={i} className="animate-pulse flex items-center justify-between py-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-2 h-2 bg-gray-200 rounded-full" />
+                            <div>
+                              <div className="h-4 bg-gray-200 rounded w-24 mb-1" />
+                              <div className="h-3 bg-gray-200 rounded w-32" />
+                            </div>
+                          </div>
+                          <div className="h-4 bg-gray-200 rounded w-20" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : !financialOverview?.recentTransactions.length ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="font-medium mb-2">No transactions yet</p>
+                      <p className="text-sm mb-4">Record your first income or expense from the Finances Dashboard</p>
+                      <Link to="/finances">
+                        <Button>Go to Finances Dashboard</Button>
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {financialOverview.recentTransactions.map((tx) => (
+                        <div
+                          key={tx.id}
+                          className="flex items-center justify-between py-2 border-b last:border-0"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-2 h-2 rounded-full ${tx.transaction_type === 'income' ? 'bg-emerald-500' : 'bg-red-500'}`}
+                            />
+                            <div>
+                              <p className="text-sm font-medium">{tx.category}</p>
+                              <p className="text-xs text-gray-500">
+                                {tx.transaction_date}
+                                {tx.satellite?.name ? ` · ${tx.satellite.name}` : ''}
+                                {tx.member?.name ? ` · ${tx.member.name}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <span
+                            className={`font-medium text-sm ${tx.transaction_type === 'income' ? 'text-emerald-600' : 'text-red-600'}`}
+                          >
+                            {tx.transaction_type === 'income' ? '+' : '-'}
+                            {formatCurrency(Number(tx.amount))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Satellite Breakdown */}
+              {financialOverview?.bySatellite.length ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>By Satellite</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Satellite</TableHead>
+                          <TableHead className="text-right">Income</TableHead>
+                          <TableHead className="text-right">Expenses</TableHead>
+                          <TableHead className="text-right">Balance</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {financialOverview.bySatellite.map((s) => (
+                          <TableRow key={s.satelliteId}>
+                            <TableCell className="font-medium">{s.satelliteName}</TableCell>
+                            <TableCell className="text-right text-emerald-600">{formatCurrency(s.income)}</TableCell>
+                            <TableCell className="text-right text-red-600">{formatCurrency(s.expenses)}</TableCell>
+                            <TableCell className={`text-right font-medium ${s.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {formatCurrency(s.balance)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              ) : null}
             </div>
           </TabsContent>
 

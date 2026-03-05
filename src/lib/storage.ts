@@ -5,6 +5,7 @@ import { supabase } from './supabase'
 const BUCKET_NAME = 'media'
 const MEMBER_PHOTOS_FOLDER = 'member-photos'
 const EVENT_BANNERS_FOLDER = 'event-banners'
+const RECEIPTS_FOLDER = 'receipts'
 
 // ============================================
 // UPLOAD MEMBER PHOTO
@@ -111,6 +112,48 @@ export async function uploadEventBanner(
     return { url: publicUrl, error: null }
   } catch (err) {
     console.error('Upload error:', err)
+    return { url: '', error: err as Error }
+  }
+}
+
+// ============================================
+// UPLOAD FINANCIAL RECEIPT
+// ============================================
+
+export async function uploadReceipt(
+  file: File
+): Promise<{ url: string; error: Error | null }> {
+  try {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
+    if (!allowedTypes.includes(file.type)) {
+      return { url: '', error: new Error('Invalid file type. Please upload a JPEG, PNG, WebP, GIF, or PDF.') }
+    }
+
+    const maxSize = 10 * 1024 * 1024 // 10MB for receipts
+    if (file.size > maxSize) {
+      return { url: '', error: new Error('File too large. Maximum size is 10MB.') }
+    }
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const fileName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${fileExt}`
+    const filePath = `${RECEIPTS_FOLDER}/${fileName}`
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, file, { cacheControl: '3600', upsert: false })
+
+    if (uploadError) {
+      console.error('Receipt upload error:', uploadError)
+      return { url: '', error: new Error('Failed to upload receipt. Please try again.') }
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(filePath)
+
+    return { url: publicUrl, error: null }
+  } catch (err) {
+    console.error('Receipt upload error:', err)
     return { url: '', error: err as Error }
   }
 }
