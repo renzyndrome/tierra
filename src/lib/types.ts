@@ -344,6 +344,7 @@ export interface Ministry {
   description: string | null
   department: string | null
   head_id: string | null
+  photo_url: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -355,6 +356,7 @@ export interface MinistryInsert {
   description?: string | null
   department?: string | null
   head_id?: string | null
+  photo_url?: string | null
   is_active?: boolean
 }
 
@@ -363,6 +365,7 @@ export interface MinistryUpdate {
   description?: string | null
   department?: string | null
   head_id?: string | null
+  photo_url?: string | null
   is_active?: boolean
 }
 

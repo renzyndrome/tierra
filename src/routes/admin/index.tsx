@@ -1,7 +1,7 @@
 // Quest Laguna Directory - Admin Dashboard (Protected)
 
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../../components/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -20,6 +20,8 @@ import { addSatellite, deleteSatellite } from '../../server/functions/satellites
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -116,12 +118,28 @@ function AdminDashboard() {
     head_id: '',
     is_active: true,
   })
+  const [minPhotoFile, setMinPhotoFile] = useState<File | null>(null)
+  const [minPhotoPreview, setMinPhotoPreview] = useState<string | null>(null)
+  const [existingMinPhotoUrl, setExistingMinPhotoUrl] = useState<string | null>(null)
 
   // Satellite CRUD
   const [showSatDialog, setShowSatDialog] = useState(false)
   const [satToDelete, setSatToDelete] = useState<Satellite | null>(null)
   const [isSavingSat, setIsSavingSat] = useState(false)
   const [satForm, setSatForm] = useState({ name: '' })
+
+  // Compute member IDs that are in cell groups (for filtering)
+  const memberIdsInCellGroups = useMemo(() => {
+    const ids = new Set<string>()
+    for (const group of cellGroups) {
+      if (group.members) {
+        for (const m of group.members) {
+          if ((m as any).member_id) ids.add((m as any).member_id)
+        }
+      }
+    }
+    return ids
+  }, [cellGroups])
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -152,7 +170,7 @@ function AdminDashboard() {
             leader:members!cell_groups_leader_id_fkey(id, name, photo_url),
             co_leader:members!cell_groups_co_leader_id_fkey(id, name, photo_url),
             satellite:satellites(id, name),
-            members:member_cell_groups(id)
+            members:member_cell_groups(id, member_id)
           `).eq('is_active', true).order('name'),
           supabase.from('ministries').select(`
             *,
@@ -173,7 +191,13 @@ function AdminDashboard() {
         }
         if (minsRes.data) setMinistries(minsRes.data as MinistryWithRelations[])
 
-        // Fetch events and financial overview (server functions, separate from supabase queries)
+        // Core data loaded — stop showing skeletons for main tabs
+        if (!cancelled) {
+          setIsLoading(false)
+          hasFetchedRef.current = true
+        }
+
+        // Fetch events and financial overview in the background (server functions)
         try {
           const [eventsData, finOverview] = await Promise.all([
             getEvents({ data: { activeOnly: false } }),
@@ -189,11 +213,7 @@ function AdminDashboard() {
       } catch (err) {
         if (cancelled) return
         console.error('[Dashboard] fetchData error:', err)
-      }
-
-      if (!cancelled) {
         setIsLoading(false)
-        hasFetchedRef.current = true
       }
     }
 
@@ -481,6 +501,7 @@ function AdminDashboard() {
         head_id: min.head_id || '',
         is_active: min.is_active !== false,
       })
+      setExistingMinPhotoUrl(min.photo_url || null)
     } else {
       setEditingMin(null)
       setMinForm({
@@ -490,7 +511,10 @@ function AdminDashboard() {
         head_id: '',
         is_active: true,
       })
+      setExistingMinPhotoUrl(null)
     }
+    setMinPhotoFile(null)
+    setMinPhotoPreview(null)
     setShowMinDialog(true)
   }
 
@@ -498,11 +522,26 @@ function AdminDashboard() {
     if (!minForm.name.trim()) return
     setIsSavingMin(true)
     try {
+      // Upload photo if a new file was selected
+      let photoUrl: string | null = existingMinPhotoUrl
+      if (minPhotoFile) {
+        const { uploadMinistryPhoto } = await import('../../lib/storage')
+        const tempId = editingMin?.id || crypto.randomUUID()
+        const { url, error: uploadError } = await uploadMinistryPhoto(tempId, minPhotoFile)
+        if (uploadError) {
+          alert(`Photo upload failed: ${uploadError.message}`)
+          setIsSavingMin(false)
+          return
+        }
+        photoUrl = url
+      }
+
       const payload = {
         name: minForm.name.trim(),
         description: minForm.description.trim() || null,
         department: minForm.department.trim() || null,
         head_id: minForm.head_id || null,
+        photo_url: photoUrl,
         is_active: minForm.is_active,
       }
       if (editingMin) {
@@ -511,6 +550,9 @@ function AdminDashboard() {
         await createMinistry({ data: payload })
       }
       setShowMinDialog(false)
+      setMinPhotoFile(null)
+      setMinPhotoPreview(null)
+      setExistingMinPhotoUrl(null)
       await refreshData()
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to save ministry')
@@ -623,6 +665,26 @@ function AdminDashboard() {
   }
   const fullTimeCount = members.filter(m => m.is_full_time).length
 
+  // Monthly total active member headcount
+  const monthlyMemberCount = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth()
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+    return monthNames
+      .slice(0, currentMonth + 1)
+      .map((name, i) => {
+        const endOfMonth = new Date(currentYear, i + 1, 0, 23, 59, 59)
+        const count = members.filter(m => {
+          if (!m.created_at) return true
+          return new Date(m.created_at) <= endOfMonth
+        }).length
+        return { month: name, members: count }
+      })
+  }, [members])
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -726,6 +788,43 @@ function AdminDashboard() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Member Count Over Time */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">Member Count</CardTitle>
+                  <CardDescription>
+                    Total active members at end of each month — {new Date().getFullYear()}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={monthlyMemberCount}
+                        margin={{ top: 20, right: 20, left: -10, bottom: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 12 }} allowDecimals={false} domain={[0, 'auto']} />
+                        <Tooltip
+                          contentStyle={{ fontSize: 13, borderRadius: 8 }}
+                          formatter={(value: number) => [value, 'Members']}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="members"
+                          stroke="#8B1538"
+                          strokeWidth={2.5}
+                          dot={{ r: 5, fill: '#8B1538', strokeWidth: 2, stroke: '#fff' }}
+                          activeDot={{ r: 7, fill: '#8B1538' }}
+                          label={{ position: 'top', fontSize: 12, fill: '#6b7280', offset: 10 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* Discipleship Journey Breakdown */}
               <Card>
@@ -1740,6 +1839,7 @@ function AdminDashboard() {
               satellites={satellites}
               isLoading={isLoading}
               onDataChanged={() => setRefreshTrigger(p => p + 1)}
+              memberIdsInCellGroups={memberIdsInCellGroups}
             />
           </TabsContent>
 
@@ -2554,6 +2654,61 @@ function AdminDashboard() {
                 <option value="">None</option>
                 {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
+            </div>
+            {/* Group Photo */}
+            <div>
+              <Label htmlFor="min-photo">Group Photo</Label>
+              <div className="mt-1">
+                <input
+                  id="min-photo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-gray-300 file:text-sm file:font-medium file:bg-white file:text-gray-700 hover:file:bg-gray-50 file:cursor-pointer"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null
+                    setMinPhotoFile(file)
+                    if (file) {
+                      const reader = new FileReader()
+                      reader.onload = (ev) => setMinPhotoPreview(ev.target?.result as string)
+                      reader.readAsDataURL(file)
+                    } else {
+                      setMinPhotoPreview(null)
+                    }
+                  }}
+                />
+                <p className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP, or GIF. Max 5MB.</p>
+              </div>
+              {minPhotoPreview && (
+                <div className="mt-2 relative inline-block">
+                  <img src={minPhotoPreview} alt="Preview" className="max-h-32 rounded border" />
+                  <button
+                    type="button"
+                    className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow text-gray-500 hover:text-red-600"
+                    onClick={() => {
+                      setMinPhotoFile(null)
+                      setMinPhotoPreview(null)
+                      const input = document.getElementById('min-photo') as HTMLInputElement
+                      if (input) input.value = ''
+                    }}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {!minPhotoFile && existingMinPhotoUrl && (
+                <div className="mt-2 flex items-center gap-3">
+                  <img src={existingMinPhotoUrl} alt="Current" className="max-h-24 rounded border" />
+                  <button
+                    type="button"
+                    className="text-xs text-red-500 hover:text-red-700"
+                    onClick={() => setExistingMinPhotoUrl(null)}
+                  >
+                    Remove photo
+                  </button>
+                </div>
+              )}
             </div>
             <div>
               <label className="flex items-center gap-2 cursor-pointer">

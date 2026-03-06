@@ -1,13 +1,28 @@
 // Quest Laguna Directory - Member Profile Page
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { getMemberWithRelations } from '../../../server/functions/members'
-import { getPlaceholderAvatar } from '../../../lib/storage'
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { useState, useEffect } from 'react'
+import { getMemberWithRelations, updateMember } from '../../../server/functions/members'
+import { addMemberToMinistry } from '../../../server/functions/ministries'
+import { getAllMinistries } from '../../../server/functions/ministries'
+import { addMemberToCellGroup } from '../../../server/functions/cellGroups'
+import { getAllCellGroups } from '../../../server/functions/cellGroups'
+import { getPlaceholderAvatar, uploadMemberPhoto } from '../../../lib/storage'
 import {
   DISCIPLESHIP_JOURNEY_STAGES,
   LEADERSHIP_LEVELS,
   FOLLOW_THROUGH_STAGES,
 } from '../../../lib/constants'
-import type { DiscipleshipJourney } from '../../../lib/types'
+import type { DiscipleshipJourney, Ministry, CellGroup } from '../../../lib/types'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../../components/ui/dialog'
+import { Button } from '../../../components/ui/button'
+import { Label } from '../../../components/ui/label'
 
 export const Route = createFileRoute('/directory/members/$memberId')({
   loader: async ({ params }) => {
@@ -118,6 +133,42 @@ function SectionCard({
 }
 
 // ============================================
+// SECTION CARD WITH ACTION BUTTON
+// ============================================
+
+function SectionCardWithAction({
+  title,
+  icon,
+  actionLabel,
+  onAction,
+  children,
+}: {
+  title: string
+  icon: string
+  actionLabel: string
+  onAction: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-base">{icon}</span>
+          <h3 className="font-semibold text-gray-900">{title}</h3>
+        </div>
+        <button
+          onClick={onAction}
+          className="text-xs font-medium text-[#8B1538] hover:text-[#6B0F2B] hover:bg-[#8B1538]/5 px-2.5 py-1 rounded-md transition-colors"
+        >
+          {actionLabel}
+        </button>
+      </div>
+      <div className="px-5 py-4">{children}</div>
+    </div>
+  )
+}
+
+// ============================================
 // INFO ROW COMPONENT
 // ============================================
 
@@ -148,6 +199,7 @@ function InfoRow({ label, value, href }: { label: string; value: string | null |
 
 function MemberProfilePage() {
   const { member } = Route.useLoaderData()
+  const router = useRouter()
 
   const avatarUrl = member.photo_url || getPlaceholderAvatar(member.name)
   const satelliteName = (member as any).satellite?.name || null
@@ -155,6 +207,89 @@ function MemberProfilePage() {
   // Safely access relations
   const cellGroups = ((member as any).cell_groups || []).filter((cg: any) => cg.is_active)
   const ministries = ((member as any).ministries || []).filter((m: any) => m.is_active)
+
+  // Quick action state
+  const [showMinistryDialog, setShowMinistryDialog] = useState(false)
+  const [showCellGroupDialog, setShowCellGroupDialog] = useState(false)
+  const [allMinistries, setAllMinistries] = useState<Ministry[]>([])
+  const [allCellGroups, setAllCellGroups] = useState<CellGroup[]>([])
+  const [selectedMinistryId, setSelectedMinistryId] = useState('')
+  const [selectedMinistryRole, setSelectedMinistryRole] = useState<'head' | 'coordinator' | 'volunteer'>('volunteer')
+  const [selectedCellGroupId, setSelectedCellGroupId] = useState('')
+  const [selectedCellGroupRole, setSelectedCellGroupRole] = useState<'leader' | 'co_leader' | 'member'>('member')
+  const [isSaving, setIsSaving] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
+
+  // Fetch ministries/cell groups for dropdowns when dialogs open
+  useEffect(() => {
+    if (showMinistryDialog && allMinistries.length === 0) {
+      getAllMinistries({ data: { activeOnly: true } }).then(setAllMinistries).catch(console.error)
+    }
+  }, [showMinistryDialog, allMinistries.length])
+
+  useEffect(() => {
+    if (showCellGroupDialog && allCellGroups.length === 0) {
+      getAllCellGroups({ data: { activeOnly: true } }).then(setAllCellGroups).catch(console.error)
+    }
+  }, [showCellGroupDialog, allCellGroups.length])
+
+  // Filter out ministries/cell groups the member is already in
+  const existingMinistryIds = new Set(ministries.map((m: any) => m.ministry?.id).filter(Boolean))
+  const existingCellGroupIds = new Set(cellGroups.map((cg: any) => cg.cell_group?.id).filter(Boolean))
+  const availableMinistries = allMinistries.filter(m => !existingMinistryIds.has(m.id))
+  const availableCellGroups = allCellGroups.filter(cg => !existingCellGroupIds.has(cg.id))
+
+  const handleAddMinistry = async () => {
+    if (!selectedMinistryId) return setActionError('Select a ministry')
+    setIsSaving(true)
+    setActionError('')
+    try {
+      await addMemberToMinistry({ data: { memberId: member.id, ministryId: selectedMinistryId, role: selectedMinistryRole } })
+      setShowMinistryDialog(false)
+      setSelectedMinistryId('')
+      setSelectedMinistryRole('volunteer')
+      router.invalidate()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to add to ministry')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleAddCellGroup = async () => {
+    if (!selectedCellGroupId) return setActionError('Select a cell group')
+    setIsSaving(true)
+    setActionError('')
+    try {
+      await addMemberToCellGroup({ data: { memberId: member.id, cellGroupId: selectedCellGroupId, role: selectedCellGroupRole } })
+      setShowCellGroupDialog(false)
+      setSelectedCellGroupId('')
+      setSelectedCellGroupRole('member')
+      router.invalidate()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to add to cell group')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handlePhotoUpload = async (file: File) => {
+    setIsUploadingPhoto(true)
+    try {
+      const { url, error } = await uploadMemberPhoto(member.id, file)
+      if (error) {
+        alert(`Upload failed: ${error.message}`)
+        return
+      }
+      await updateMember({ data: { id: member.id, updates: { photo_url: url } } })
+      router.invalidate()
+    } catch (error) {
+      alert('Failed to upload photo')
+    } finally {
+      setIsUploadingPhoto(false)
+    }
+  }
 
   // Format birthday for display
   const formatBirthday = (dateStr: string | null) => {
@@ -334,7 +469,12 @@ function MemberProfilePage() {
             </SectionCard>
 
             {/* Ministries */}
-            <SectionCard title="Ministries" icon="🙏">
+            <SectionCardWithAction
+              title="Ministries"
+              icon="🙏"
+              actionLabel="+ Add"
+              onAction={() => { setActionError(''); setShowMinistryDialog(true) }}
+            >
               {ministries.length > 0 ? (
                 <div className="space-y-3">
                   {ministries.map((m: any, i: number) => (
@@ -352,10 +492,15 @@ function MemberProfilePage() {
               ) : (
                 <p className="text-sm text-gray-400 italic">Not serving in any ministry.</p>
               )}
-            </SectionCard>
+            </SectionCardWithAction>
 
             {/* Cell Groups */}
-            <SectionCard title="Cell Groups" icon="👥">
+            <SectionCardWithAction
+              title="Cell Groups"
+              icon="👥"
+              actionLabel="+ Add"
+              onAction={() => { setActionError(''); setShowCellGroupDialog(true) }}
+            >
               {cellGroups.length > 0 ? (
                 <div className="space-y-3">
                   {cellGroups.map((cg: any, i: number) => (
@@ -375,10 +520,26 @@ function MemberProfilePage() {
               ) : (
                 <p className="text-sm text-gray-400 italic">Not a member of any cell group.</p>
               )}
-            </SectionCard>
+            </SectionCardWithAction>
 
             {/* Photo Gallery */}
-            <SectionCard title="Photo Gallery" icon="📷">
+            <SectionCardWithAction
+              title="Photo Gallery"
+              icon="📷"
+              actionLabel={isUploadingPhoto ? 'Uploading...' : '+ Add Photo'}
+              onAction={() => document.getElementById('photo-upload-input')?.click()}
+            >
+              <input
+                id="photo-upload-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handlePhotoUpload(file)
+                  e.target.value = ''
+                }}
+              />
               {member.photo_url ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <img
@@ -388,9 +549,20 @@ function MemberProfilePage() {
                   />
                 </div>
               ) : (
-                <p className="text-sm text-gray-400 italic">No photos yet.</p>
+                <div className="text-center py-6">
+                  <svg className="w-10 h-10 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-sm text-gray-400 italic">No photos yet.</p>
+                  <button
+                    onClick={() => document.getElementById('photo-upload-input')?.click()}
+                    className="mt-2 text-sm text-[#8B1538] hover:underline font-medium"
+                  >
+                    Upload a photo
+                  </button>
+                </div>
               )}
-            </SectionCard>
+            </SectionCardWithAction>
 
             {/* Spiritual Profile */}
             {hasSpiritualProfile && (
@@ -516,6 +688,124 @@ function MemberProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Add to Ministry Dialog */}
+      <Dialog open={showMinistryDialog} onOpenChange={setShowMinistryDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add to Ministry</DialogTitle>
+            <DialogDescription>
+              Assign {member.name} to a ministry with a role.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {actionError && (
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{actionError}</p>
+            )}
+            <div className="space-y-2">
+              <Label>Ministry</Label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1538]/30 focus:border-[#8B1538]"
+                value={selectedMinistryId}
+                onChange={(e) => setSelectedMinistryId(e.target.value)}
+              >
+                <option value="">Select a ministry...</option>
+                {availableMinistries.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.department ? ` (${m.department})` : ''}
+                  </option>
+                ))}
+              </select>
+              {availableMinistries.length === 0 && allMinistries.length > 0 && (
+                <p className="text-xs text-gray-500 italic">Already a member of all ministries.</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1538]/30 focus:border-[#8B1538]"
+                value={selectedMinistryRole}
+                onChange={(e) => setSelectedMinistryRole(e.target.value as 'head' | 'coordinator' | 'volunteer')}
+              >
+                <option value="volunteer">Volunteer</option>
+                <option value="coordinator">Coordinator</option>
+                <option value="head">Head</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMinistryDialog(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddMinistry}
+              disabled={isSaving || !selectedMinistryId}
+              className="bg-[#8B1538] hover:bg-[#6B0F2B] text-white"
+            >
+              {isSaving ? 'Adding...' : 'Add to Ministry'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add to Cell Group Dialog */}
+      <Dialog open={showCellGroupDialog} onOpenChange={setShowCellGroupDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add to Cell Group</DialogTitle>
+            <DialogDescription>
+              Assign {member.name} to a cell group with a role.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {actionError && (
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{actionError}</p>
+            )}
+            <div className="space-y-2">
+              <Label>Cell Group</Label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1538]/30 focus:border-[#8B1538]"
+                value={selectedCellGroupId}
+                onChange={(e) => setSelectedCellGroupId(e.target.value)}
+              >
+                <option value="">Select a cell group...</option>
+                {availableCellGroups.map((cg) => (
+                  <option key={cg.id} value={cg.id}>
+                    {cg.name}{cg.meeting_day ? ` (${cg.meeting_day})` : ''}
+                  </option>
+                ))}
+              </select>
+              {availableCellGroups.length === 0 && allCellGroups.length > 0 && (
+                <p className="text-xs text-gray-500 italic">Already a member of all cell groups.</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1538]/30 focus:border-[#8B1538]"
+                value={selectedCellGroupRole}
+                onChange={(e) => setSelectedCellGroupRole(e.target.value as 'leader' | 'co_leader' | 'member')}
+              >
+                <option value="member">Member</option>
+                <option value="co_leader">Co-Leader</option>
+                <option value="leader">Leader</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCellGroupDialog(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddCellGroup}
+              disabled={isSaving || !selectedCellGroupId}
+              className="bg-[#8B1538] hover:bg-[#6B0F2B] text-white"
+            >
+              {isSaving ? 'Adding...' : 'Add to Cell Group'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

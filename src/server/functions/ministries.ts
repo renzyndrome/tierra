@@ -14,6 +14,7 @@ const ministryInsertSchema = z.object({
   description: z.string().max(500).optional().nullable(),
   department: z.string().max(100).optional().nullable(),
   head_id: z.string().uuid().optional().nullable(),
+  photo_url: z.string().url().optional().nullable(),
   is_active: z.boolean().optional(),
 })
 

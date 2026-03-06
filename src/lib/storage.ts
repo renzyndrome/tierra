@@ -6,6 +6,7 @@ const BUCKET_NAME = 'media'
 const MEMBER_PHOTOS_FOLDER = 'member-photos'
 const EVENT_BANNERS_FOLDER = 'event-banners'
 const RECEIPTS_FOLDER = 'receipts'
+const MINISTRY_PHOTOS_FOLDER = 'ministry-photos'
 
 // ============================================
 // UPLOAD MEMBER PHOTO
@@ -154,6 +155,49 @@ export async function uploadReceipt(
     return { url: publicUrl, error: null }
   } catch (err) {
     console.error('Receipt upload error:', err)
+    return { url: '', error: err as Error }
+  }
+}
+
+// ============================================
+// UPLOAD MINISTRY PHOTO
+// ============================================
+
+export async function uploadMinistryPhoto(
+  ministryId: string,
+  file: File
+): Promise<{ url: string; error: Error | null }> {
+  try {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type)) {
+      return { url: '', error: new Error('Invalid file type. Please upload a JPEG, PNG, WebP, or GIF image.') }
+    }
+
+    const maxSize = 5 * 1024 * 1024
+    if (file.size > maxSize) {
+      return { url: '', error: new Error('File too large. Maximum size is 5MB.') }
+    }
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const fileName = `${ministryId}-${Date.now()}.${fileExt}`
+    const filePath = `${MINISTRY_PHOTOS_FOLDER}/${fileName}`
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, file, { cacheControl: '3600', upsert: true })
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError)
+      return { url: '', error: new Error('Failed to upload photo. Please try again.') }
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(filePath)
+
+    return { url: publicUrl, error: null }
+  } catch (err) {
+    console.error('Upload error:', err)
     return { url: '', error: err as Error }
   }
 }

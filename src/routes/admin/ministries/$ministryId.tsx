@@ -376,6 +376,19 @@ function MinistryDetailPage() {
         </div>
       </header>
 
+      {/* Group Photo Banner */}
+      {ministry.photo_url && (
+        <div className="max-w-7xl mx-auto px-4 -mt-2 pt-6">
+          <div className="rounded-xl overflow-hidden shadow-md">
+            <img
+              src={ministry.photo_url}
+              alt={`${ministry.name} group photo`}
+              className="w-full h-48 sm:h-64 lg:h-80 object-cover"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

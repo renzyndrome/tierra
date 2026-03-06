@@ -105,6 +105,12 @@ function FinancesPage() {
   const [searchInput, setSearchInput] = useState<string>('')
   const [filterStartDate, setFilterStartDate] = useState<string>('')
   const [filterEndDate, setFilterEndDate] = useState<string>('')
+  const [filterMemberId, setFilterMemberId] = useState<string>('')
+  const [filterMinAmount, setFilterMinAmount] = useState<string>('')
+  const [filterMaxAmount, setFilterMaxAmount] = useState<string>('')
+  const [filterHasReceipt, setFilterHasReceipt] = useState<string>('')
+  const [txSortBy, setTxSortBy] = useState<'transaction_date' | 'amount' | 'created_at'>('transaction_date')
+  const [txSortOrder, setTxSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedTransaction, setSelectedTransaction] = useState<FinancialTransactionWithRelations | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -199,6 +205,8 @@ function FinancesPage() {
   // Fetch transactions list
   const fetchTransactions = useCallback(async () => {
     try {
+      const minAmt = filterMinAmount ? parseFloat(filterMinAmount) : undefined
+      const maxAmt = filterMaxAmount ? parseFloat(filterMaxAmount) : undefined
       const res = await getFinancialTransactions({
         data: {
           search: filterSearch || undefined,
@@ -207,17 +215,21 @@ function FinancesPage() {
           category: filterCategory || undefined,
           startDate: filterStartDate || undefined,
           endDate: filterEndDate || undefined,
+          memberId: filterMemberId || undefined,
+          minAmount: minAmt && minAmt > 0 ? minAmt : undefined,
+          maxAmount: maxAmt && maxAmt > 0 ? maxAmt : undefined,
+          hasReceipt: filterHasReceipt === 'yes' ? true : filterHasReceipt === 'no' ? false : undefined,
           page: currentPage,
           limit: 20,
-          sortBy: 'transaction_date',
-          sortOrder: 'desc',
+          sortBy: txSortBy,
+          sortOrder: txSortOrder,
         },
       })
       setTransactions(res)
     } catch (error) {
       console.error('Error fetching transactions:', error)
     }
-  }, [filterSatelliteId, filterType, filterCategory, filterSearch, filterStartDate, filterEndDate, currentPage])
+  }, [filterSatelliteId, filterType, filterCategory, filterSearch, filterStartDate, filterEndDate, filterMemberId, filterMinAmount, filterMaxAmount, filterHasReceipt, txSortBy, txSortOrder, currentPage])
 
   // Fetch overview when overview-relevant filters change (satellite, date range)
   useEffect(() => {
@@ -310,15 +322,15 @@ function FinancesPage() {
 
       const payload = {
         transaction_date: formDate,
-        transaction_type: formType,
+        transaction_type: formType as TransactionType,
         category: formCategory,
         amount,
         satellite_id: formSatelliteId,
-        member_id: formType === 'income' && formMemberId ? formMemberId : null,
-        description: formDescription || null,
-        reference_number: formReferenceNumber || null,
-        receipt_url: receiptUrl,
-        notes: formNotes || null,
+        member_id: (formType === 'income' && formMemberId) ? formMemberId : null,
+        description: formDescription.trim() || undefined,
+        reference_number: formReferenceNumber.trim() || undefined,
+        receipt_url: receiptUrl || undefined,
+        notes: formNotes.trim() || undefined,
       }
 
       if (editingTransaction) {
@@ -326,7 +338,7 @@ function FinancesPage() {
           data: { id: editingTransaction.id, updates: payload },
         })
       } else {
-        await createFinancialTransaction({ data: payload })
+        await createFinancialTransaction({ data: payload as any })
       }
 
       setShowFormDialog(false)
@@ -334,7 +346,8 @@ function FinancesPage() {
       await Promise.all([fetchOverviewData(), fetchTransactions()])
     } catch (error) {
       console.error('Error saving transaction:', error)
-      setFormError('Failed to save transaction. Please try again.')
+      const msg = error instanceof Error ? error.message : 'Unknown error'
+      setFormError(`Failed to save transaction: ${msg}`)
     } finally {
       setIsSaving(false)
     }
@@ -519,7 +532,7 @@ function FinancesPage() {
               onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1) }}
               placeholder="End date"
             />
-            {(filterSatelliteId || filterStartDate || filterEndDate || filterType || filterCategory || filterSearch) && (
+            {(filterSatelliteId || filterStartDate || filterEndDate || filterType || filterCategory || filterSearch || filterMemberId || filterMinAmount || filterMaxAmount || filterHasReceipt) && (
               <Button
                 variant="outline"
                 size="sm"
@@ -531,6 +544,12 @@ function FinancesPage() {
                   setFilterCategory('')
                   setFilterSearch('')
                   setSearchInput('')
+                  setFilterMemberId('')
+                  setFilterMinAmount('')
+                  setFilterMaxAmount('')
+                  setFilterHasReceipt('')
+                  setTxSortBy('transaction_date')
+                  setTxSortOrder('desc')
                   setCurrentPage(1)
                 }}
               >
@@ -1000,16 +1019,16 @@ function FinancesPage() {
                 <div className="space-y-4">
                   {/* Search & Filters Bar */}
                   <Card>
-                    <CardContent className="p-4">
+                    <CardContent className="p-4 space-y-3">
+                      {/* Row 1: Search + Search Button */}
                       <div className="flex flex-col sm:flex-row gap-3">
-                        {/* Search */}
                         <div className="flex-1 relative">
                           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                           </svg>
                           <Input
                             className="pl-9"
-                            placeholder="Search by member name, description, category, reference..."
+                            placeholder="Search member, satellite, category, amount, description, reference..."
                             value={searchInput}
                             onChange={(e) => setSearchInput(e.target.value)}
                             onKeyDown={(e) => {
@@ -1020,9 +1039,20 @@ function FinancesPage() {
                             }}
                           />
                         </div>
-                        {/* Type filter */}
+                        <Button
+                          onClick={() => { setFilterSearch(searchInput); setCurrentPage(1) }}
+                          size="sm"
+                          className="whitespace-nowrap"
+                        >
+                          Search
+                        </Button>
+                      </div>
+
+                      {/* Row 2: Filter dropdowns */}
+                      <div className="flex flex-wrap gap-2">
+                        {/* Type */}
                         <select
-                          className="border rounded-md px-3 py-2 text-sm min-w-[120px]"
+                          className="border rounded-md px-3 py-1.5 text-sm"
                           value={filterType}
                           onChange={(e) => {
                             setFilterType(e.target.value)
@@ -1034,9 +1064,9 @@ function FinancesPage() {
                           <option value="income">Income</option>
                           <option value="expense">Expense</option>
                         </select>
-                        {/* Category filter */}
+                        {/* Category */}
                         <select
-                          className="border rounded-md px-3 py-2 text-sm min-w-[140px]"
+                          className="border rounded-md px-3 py-1.5 text-sm"
                           value={filterCategory}
                           onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1) }}
                         >
@@ -1056,18 +1086,68 @@ function FinancesPage() {
                             </optgroup>
                           )}
                         </select>
-                        {/* Search button */}
-                        <Button
-                          onClick={() => { setFilterSearch(searchInput); setCurrentPage(1) }}
-                          size="sm"
-                          className="whitespace-nowrap"
+                        {/* Member */}
+                        <select
+                          className="border rounded-md px-3 py-1.5 text-sm"
+                          value={filterMemberId}
+                          onChange={(e) => { setFilterMemberId(e.target.value); setCurrentPage(1) }}
                         >
-                          Search
-                        </Button>
+                          <option value="">All Members</option>
+                          {members.map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                        {/* Receipt */}
+                        <select
+                          className="border rounded-md px-3 py-1.5 text-sm"
+                          value={filterHasReceipt}
+                          onChange={(e) => { setFilterHasReceipt(e.target.value); setCurrentPage(1) }}
+                        >
+                          <option value="">Receipt</option>
+                          <option value="yes">Has Receipt</option>
+                          <option value="no">No Receipt</option>
+                        </select>
+                        {/* Amount Range */}
+                        <Input
+                          type="number"
+                          placeholder="Min amount"
+                          className="w-28"
+                          value={filterMinAmount}
+                          onChange={(e) => { setFilterMinAmount(e.target.value); setCurrentPage(1) }}
+                          min="0"
+                          step="0.01"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Max amount"
+                          className="w-28"
+                          value={filterMaxAmount}
+                          onChange={(e) => { setFilterMaxAmount(e.target.value); setCurrentPage(1) }}
+                          min="0"
+                          step="0.01"
+                        />
+                        {/* Sort */}
+                        <select
+                          className="border rounded-md px-3 py-1.5 text-sm"
+                          value={txSortBy}
+                          onChange={(e) => { setTxSortBy(e.target.value as 'transaction_date' | 'amount' | 'created_at'); setCurrentPage(1) }}
+                        >
+                          <option value="transaction_date">Sort: Date</option>
+                          <option value="amount">Sort: Amount</option>
+                          <option value="created_at">Sort: Date Added</option>
+                        </select>
+                        <button
+                          onClick={() => setTxSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
+                          className="px-3 py-1.5 border rounded-md text-sm bg-white hover:bg-gray-50"
+                          title={txSortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                        >
+                          {txSortOrder === 'asc' ? '↑ Asc' : '↓ Desc'}
+                        </button>
                       </div>
+
                       {/* Active filter tags */}
-                      {(filterSearch || filterType || filterCategory) && (
-                        <div className="flex flex-wrap gap-2 mt-3">
+                      {(filterSearch || filterType || filterCategory || filterMemberId || filterMinAmount || filterMaxAmount || filterHasReceipt || filterSatelliteId || filterStartDate || filterEndDate) && (
+                        <div className="flex flex-wrap gap-2">
                           {filterSearch && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
                               Search: "{filterSearch}"
@@ -1089,6 +1169,54 @@ function FinancesPage() {
                               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getCategoryColor(filterCategory) }} />
                               {filterCategory}
                               <button onClick={() => { setFilterCategory(''); setCurrentPage(1) }} className="hover:text-purple-900">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </span>
+                          )}
+                          {filterMemberId && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
+                              Member: {members.find(m => m.id === filterMemberId)?.name || 'Unknown'}
+                              <button onClick={() => { setFilterMemberId(''); setCurrentPage(1) }} className="hover:text-indigo-900">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </span>
+                          )}
+                          {filterHasReceipt && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs font-medium">
+                              {filterHasReceipt === 'yes' ? 'Has Receipt' : 'No Receipt'}
+                              <button onClick={() => { setFilterHasReceipt(''); setCurrentPage(1) }} className="hover:text-cyan-900">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </span>
+                          )}
+                          {(filterMinAmount || filterMaxAmount) && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-medium">
+                              Amount: {filterMinAmount ? formatCurrency(parseFloat(filterMinAmount)) : '0'} – {filterMaxAmount ? formatCurrency(parseFloat(filterMaxAmount)) : '∞'}
+                              <button onClick={() => { setFilterMinAmount(''); setFilterMaxAmount(''); setCurrentPage(1) }} className="hover:text-amber-900">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </span>
+                          )}
+                          {filterSatelliteId && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 rounded-full text-xs font-medium">
+                              Satellite: {satellites.find(s => s.id === filterSatelliteId)?.name || filterSatelliteId}
+                              <button onClick={() => { if (!userSatelliteId) { setFilterSatelliteId(''); setCurrentPage(1) } }} className={userSatelliteId ? 'opacity-30 cursor-not-allowed' : 'hover:text-rose-900'}>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </span>
+                          )}
+                          {filterStartDate && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 text-teal-700 rounded-full text-xs font-medium">
+                              From: {new Date(filterStartDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              <button onClick={() => { setFilterStartDate(''); setCurrentPage(1) }} className="hover:text-teal-900">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </span>
+                          )}
+                          {filterEndDate && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-teal-50 text-teal-700 rounded-full text-xs font-medium">
+                              To: {new Date(filterEndDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              <button onClick={() => { setFilterEndDate(''); setCurrentPage(1) }} className="hover:text-teal-900">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                               </button>
                             </span>

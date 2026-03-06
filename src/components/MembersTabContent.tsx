@@ -44,6 +44,7 @@ interface MembersTabContentProps {
   satellites: Satellite[]
   isLoading: boolean
   onDataChanged: () => void
+  memberIdsInCellGroups?: Set<string>
 }
 
 type ViewMode = 'card' | 'table'
@@ -52,7 +53,7 @@ type ViewMode = 'card' | 'table'
 // COMPONENT
 // ============================================
 
-export function MembersTabContent({ members, satellites, isLoading, onDataChanged }: MembersTabContentProps) {
+export function MembersTabContent({ members, satellites, isLoading, onDataChanged, memberIdsInCellGroups }: MembersTabContentProps) {
   // View mode
   const [viewMode, setViewMode] = useState<ViewMode>('card')
 
@@ -65,6 +66,8 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
   const [filterCategory, setFilterCategory] = useState('')
   const [filterLeadership, setFilterLeadership] = useState('')
   const [filterJourney, setFilterJourney] = useState('')
+  const [filterCellGroup, setFilterCellGroup] = useState('')
+  const [filterDiscipler, setFilterDiscipler] = useState('')
 
   // Sort
   const [sortBy, setSortBy] = useState('name')
@@ -78,7 +81,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
   // Derived data
   const uniqueCities = [...new Set(members.map(m => m.city).filter(Boolean))].sort()
 
-  const hasFilters = filterSatellite || filterStage || filterStatus || filterCity || filterCategory || filterLeadership || filterJourney || sortBy !== 'name' || sortOrder !== 'asc'
+  const hasFilters = filterSatellite || filterStage || filterStatus || filterCity || filterCategory || filterLeadership || filterJourney || filterCellGroup || filterDiscipler || sortBy !== 'name' || sortOrder !== 'asc'
 
   const clearFilters = () => {
     setFilterSatellite('')
@@ -88,6 +91,8 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
     setFilterCategory('')
     setFilterLeadership('')
     setFilterJourney('')
+    setFilterCellGroup('')
+    setFilterDiscipler('')
     setSortBy('name')
     setSortOrder('asc')
   }
@@ -109,6 +114,10 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
       if (filterCategory && member.member_category !== filterCategory) return false
       if (filterLeadership && member.leadership_level !== filterLeadership) return false
       if (filterJourney && member.discipleship_journey !== filterJourney) return false
+      if (filterCellGroup === 'no' && memberIdsInCellGroups?.has(member.id)) return false
+      if (filterCellGroup === 'yes' && !memberIdsInCellGroups?.has(member.id)) return false
+      if (filterDiscipler === 'no' && member.discipler_id) return false
+      if (filterDiscipler === 'yes' && !member.discipler_id) return false
       return true
     })
     .sort((a, b) => {
@@ -310,6 +319,26 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
                 <option key={stage.value} value={stage.value}>{stage.label}</option>
               ))}
             </select>
+            {memberIdsInCellGroups && (
+              <select
+                value={filterCellGroup}
+                onChange={(e) => setFilterCellGroup(e.target.value)}
+                className="px-3 py-1.5 border rounded-md text-sm bg-white"
+              >
+                <option value="">Cell Group</option>
+                <option value="no">No Cell Group</option>
+                <option value="yes">Has Cell Group</option>
+              </select>
+            )}
+            <select
+              value={filterDiscipler}
+              onChange={(e) => setFilterDiscipler(e.target.value)}
+              className="px-3 py-1.5 border rounded-md text-sm bg-white"
+            >
+              <option value="">Discipler</option>
+              <option value="no">No Discipler</option>
+              <option value="yes">Has Discipler</option>
+            </select>
             {hasFilters && (
               <button
                 onClick={clearFilters}
@@ -319,6 +348,84 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
               </button>
             )}
           </div>
+
+          {/* Active Filter Tags */}
+          {(filterSatellite || filterStage || filterStatus || filterCity || filterCategory || filterLeadership || filterJourney || filterCellGroup || filterDiscipler) && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {filterSatellite && (
+                <FilterTag
+                  label="Satellite"
+                  value={satellites.find(s => s.id === filterSatellite)?.name?.replace('Quest ', '') || filterSatellite}
+                  color="bg-red-50 text-red-700"
+                  onRemove={() => setFilterSatellite('')}
+                />
+              )}
+              {filterStage && (
+                <FilterTag
+                  label="Stage"
+                  value={filterStage}
+                  color="bg-amber-50 text-amber-700"
+                  onRemove={() => setFilterStage('')}
+                />
+              )}
+              {filterStatus && (
+                <FilterTag
+                  label="Status"
+                  value={filterStatus}
+                  color="bg-emerald-50 text-emerald-700"
+                  onRemove={() => setFilterStatus('')}
+                />
+              )}
+              {filterCity && (
+                <FilterTag
+                  label="City"
+                  value={filterCity}
+                  color="bg-blue-50 text-blue-700"
+                  onRemove={() => setFilterCity('')}
+                />
+              )}
+              {filterCategory && (
+                <FilterTag
+                  label="Category"
+                  value={MEMBER_CATEGORIES.find(c => c.value === filterCategory)?.label || filterCategory}
+                  color="bg-purple-50 text-purple-700"
+                  onRemove={() => setFilterCategory('')}
+                />
+              )}
+              {filterLeadership && (
+                <FilterTag
+                  label="Leadership"
+                  value={LEADERSHIP_LEVELS.find(l => l.value === filterLeadership)?.label || filterLeadership}
+                  color="bg-indigo-50 text-indigo-700"
+                  onRemove={() => setFilterLeadership('')}
+                />
+              )}
+              {filterJourney && (
+                <FilterTag
+                  label="Journey"
+                  value={DISCIPLESHIP_JOURNEY_STAGES.find(s => s.value === filterJourney)?.label || filterJourney}
+                  color="bg-teal-50 text-teal-700"
+                  onRemove={() => setFilterJourney('')}
+                />
+              )}
+              {filterCellGroup && (
+                <FilterTag
+                  label="Cell Group"
+                  value={filterCellGroup === 'no' ? 'No Cell Group' : 'Has Cell Group'}
+                  color="bg-orange-50 text-orange-700"
+                  onRemove={() => setFilterCellGroup('')}
+                />
+              )}
+              {filterDiscipler && (
+                <FilterTag
+                  label="Discipler"
+                  value={filterDiscipler === 'no' ? 'No Discipler' : 'Has Discipler'}
+                  color="bg-pink-50 text-pink-700"
+                  onRemove={() => setFilterDiscipler('')}
+                />
+              )}
+            </div>
+          )}
 
           {/* Content */}
           {isLoading ? (
@@ -475,6 +582,23 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+// ============================================
+// FILTER TAG CHIP
+// ============================================
+
+function FilterTag({ label, value, color, onRemove }: { label: string; value: string; color: string; onRemove: () => void }) {
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${color}`}>
+      {label}: {value}
+      <button onClick={onRemove} className="hover:opacity-70 ml-0.5">
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </span>
   )
 }
 

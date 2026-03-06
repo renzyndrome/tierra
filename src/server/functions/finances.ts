@@ -28,7 +28,7 @@ const transactionInsertSchema = z.object({
   reference_number: z.string().max(100).optional().nullable(),
   satellite_id: z.string().uuid('Select a satellite'),
   member_id: z.string().uuid().optional().nullable(),
-  receipt_url: z.string().url().optional().nullable(),
+  receipt_url: z.string().optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
 })
 
@@ -42,6 +42,9 @@ const transactionFilterSchema = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   memberId: z.string().uuid().optional(),
+  minAmount: z.number().min(0).optional(),
+  maxAmount: z.number().min(0).optional(),
+  hasReceipt: z.boolean().optional(),
   page: z.number().min(1).default(1),
   limit: z.number().min(1).max(100).default(20),
   sortBy: z.enum(['transaction_date', 'amount', 'created_at']).default('transaction_date'),
@@ -71,17 +74,30 @@ export const getFinancialTransactions = createServerFn({ method: 'GET' })
 
     // Apply filters
     if (data.search) {
+      const searchTerm = data.search.trim()
+
       // Search member names via a separate lookup (PostgREST can't search across joins in .or())
-      const { data: matchingMembers } = await supabase
-        .from('members')
-        .select('id')
-        .ilike('name', `%${data.search}%`)
+      const [membersRes, satellitesRes] = await Promise.all([
+        supabase.from('members').select('id').ilike('name', `%${searchTerm}%`),
+        supabase.from('satellites').select('id').ilike('name', `%${searchTerm}%`),
+      ])
 
-      let orConditions = `description.ilike.%${data.search}%,category.ilike.%${data.search}%,reference_number.ilike.%${data.search}%,notes.ilike.%${data.search}%`
+      let orConditions = `description.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,reference_number.ilike.%${searchTerm}%,notes.ilike.%${searchTerm}%,transaction_type.ilike.%${searchTerm}%`
 
-      if (matchingMembers && matchingMembers.length > 0) {
-        const ids = matchingMembers.map((m) => m.id).join(',')
+      // Match by amount if search term is a number
+      const asNumber = parseFloat(searchTerm)
+      if (!isNaN(asNumber)) {
+        orConditions += `,amount.eq.${asNumber}`
+      }
+
+      if (membersRes.data && membersRes.data.length > 0) {
+        const ids = membersRes.data.map((m) => m.id).join(',')
         orConditions += `,member_id.in.(${ids})`
+      }
+
+      if (satellitesRes.data && satellitesRes.data.length > 0) {
+        const ids = satellitesRes.data.map((s) => s.id).join(',')
+        orConditions += `,satellite_id.in.(${ids})`
       }
 
       query = query.or(orConditions)
@@ -103,6 +119,17 @@ export const getFinancialTransactions = createServerFn({ method: 'GET' })
     }
     if (data.memberId) {
       query = query.eq('member_id', data.memberId)
+    }
+    if (data.minAmount !== undefined) {
+      query = query.gte('amount', data.minAmount)
+    }
+    if (data.maxAmount !== undefined) {
+      query = query.lte('amount', data.maxAmount)
+    }
+    if (data.hasReceipt === true) {
+      query = query.not('receipt_url', 'is', null)
+    } else if (data.hasReceipt === false) {
+      query = query.is('receipt_url', null)
     }
 
     // Sort and paginate
