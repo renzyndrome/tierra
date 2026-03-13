@@ -150,7 +150,6 @@ function AdminDashboard() {
   }, [authLoading, isAuthenticated, navigate])
 
   // Fetch all dashboard data
-  // Debounced to avoid AbortError from React strict mode double-mounting.
   const hasFetchedRef = useRef(false)
 
   useEffect(() => {
@@ -190,37 +189,33 @@ function AdminDashboard() {
           setCellGroups(groupsWithCount as CellGroupWithRelations[])
         }
         if (minsRes.data) setMinistries(minsRes.data as MinistryWithRelations[])
-
-        // Core data loaded — stop showing skeletons for main tabs
-        if (!cancelled) {
-          setIsLoading(false)
-          hasFetchedRef.current = true
-        }
-
-        // Fetch events and financial overview in the background (server functions)
-        try {
-          const [eventsData, finOverview] = await Promise.all([
-            getEvents({ data: { activeOnly: false } }),
-            getFinancialOverview({ data: {} }),
-          ])
-          if (!cancelled) {
-            setEvents(eventsData)
-            setFinancialOverview(finOverview)
-          }
-        } catch (evtErr) {
-          if (!cancelled) console.error('[Dashboard] events/finances fetch error:', evtErr)
-        }
       } catch (err) {
-        if (cancelled) return
         console.error('[Dashboard] fetchData error:', err)
+      }
+
+      // Always stop loading after core queries (success or fail)
+      if (!cancelled) {
         setIsLoading(false)
+        hasFetchedRef.current = true
+      }
+
+      // Fetch events and financial overview in the background (server functions)
+      try {
+        const [eventsData, finOverview] = await Promise.all([
+          getEvents({ data: { activeOnly: false } }),
+          getFinancialOverview({ data: {} }),
+        ])
+        if (!cancelled) {
+          setEvents(eventsData)
+          setFinancialOverview(finOverview)
+        }
+      } catch (evtErr) {
+        if (!cancelled) console.error('[Dashboard] events/finances fetch error:', evtErr)
       }
     }
 
-    // Debounce: delay fetch so strict mode's first mount cleanup runs before requests fire
-    const timer = setTimeout(() => {
-      if (!cancelled) doFetch(!hasFetchedRef.current)
-    }, 100)
+    // Start fetch immediately (no debounce)
+    doFetch(!hasFetchedRef.current)
 
     // Silently refresh on window focus
     const onFocus = () => {
@@ -230,7 +225,6 @@ function AdminDashboard() {
 
     return () => {
       cancelled = true
-      clearTimeout(timer)
       window.removeEventListener('focus', onFocus)
     }
   }, [isAuthenticated, refreshTrigger])
