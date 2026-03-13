@@ -159,10 +159,6 @@ export function MemberForm({
       newErrors.name = 'Name must be at least 2 characters'
     }
 
-    if (!formData.city || formData.city.length < 2) {
-      newErrors.city = 'City is required'
-    }
-
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Invalid email address'
     }
@@ -348,7 +344,7 @@ export function MemberForm({
         {/* City */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            City <span className="text-red-500">*</span>
+            City
           </label>
           <input
             type="text"
@@ -420,7 +416,7 @@ export function MemberForm({
           {/* Discipleship Stage */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Discipleship Stage <span className="text-red-500">*</span>
+              Discipleship Stage
             </label>
             <select
               name="discipleship_stage"

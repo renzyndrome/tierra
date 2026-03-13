@@ -10,25 +10,25 @@ import type { Member, MemberInsert, MemberUpdate, PaginatedResult } from '../../
 // ============================================
 
 const memberInsertSchema = z.object({
+  // Only name is truly required
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   email: z.string().email('Invalid email').optional().nullable(),
   phone: z.string().optional().nullable(),
   age: z.number().min(1).max(120).optional().nullable(),
   birthday: z.string().optional().nullable(),
   gender: z.enum(['male', 'female']).optional().nullable(),
-  city: z.string().min(2, 'City must be at least 2 characters').max(50),
+  city: z.string().max(50).optional().nullable(),
   address: z.string().optional().nullable(),
   satellite_id: z.string().uuid().optional().nullable(),
-  discipleship_stage: z.enum(['Newbie', 'Growing', 'Leader']),
-  membership_status: z.enum(['visitor', 'regular', 'active', 'inactive']).optional(),
+  discipleship_stage: z.enum(['Newbie', 'Growing', 'Leader']).default('Newbie'),
+  membership_status: z.enum(['visitor', 'regular', 'active', 'inactive']).default('active'),
   joined_date: z.string().optional().nullable(),
-  photo_url: z.string().url().optional().nullable(),
+  photo_url: z.string().optional().nullable(),
   bio: z.string().max(500).optional().nullable(),
   spiritual_description: z.string().max(500).optional().nullable(),
   prayer_needs: z.string().max(500).optional().nullable(),
   emergency_contact_name: z.string().optional().nullable(),
   emergency_contact_phone: z.string().optional().nullable(),
-  // Extended fields from spreadsheet integration
   civil_status: z.enum(['single', 'married', 'widowed']).optional().nullable(),
   spouse_name: z.string().optional().nullable(),
   wedding_anniversary: z.string().optional().nullable(),
@@ -37,12 +37,12 @@ const memberInsertSchema = z.object({
   discipler_id: z.string().uuid().optional().nullable(),
   follow_through: z.enum(['Salvation', 'Prayer', 'Bible and Devotion', 'Transformation', 'Cell and Church']).optional().nullable(),
   discipleship_journey: z.enum(['Consolidations', 'Pre Encounter', 'Encounter', 'Post-Encounter', 'SOD1', 'SOD2', 'SOD3', 'QBS Theology 101', 'QBS Preaching 101']).optional().nullable(),
-  leadership_level: z.enum(['Member', 'Disciple Maker', 'Eagle', 'Pastor', 'Head Pastor']).optional(),
+  leadership_level: z.enum(['Member', 'Disciple Maker', 'Eagle', 'Pastor', 'Head Pastor']).default('Member'),
   spiritual_name: z.string().optional().nullable(),
   is_vision_keeper: z.boolean().optional(),
   is_full_time: z.boolean().optional(),
   community: z.string().optional().nullable(),
-  facebook_url: z.string().url().optional().nullable(),
+  facebook_url: z.string().optional().nullable(),
 })
 
 const memberUpdateSchema = memberInsertSchema.partial()
@@ -193,7 +193,14 @@ export const getMemberWithRelations = createServerFn({ method: 'GET' })
 // ============================================
 
 export const createMember = createServerFn({ method: 'POST' })
-  .inputValidator((data: MemberInsert) => memberInsertSchema.parse(data))
+  .inputValidator((data: MemberInsert) => {
+    const result = memberInsertSchema.safeParse(data)
+    if (!result.success) {
+      const fieldErrors = result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')
+      throw new Error(`Validation failed — ${fieldErrors}`)
+    }
+    return result.data
+  })
   .handler(async ({ data }): Promise<Member> => {
     const supabase = createServerSupabaseClient()
 
@@ -208,7 +215,7 @@ export const createMember = createServerFn({ method: 'POST' })
       if (error.code === '23505') {
         throw new Error('A member with this email already exists')
       }
-      throw new Error('Failed to create member')
+      throw new Error(`Failed to create member: ${error.message}`)
     }
 
     return member as Member
