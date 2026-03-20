@@ -3,6 +3,7 @@
 import { Link } from '@tanstack/react-router'
 import type { Member } from '../lib/types'
 import { getPlaceholderAvatar } from '../lib/storage'
+import { STAGE_LABELS } from '../lib/constants'
 
 interface MemberCardProps {
   member: Member
@@ -52,7 +53,7 @@ export function MemberCard({ member, showActions = false, onEdit, onArchive }: M
           {/* Badges */}
           <div className="flex flex-wrap gap-2 mt-2">
             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${stageBadgeColor}`}>
-              {member.discipleship_stage}
+              {STAGE_LABELS[member.discipleship_stage] || member.discipleship_stage}
             </span>
             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusBadgeColor}`}>
               {member.membership_status}
@@ -168,7 +169,7 @@ export function CompactMemberCard({ member, onClick }: CompactMemberCardProps) {
         member.discipleship_stage === 'Growing' ? 'bg-teal-100 text-teal-800' :
         'bg-slate-200 text-slate-800'
       }`}>
-        {member.discipleship_stage}
+        {STAGE_LABELS[member.discipleship_stage] || member.discipleship_stage}
       </span>
     </div>
   )

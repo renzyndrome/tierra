@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { getPlaceholderAvatar } from '../../lib/storage'
 import type { Member, Satellite, CellGroupWithRelations, MinistryWithRelations } from '../../lib/types'
+import { STAGE_LABELS } from '../../lib/constants'
 
 export const Route = createFileRoute('/profile/')({
   component: ProfilePage,
@@ -175,7 +176,7 @@ function ProfilePage() {
                 <p className="text-white/80 mt-1">{member.city}</p>
                 <div className="flex gap-2 mt-2">
                   <span className={`px-3 py-1 text-sm font-medium rounded-full ${stageBadgeColor}`}>
-                    {member.discipleship_stage}
+                    {STAGE_LABELS[member.discipleship_stage] || member.discipleship_stage}
                   </span>
                   {satellite && (
                     <span className="px-3 py-1 text-sm font-medium rounded-full bg-white/20 text-white">

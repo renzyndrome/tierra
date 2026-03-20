@@ -8,13 +8,13 @@ export const DISCIPLESHIP_STAGES: {
 }[] = [
   {
     value: 'Newbie',
-    label: 'Newbie',
+    label: 'New Friends',
     description: 'New believer or first-time attendee',
   },
   {
     value: 'Growing',
-    label: 'Growing',
-    description: 'Regular member in discipleship',
+    label: 'Schooling',
+    description: 'Members in SOD 1-3 and QBS discipleship',
   },
   {
     value: 'Leader',
@@ -22,6 +22,13 @@ export const DISCIPLESHIP_STAGES: {
     description: 'Small group leader or ministry head',
   },
 ]
+
+// Map DB enum values to display labels
+export const STAGE_LABELS: Record<string, string> = {
+  Newbie: 'New Friends',
+  Growing: 'Schooling',
+  Leader: 'Leader',
+}
 
 // Event registration member status options
 export const EVENT_MEMBER_STATUSES: {
@@ -84,14 +91,14 @@ export const DISCIPLESHIP_JOURNEY_STAGES: {
   simpleStage: DiscipleshipStage
 }[] = [
   { value: 'Consolidations', label: 'Consolidations', description: 'Initial follow-up after first contact', simpleStage: 'Newbie' },
-  { value: 'Pre Encounter', label: 'Pre Encounter', description: 'Preparing for encounter weekend', simpleStage: 'Newbie' },
+  { value: 'Pre Encounter', label: 'Pre Encounter', description: 'Preparing for encounter weekend', simpleStage: 'Growing' },
   { value: 'Encounter', label: 'Encounter', description: 'Attended encounter weekend', simpleStage: 'Growing' },
   { value: 'Post-Encounter', label: 'Post-Encounter', description: 'After encounter, starting discipleship', simpleStage: 'Growing' },
   { value: 'SOD1', label: 'SOD 1', description: 'School of Disciples Level 1', simpleStage: 'Growing' },
   { value: 'SOD2', label: 'SOD 2', description: 'School of Disciples Level 2', simpleStage: 'Growing' },
-  { value: 'SOD3', label: 'SOD 3', description: 'School of Disciples Level 3', simpleStage: 'Leader' },
-  { value: 'QBS Theology 101', label: 'QBS Theology 101', description: 'Quest Bible Seminary - Theology', simpleStage: 'Leader' },
-  { value: 'QBS Preaching 101', label: 'QBS Preaching 101', description: 'Quest Bible Seminary - Preaching', simpleStage: 'Leader' },
+  { value: 'SOD3', label: 'SOD 3', description: 'School of Disciples Level 3', simpleStage: 'Growing' },
+  { value: 'QBS Theology 101', label: 'QBS Theology 101', description: 'Quest Bible Seminary - Theology', simpleStage: 'Growing' },
+  { value: 'QBS Preaching 101', label: 'QBS Preaching 101', description: 'Quest Bible Seminary - Preaching', simpleStage: 'Growing' },
 ]
 
 // Leadership levels (ordered by rank)

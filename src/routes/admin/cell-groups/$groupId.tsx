@@ -11,6 +11,7 @@ import { getPlaceholderAvatar } from '../../../lib/storage'
 import { getCellGroupWithRelations, addMemberToCellGroup, removeMemberFromCellGroup, updateMemberCellGroupRole } from '../../../server/functions/cellGroups'
 import { searchMembers } from '../../../server/functions/members'
 import type { CellGroupWithRelations, Member } from '../../../lib/types'
+import { STAGE_LABELS } from '../../../lib/constants'
 
 export const Route = createFileRoute('/admin/cell-groups/$groupId')({
   component: CellGroupDetailPage,
@@ -347,7 +348,7 @@ function CellGroupDetailPage() {
                           return (
                             <div key={stage}>
                               <div className="flex justify-between text-sm mb-1">
-                                <span className={`font-medium ${colors[stage].text}`}>{stage}</span>
+                                <span className={`font-medium ${colors[stage].text}`}>{STAGE_LABELS[stage] || stage}</span>
                                 <span className="text-gray-500">{count} ({pct}%)</span>
                               </div>
                               <div className="w-full bg-gray-100 rounded-full h-2">
@@ -470,7 +471,7 @@ function CellGroupDetailPage() {
                                     ? 'bg-teal-100 text-teal-800'
                                     : 'bg-slate-200 text-slate-800'
                               }`}>
-                                {membership.member.discipleship_stage}
+                                {STAGE_LABELS[membership.member.discipleship_stage] || membership.member.discipleship_stage}
                               </span>
                             )}
                             <select
