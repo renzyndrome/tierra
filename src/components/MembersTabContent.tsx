@@ -5,7 +5,7 @@ import { Link } from '@tanstack/react-router'
 import { MemberCard, MemberCardSkeleton } from './MemberCard'
 import { archiveMember, restoreMember, deleteMember } from '../server/functions/members'
 import { getPlaceholderAvatar } from '../lib/storage'
-import { MEMBER_CATEGORIES, LEADERSHIP_LEVELS, DISCIPLESHIP_JOURNEY_STAGES } from '../lib/constants'
+import { MEMBER_CATEGORIES, LEADERSHIP_LEVELS, DISCIPLESHIP_JOURNEY_STAGES, STAGE_LABELS } from '../lib/constants'
 import type { Member, Satellite } from '../lib/types'
 
 // shadcn/ui
@@ -264,8 +264,8 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
               className="px-3 py-1.5 border rounded-md text-sm bg-white"
             >
               <option value="">All Stages</option>
-              <option value="Newbie">Newbie</option>
-              <option value="Growing">Growing</option>
+              <option value="Newbie">New Friends</option>
+              <option value="Growing">Schooling</option>
               <option value="Leader">Leader</option>
             </select>
             <select
@@ -363,7 +363,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
               {filterStage && (
                 <FilterTag
                   label="Stage"
-                  value={filterStage}
+                  value={STAGE_LABELS[filterStage] || filterStage}
                   color="bg-amber-50 text-amber-700"
                   onRemove={() => setFilterStage('')}
                 />
@@ -526,7 +526,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
                                 : 'bg-slate-200 text-slate-800'
                           }`}
                         >
-                          {member.discipleship_stage}
+                          {STAGE_LABELS[member.discipleship_stage] || member.discipleship_stage}
                         </span>
                       </TableCell>
                       <TableCell>

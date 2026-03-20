@@ -424,8 +424,8 @@ export function MemberForm({
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none"
             >
-              <option value="Newbie">Newbie</option>
-              <option value="Growing">Growing</option>
+              <option value="Newbie">New Friends</option>
+              <option value="Growing">Schooling</option>
               <option value="Leader">Leader</option>
             </select>
           </div>

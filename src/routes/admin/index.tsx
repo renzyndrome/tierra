@@ -39,7 +39,7 @@ import { MinistryCard, MinistryCardSkeleton } from '../../components/MinistryCar
 import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, EventWithStats, FinancialOverview } from '../../lib/types'
 import { getEvents } from '../../server/functions/events'
 import { getFinancialOverview } from '../../server/functions/finances'
-import { ADMIN_PIN, formatCurrency } from '../../lib/constants'
+import { ADMIN_PIN, formatCurrency, STAGE_LABELS } from '../../lib/constants'
 
 export const Route = createFileRoute('/admin/')({
   component: AdminDashboard,
@@ -74,6 +74,11 @@ function AdminDashboard() {
   // Admin setup
   const [isSettingUpAdmin, setIsSettingUpAdmin] = useState(false)
   const [adminSetupResult, setAdminSetupResult] = useState<string | null>(null)
+
+  // Journey collapsible sections
+  const [expandedJourneyGroups, setExpandedJourneyGroups] = useState<Record<string, boolean>>({})
+  const isJourneyGroupExpanded = (key: string) => expandedJourneyGroups[key] !== false
+  const toggleJourneyGroup = (key: string) => setExpandedJourneyGroups(prev => ({ ...prev, [key]: !isJourneyGroupExpanded(key) }))
 
   // Dialogs
   const [showPurgeDialog, setShowPurgeDialog] = useState(false)
@@ -173,7 +178,8 @@ function AdminDashboard() {
           `).eq('is_active', true).order('name'),
           supabase.from('ministries').select(`
             *,
-            head:members(id, name, photo_url, city, discipleship_stage)
+            head:members(id, name, photo_url, city, discipleship_stage),
+            ministry_members:member_ministries(id, role, is_active)
           `).eq('is_active', true).order('name'),
         ])
 
@@ -617,6 +623,20 @@ function AdminDashboard() {
     return matchesSearch
   })
 
+  // Ministry role counts (from member_ministries join)
+  const ministryRoleCounts = useMemo(() => {
+    let volunteers = 0, coordinators = 0, heads = 0
+    for (const m of ministries) {
+      const activeMembers = ((m as any).ministry_members || []).filter((mm: any) => mm.is_active)
+      for (const mm of activeMembers) {
+        if (mm.role === 'volunteer') volunteers++
+        else if (mm.role === 'coordinator') coordinators++
+        else if (mm.role === 'head') heads++
+      }
+    }
+    return { volunteers, coordinators, heads, total: volunteers + coordinators + heads }
+  }, [ministries])
+
   // Stats
   const totalMembers = members.length
   const totalCellGroups = cellGroups.length
@@ -624,6 +644,7 @@ function AdminDashboard() {
   const newbies = members.filter((m) => m.discipleship_stage === 'Newbie').length
   const growing = members.filter((m) => m.discipleship_stage === 'Growing').length
   const leaders = members.filter((m) => m.discipleship_stage === 'Leader').length
+  const discipleMakers = members.filter((m) => m.leadership_level === 'Disciple Maker').length
 
   // Discipleship journey breakdown
   const journeyCounts = {
@@ -766,19 +787,19 @@ function AdminDashboard() {
                 <Card className="bg-purple-50 border-purple-200">
                   <CardContent className="p-3 text-center">
                     <p className="text-2xl font-bold text-purple-600">{newbies}</p>
-                    <p className="text-xs text-purple-500">Newbie</p>
+                    <p className="text-xs text-purple-500">New Friends</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-yellow-50 border-yellow-200">
                   <CardContent className="p-3 text-center">
                     <p className="text-2xl font-bold text-yellow-600">{growing}</p>
-                    <p className="text-xs text-yellow-600">Growing</p>
+                    <p className="text-xs text-yellow-600">Schooling</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-orange-50 border-orange-200">
                   <CardContent className="p-3 text-center">
-                    <p className="text-2xl font-bold text-orange-600">{leaders}</p>
-                    <p className="text-xs text-orange-500">Leader</p>
+                    <p className="text-2xl font-bold text-orange-600">{discipleMakers}</p>
+                    <p className="text-xs text-orange-500">Disciple Makers</p>
                   </CardContent>
                 </Card>
               </div>
@@ -827,97 +848,112 @@ function AdminDashboard() {
                   <CardDescription>Detailed breakdown by journey stage</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Newbie Journey */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* New Friends */}
                     <div>
-                      <div className="flex items-center gap-2 mb-3">
+                      <button type="button" onClick={() => toggleJourneyGroup('newFriends')} className="flex items-center gap-2 mb-1 w-full hover:opacity-80 transition-opacity">
                         <span className="w-3 h-3 rounded-full bg-purple-500" />
-                        <span className="font-semibold text-sm">Newbie ({newbies})</span>
-                      </div>
-                      <div className="space-y-2">
-                        {([
-                          { label: 'Consolidations', count: journeyCounts['Consolidations'] },
-                          { label: 'Pre Encounter', count: journeyCounts['Pre Encounter'] },
-                        ] as const).map((item) => (
-                          <div key={item.label} className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">{item.label}</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-purple-400 rounded-full" style={{ width: `${newbies > 0 ? (item.count / newbies) * 100 : 0}%` }} />
+                        <span className="font-semibold text-sm">New Friends ({newbies})</span>
+                        <svg className={`w-4 h-4 text-gray-400 transition-transform ${isJourneyGroupExpanded('newFriends') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      </button>
+                      {isJourneyGroupExpanded('newFriends') && (
+                        <div className="space-y-2 mt-2 ml-5">
+                          {([
+                            { label: 'Consolidations', count: journeyCounts['Consolidations'] },
+                          ] as const).map((item) => (
+                            <div key={item.label} className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600">{item.label}</span>
+                              <div className="flex items-center gap-2">
+                                <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-purple-400 rounded-full" style={{ width: `${newbies > 0 ? (item.count / newbies) * 100 : 0}%` }} />
+                                </div>
+                                <span className="text-sm font-medium w-8 text-right">{item.count}</span>
                               </div>
-                              <span className="text-sm font-medium w-8 text-right">{item.count}</span>
                             </div>
-                          </div>
-                        ))}
-                        {newbies - journeyCounts['Consolidations'] - journeyCounts['Pre Encounter'] > 0 && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-400 italic">Not assigned</span>
-                            <span className="text-sm text-gray-400 w-8 text-right">{newbies - journeyCounts['Consolidations'] - journeyCounts['Pre Encounter']}</span>
-                          </div>
-                        )}
-                      </div>
+                          ))}
+                          {newbies - journeyCounts['Consolidations'] > 0 && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-400 italic">Not assigned</span>
+                              <span className="text-sm text-gray-400 w-8 text-right">{newbies - journeyCounts['Consolidations']}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Growing Journey */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="w-3 h-3 rounded-full bg-yellow-500" />
-                        <span className="font-semibold text-sm">Growing ({growing})</span>
-                      </div>
-                      <div className="space-y-2">
-                        {([
-                          { label: 'Encounter', count: journeyCounts['Encounter'] },
-                          { label: 'Post-Encounter', count: journeyCounts['Post-Encounter'] },
-                          { label: 'SOD 1', count: journeyCounts['SOD1'] },
-                          { label: 'SOD 2', count: journeyCounts['SOD2'] },
-                        ] as const).map((item) => (
-                          <div key={item.label} className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">{item.label}</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${growing > 0 ? (item.count / growing) * 100 : 0}%` }} />
-                              </div>
-                              <span className="text-sm font-medium w-8 text-right">{item.count}</span>
+                    {/* Growing */}
+                    {(() => {
+                      const growingTotal = journeyCounts['Pre Encounter'] + journeyCounts['Encounter'] + journeyCounts['Post-Encounter']
+                      return (
+                        <div>
+                          <button type="button" onClick={() => toggleJourneyGroup('growing')} className="flex items-center gap-2 mb-1 w-full hover:opacity-80 transition-opacity">
+                            <span className="w-3 h-3 rounded-full bg-teal-500" />
+                            <span className="font-semibold text-sm">Growing ({growingTotal})</span>
+                            <svg className={`w-4 h-4 text-gray-400 transition-transform ${isJourneyGroupExpanded('growing') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                          {isJourneyGroupExpanded('growing') && (
+                            <div className="space-y-2 mt-2 ml-5">
+                              {([
+                                { label: 'Pre Encounter', count: journeyCounts['Pre Encounter'] },
+                                { label: 'Encounter', count: journeyCounts['Encounter'] },
+                                { label: 'Post-Encounter', count: journeyCounts['Post-Encounter'] },
+                              ] as const).map((item) => (
+                                <div key={item.label} className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-600">{item.label}</span>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                      <div className="h-full bg-teal-400 rounded-full" style={{ width: `${growingTotal > 0 ? (item.count / growingTotal) * 100 : 0}%` }} />
+                                    </div>
+                                    <span className="text-sm font-medium w-8 text-right">{item.count}</span>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          </div>
-                        ))}
-                        {growing - journeyCounts['Encounter'] - journeyCounts['Post-Encounter'] - journeyCounts['SOD1'] - journeyCounts['SOD2'] > 0 && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-400 italic">Not assigned</span>
-                            <span className="text-sm text-gray-400 w-8 text-right">{growing - journeyCounts['Encounter'] - journeyCounts['Post-Encounter'] - journeyCounts['SOD1'] - journeyCounts['SOD2']}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                          )}
+                        </div>
+                      )
+                    })()}
 
-                    {/* Leader Journey */}
+                    {/* Schooling */}
+                    {(() => {
+                      const schoolingTotal = journeyCounts['SOD1'] + journeyCounts['SOD2'] + journeyCounts['SOD3'] + journeyCounts['QBS Theology 101'] + journeyCounts['QBS Preaching 101']
+                      return (
+                        <div>
+                          <button type="button" onClick={() => toggleJourneyGroup('schooling')} className="flex items-center gap-2 mb-1 w-full hover:opacity-80 transition-opacity">
+                            <span className="w-3 h-3 rounded-full bg-yellow-500" />
+                            <span className="font-semibold text-sm">Schooling ({schoolingTotal})</span>
+                            <svg className={`w-4 h-4 text-gray-400 transition-transform ${isJourneyGroupExpanded('schooling') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                          {isJourneyGroupExpanded('schooling') && (
+                            <div className="space-y-2 mt-2 ml-5">
+                              {([
+                                { label: 'SOD 1', count: journeyCounts['SOD1'] },
+                                { label: 'SOD 2', count: journeyCounts['SOD2'] },
+                                { label: 'SOD 3', count: journeyCounts['SOD3'] },
+                                { label: 'QBS Theology 101', count: journeyCounts['QBS Theology 101'] },
+                                { label: 'QBS Preaching 101', count: journeyCounts['QBS Preaching 101'] },
+                              ] as const).map((item) => (
+                                <div key={item.label} className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-600">{item.label}</span>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                      <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${schoolingTotal > 0 ? (item.count / schoolingTotal) * 100 : 0}%` }} />
+                                    </div>
+                                    <span className="text-sm font-medium w-8 text-right">{item.count}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+
+                    {/* Disciple Makers */}
                     <div>
-                      <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center gap-2 mb-1">
                         <span className="w-3 h-3 rounded-full bg-orange-500" />
-                        <span className="font-semibold text-sm">Leader ({leaders})</span>
-                      </div>
-                      <div className="space-y-2">
-                        {([
-                          { label: 'SOD 3', count: journeyCounts['SOD3'] },
-                          { label: 'QBS Theology 101', count: journeyCounts['QBS Theology 101'] },
-                          { label: 'QBS Preaching 101', count: journeyCounts['QBS Preaching 101'] },
-                        ] as const).map((item) => (
-                          <div key={item.label} className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">{item.label}</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-orange-400 rounded-full" style={{ width: `${leaders > 0 ? (item.count / leaders) * 100 : 0}%` }} />
-                              </div>
-                              <span className="text-sm font-medium w-8 text-right">{item.count}</span>
-                            </div>
-                          </div>
-                        ))}
-                        {leaders - journeyCounts['SOD3'] - journeyCounts['QBS Theology 101'] - journeyCounts['QBS Preaching 101'] > 0 && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-400 italic">Not assigned</span>
-                            <span className="text-sm text-gray-400 w-8 text-right">{leaders - journeyCounts['SOD3'] - journeyCounts['QBS Theology 101'] - journeyCounts['QBS Preaching 101']}</span>
-                          </div>
-                        )}
+                        <span className="font-semibold text-sm">Disciple Makers ({discipleMakers})</span>
                       </div>
                     </div>
                   </div>
@@ -1050,9 +1086,9 @@ function AdminDashboard() {
                         <PieChart>
                           <Pie
                             data={[
-                              { name: 'Newbies', value: newbies, color: '#9333EA' },
-                              { name: 'Growing', value: growing, color: '#EAB308' },
-                              { name: 'Leaders', value: leaders, color: '#EA580C' },
+                              { name: 'New Friends', value: newbies, color: '#9333EA' },
+                              { name: 'Schooling', value: growing, color: '#EAB308' },
+                              { name: 'Disciple Makers', value: discipleMakers, color: '#EA580C' },
                             ]}
                             cx="50%"
                             cy="50%"
@@ -1063,9 +1099,9 @@ function AdminDashboard() {
                             label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                           >
                             {[
-                              { name: 'Newbies', value: newbies, color: '#9333EA' },
-                              { name: 'Growing', value: growing, color: '#EAB308' },
-                              { name: 'Leaders', value: leaders, color: '#EA580C' },
+                              { name: 'New Friends', value: newbies, color: '#9333EA' },
+                              { name: 'Schooling', value: growing, color: '#EAB308' },
+                              { name: 'Disciple Makers', value: discipleMakers, color: '#EA580C' },
                             ].map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
@@ -1205,6 +1241,7 @@ function AdminDashboard() {
                 const satNewbies = satMembers.filter(m => m.discipleship_stage === 'Newbie').length
                 const satGrowing = satMembers.filter(m => m.discipleship_stage === 'Growing').length
                 const satLeaders = satMembers.filter(m => m.discipleship_stage === 'Leader').length
+                const satDiscipleMakers = satMembers.filter(m => m.leadership_level === 'Disciple Maker').length
                 const satFullTime = satMembers.filter(m => m.is_full_time).length
 
                 // Leadership breakdown per satellite
@@ -1321,19 +1358,19 @@ function AdminDashboard() {
                       <Card className="bg-purple-50 border-purple-200">
                         <CardContent className="p-3 text-center">
                           <p className="text-2xl font-bold text-purple-600">{satNewbies}</p>
-                          <p className="text-xs text-purple-500">Newbie</p>
+                          <p className="text-xs text-purple-500">New Friends</p>
                         </CardContent>
                       </Card>
                       <Card className="bg-yellow-50 border-yellow-200">
                         <CardContent className="p-3 text-center">
                           <p className="text-2xl font-bold text-yellow-600">{satGrowing}</p>
-                          <p className="text-xs text-yellow-600">Growing</p>
+                          <p className="text-xs text-yellow-600">Schooling</p>
                         </CardContent>
                       </Card>
                       <Card className="bg-orange-50 border-orange-200">
                         <CardContent className="p-3 text-center">
-                          <p className="text-2xl font-bold text-orange-600">{satLeaders}</p>
-                          <p className="text-xs text-orange-500">Leader</p>
+                          <p className="text-2xl font-bold text-orange-600">{satDiscipleMakers}</p>
+                          <p className="text-xs text-orange-500">Disciple Makers</p>
                         </CardContent>
                       </Card>
                     </div>
@@ -1350,9 +1387,9 @@ function AdminDashboard() {
                           ) : (
                             <div className="space-y-3">
                               {([
-                                { stage: 'Newbie', count: satNewbies, color: 'bg-amber-500', text: 'text-amber-700' },
-                                { stage: 'Growing', count: satGrowing, color: 'bg-teal-500', text: 'text-teal-700' },
-                                { stage: 'Leader', count: satLeaders, color: 'bg-slate-500', text: 'text-slate-700' },
+                                { stage: 'New Friends', count: satNewbies, color: 'bg-amber-500', text: 'text-amber-700' },
+                                { stage: 'Schooling', count: satGrowing, color: 'bg-teal-500', text: 'text-teal-700' },
+                                { stage: 'Disciple Makers', count: satDiscipleMakers, color: 'bg-orange-500', text: 'text-orange-700' },
                               ] as const).map(({ stage, count, color, text }) => {
                                 const pct = satMembers.length > 0 ? Math.round((count / satMembers.length) * 100) : 0
                                 return (
@@ -1440,77 +1477,106 @@ function AdminDashboard() {
                           <CardTitle className="text-lg">Discipleship Journey</CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Newbie Journey */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* New Friends */}
                             <div>
-                              <div className="flex items-center gap-2 mb-3">
+                              <button type="button" onClick={() => toggleJourneyGroup(`sat-${sat.id}-newFriends`)} className="flex items-center gap-2 mb-1 w-full hover:opacity-80 transition-opacity">
                                 <span className="w-3 h-3 rounded-full bg-purple-500" />
-                                <span className="font-semibold text-sm">Newbie ({satNewbies})</span>
-                              </div>
-                              <div className="space-y-2">
-                                {([
-                                  { label: 'Consolidations', count: satJourneyCounts['Consolidations'] },
-                                  { label: 'Pre Encounter', count: satJourneyCounts['Pre Encounter'] },
-                                ] as const).map((item) => (
-                                  <div key={item.label} className="flex items-center justify-between">
-                                    <span className="text-sm text-gray-600">{item.label}</span>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                        <div className="h-full bg-purple-400 rounded-full" style={{ width: `${satNewbies > 0 ? (item.count / satNewbies) * 100 : 0}%` }} />
+                                <span className="font-semibold text-sm">New Friends ({satNewbies})</span>
+                                <svg className={`w-4 h-4 text-gray-400 transition-transform ${isJourneyGroupExpanded(`sat-${sat.id}-newFriends`) ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                              </button>
+                              {isJourneyGroupExpanded(`sat-${sat.id}-newFriends`) && (
+                                <div className="space-y-2 mt-2 ml-5">
+                                  {([
+                                    { label: 'Consolidations', count: satJourneyCounts['Consolidations'] },
+                                  ] as const).map((item) => (
+                                    <div key={item.label} className="flex items-center justify-between">
+                                      <span className="text-sm text-gray-600">{item.label}</span>
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                          <div className="h-full bg-purple-400 rounded-full" style={{ width: `${satNewbies > 0 ? (item.count / satNewbies) * 100 : 0}%` }} />
+                                        </div>
+                                        <span className="text-sm font-medium w-6 text-right">{item.count}</span>
                                       </div>
-                                      <span className="text-sm font-medium w-6 text-right">{item.count}</span>
                                     </div>
-                                  </div>
-                                ))}
-                              </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            {/* Growing Journey */}
-                            <div>
-                              <div className="flex items-center gap-2 mb-3">
-                                <span className="w-3 h-3 rounded-full bg-yellow-500" />
-                                <span className="font-semibold text-sm">Growing ({satGrowing})</span>
-                              </div>
-                              <div className="space-y-2">
-                                {([
-                                  { label: 'Encounter', count: satJourneyCounts['Encounter'] },
-                                  { label: 'Post-Encounter', count: satJourneyCounts['Post-Encounter'] },
-                                  { label: 'SOD 1', count: satJourneyCounts['SOD1'] },
-                                  { label: 'SOD 2', count: satJourneyCounts['SOD2'] },
-                                ] as const).map((item) => (
-                                  <div key={item.label} className="flex items-center justify-between">
-                                    <span className="text-sm text-gray-600">{item.label}</span>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                        <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${satGrowing > 0 ? (item.count / satGrowing) * 100 : 0}%` }} />
-                                      </div>
-                                      <span className="text-sm font-medium w-6 text-right">{item.count}</span>
+
+                            {/* Growing */}
+                            {(() => {
+                              const satGrowingTotal = satJourneyCounts['Pre Encounter'] + satJourneyCounts['Encounter'] + satJourneyCounts['Post-Encounter']
+                              return (
+                                <div>
+                                  <button type="button" onClick={() => toggleJourneyGroup(`sat-${sat.id}-growing`)} className="flex items-center gap-2 mb-1 w-full hover:opacity-80 transition-opacity">
+                                    <span className="w-3 h-3 rounded-full bg-teal-500" />
+                                    <span className="font-semibold text-sm">Growing ({satGrowingTotal})</span>
+                                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${isJourneyGroupExpanded(`sat-${sat.id}-growing`) ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                  </button>
+                                  {isJourneyGroupExpanded(`sat-${sat.id}-growing`) && (
+                                    <div className="space-y-2 mt-2 ml-5">
+                                      {([
+                                        { label: 'Pre Encounter', count: satJourneyCounts['Pre Encounter'] },
+                                        { label: 'Encounter', count: satJourneyCounts['Encounter'] },
+                                        { label: 'Post-Encounter', count: satJourneyCounts['Post-Encounter'] },
+                                      ] as const).map((item) => (
+                                        <div key={item.label} className="flex items-center justify-between">
+                                          <span className="text-sm text-gray-600">{item.label}</span>
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                              <div className="h-full bg-teal-400 rounded-full" style={{ width: `${satGrowingTotal > 0 ? (item.count / satGrowingTotal) * 100 : 0}%` }} />
+                                            </div>
+                                            <span className="text-sm font-medium w-6 text-right">{item.count}</span>
+                                          </div>
+                                        </div>
+                                      ))}
                                     </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                            {/* Leader Journey */}
+                                  )}
+                                </div>
+                              )
+                            })()}
+
+                            {/* Schooling */}
+                            {(() => {
+                              const satSchoolingTotal = satJourneyCounts['SOD1'] + satJourneyCounts['SOD2'] + satJourneyCounts['SOD3'] + satJourneyCounts['QBS Theology 101'] + satJourneyCounts['QBS Preaching 101']
+                              return (
+                                <div>
+                                  <button type="button" onClick={() => toggleJourneyGroup(`sat-${sat.id}-schooling`)} className="flex items-center gap-2 mb-1 w-full hover:opacity-80 transition-opacity">
+                                    <span className="w-3 h-3 rounded-full bg-yellow-500" />
+                                    <span className="font-semibold text-sm">Schooling ({satSchoolingTotal})</span>
+                                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${isJourneyGroupExpanded(`sat-${sat.id}-schooling`) ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                  </button>
+                                  {isJourneyGroupExpanded(`sat-${sat.id}-schooling`) && (
+                                    <div className="space-y-2 mt-2 ml-5">
+                                      {([
+                                        { label: 'SOD 1', count: satJourneyCounts['SOD1'] },
+                                        { label: 'SOD 2', count: satJourneyCounts['SOD2'] },
+                                        { label: 'SOD 3', count: satJourneyCounts['SOD3'] },
+                                        { label: 'QBS Theology 101', count: satJourneyCounts['QBS Theology 101'] },
+                                        { label: 'QBS Preaching 101', count: satJourneyCounts['QBS Preaching 101'] },
+                                      ] as const).map((item) => (
+                                        <div key={item.label} className="flex items-center justify-between">
+                                          <span className="text-sm text-gray-600">{item.label}</span>
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                              <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${satSchoolingTotal > 0 ? (item.count / satSchoolingTotal) * 100 : 0}%` }} />
+                                            </div>
+                                            <span className="text-sm font-medium w-6 text-right">{item.count}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
+
+                            {/* Disciple Makers */}
                             <div>
-                              <div className="flex items-center gap-2 mb-3">
+                              <div className="flex items-center gap-2 mb-1">
                                 <span className="w-3 h-3 rounded-full bg-orange-500" />
-                                <span className="font-semibold text-sm">Leader ({satLeaders})</span>
-                              </div>
-                              <div className="space-y-2">
-                                {([
-                                  { label: 'SOD 3', count: satJourneyCounts['SOD3'] },
-                                  { label: 'QBS Theology', count: satJourneyCounts['QBS Theology 101'] },
-                                  { label: 'QBS Preaching', count: satJourneyCounts['QBS Preaching 101'] },
-                                ] as const).map((item) => (
-                                  <div key={item.label} className="flex items-center justify-between">
-                                    <span className="text-sm text-gray-600">{item.label}</span>
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                        <div className="h-full bg-orange-400 rounded-full" style={{ width: `${satLeaders > 0 ? (item.count / satLeaders) * 100 : 0}%` }} />
-                                      </div>
-                                      <span className="text-sm font-medium w-6 text-right">{item.count}</span>
-                                    </div>
-                                  </div>
-                                ))}
+                                <span className="font-semibold text-sm">Disciple Makers ({satDiscipleMakers})</span>
                               </div>
                             </div>
                           </div>
@@ -1599,13 +1665,13 @@ function AdminDashboard() {
                   <Card>
                     <CardContent className="p-3 text-center">
                       <p className="text-2xl font-bold text-purple-600">{members.filter(m => m.discipleship_stage === 'Newbie').length}</p>
-                      <p className="text-xs text-gray-500">Newbie</p>
+                      <p className="text-xs text-gray-500">New Friends</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardContent className="p-3 text-center">
                       <p className="text-2xl font-bold text-yellow-600">{members.filter(m => m.discipleship_stage === 'Growing').length}</p>
-                      <p className="text-xs text-gray-500">Growing</p>
+                      <p className="text-xs text-gray-500">Schooling</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -1630,8 +1696,8 @@ function AdminDashboard() {
                             <TableHead className="font-semibold">Satellite</TableHead>
                             <TableHead className="text-center">Members</TableHead>
                             <TableHead className="text-center">Cell Groups</TableHead>
-                            <TableHead className="text-center">Newbie</TableHead>
-                            <TableHead className="text-center">Growing</TableHead>
+                            <TableHead className="text-center">New Friends</TableHead>
+                            <TableHead className="text-center">Schooling</TableHead>
                             <TableHead className="text-center">Leader</TableHead>
                             <TableHead className="text-center">Disciple Makers</TableHead>
                             <TableHead className="text-center">Full Time</TableHead>
@@ -1721,16 +1787,16 @@ function AdminDashboard() {
                                   <span className="text-xs text-gray-400">{sm.length} members</span>
                                 </div>
                                 <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
-                                  {n > 0 && <div className="bg-purple-400" style={{ width: `${(n / total) * 100}%` }} title={`${n} Newbie`} />}
-                                  {g > 0 && <div className="bg-yellow-400" style={{ width: `${(g / total) * 100}%` }} title={`${g} Growing`} />}
+                                  {n > 0 && <div className="bg-purple-400" style={{ width: `${(n / total) * 100}%` }} title={`${n} New Friends`} />}
+                                  {g > 0 && <div className="bg-yellow-400" style={{ width: `${(g / total) * 100}%` }} title={`${g} Schooling`} />}
                                   {l > 0 && <div className="bg-orange-400" style={{ width: `${(l / total) * 100}%` }} title={`${l} Leader`} />}
                                 </div>
                               </div>
                             )
                           })}
                         <div className="flex gap-4 mt-2 text-xs text-gray-500 justify-center">
-                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-400" /> Newbie</span>
-                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400" /> Growing</span>
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-400" /> New Friends</span>
+                          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400" /> Schooling</span>
                           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-400" /> Leader</span>
                         </div>
                       </div>
@@ -1800,10 +1866,10 @@ function AdminDashboard() {
                           {satMemberCount > 0 && (
                             <div className="flex h-2 rounded-full overflow-hidden bg-gray-100">
                               {satNewbieCount > 0 && (
-                                <div className="bg-amber-500" style={{ width: `${(satNewbieCount / satMemberCount) * 100}%` }} title={`${satNewbieCount} Newbies`} />
+                                <div className="bg-amber-500" style={{ width: `${(satNewbieCount / satMemberCount) * 100}%` }} title={`${satNewbieCount} New Friends`} />
                               )}
                               {satGrowingCount > 0 && (
-                                <div className="bg-teal-500" style={{ width: `${(satGrowingCount / satMemberCount) * 100}%` }} title={`${satGrowingCount} Growing`} />
+                                <div className="bg-teal-500" style={{ width: `${(satGrowingCount / satMemberCount) * 100}%` }} title={`${satGrowingCount} Schooling`} />
                               )}
                               {satLeaderCount > 0 && (
                                 <div className="bg-slate-500" style={{ width: `${(satLeaderCount / satMemberCount) * 100}%` }} title={`${satLeaderCount} Leaders`} />
@@ -1812,8 +1878,8 @@ function AdminDashboard() {
                           )}
                           {satMemberCount > 0 && (
                             <div className="flex gap-3 mt-2 text-xs text-gray-500">
-                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />{satNewbieCount} Newbie</span>
-                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500" />{satGrowingCount} Growing</span>
+                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />{satNewbieCount} New Friends</span>
+                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500" />{satGrowingCount} Schooling</span>
                               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-500" />{satLeaderCount} Leader</span>
                             </div>
                           )}
@@ -1898,6 +1964,34 @@ function AdminDashboard() {
 
           {/* Ministries Tab */}
           <TabsContent value="ministries">
+            {/* Ministry Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              <Card>
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-[#8B1538]">{ministryRoleCounts.total}</p>
+                  <p className="text-xs text-gray-500">Total Serving</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-blue-50 border-blue-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-600">{ministryRoleCounts.volunteers}</p>
+                  <p className="text-xs text-blue-500">Volunteers</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-amber-50 border-amber-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-amber-600">{ministryRoleCounts.coordinators}</p>
+                  <p className="text-xs text-amber-500">Coordinators</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-50 border-purple-200">
+                <CardContent className="p-3 text-center">
+                  <p className="text-2xl font-bold text-purple-600">{ministryRoleCounts.heads}</p>
+                  <p className="text-xs text-purple-500">Heads</p>
+                </CardContent>
+              </Card>
+            </div>
+
             <Card>
               <CardHeader>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

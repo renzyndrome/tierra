@@ -11,6 +11,7 @@ import {
   DISCIPLESHIP_JOURNEY_STAGES,
   LEADERSHIP_LEVELS,
   FOLLOW_THROUGH_STAGES,
+  STAGE_LABELS,
 } from '../../../lib/constants'
 import type { DiscipleshipJourney, Ministry, CellGroup } from '../../../lib/types'
 import {
@@ -375,7 +376,7 @@ function MemberProfilePage() {
               {/* Badges Row 1: Stage, Status, Satellite */}
               <div className="flex flex-wrap justify-center sm:justify-start gap-2 mt-3">
                 <Badge className={stageBadgeColors[member.discipleship_stage] || 'bg-gray-100 text-gray-800'}>
-                  {member.discipleship_stage}
+                  {STAGE_LABELS[member.discipleship_stage] || member.discipleship_stage}
                 </Badge>
                 <Badge className={statusBadgeColors[member.membership_status] || 'bg-gray-100 text-gray-800'}>
                   {member.membership_status}
