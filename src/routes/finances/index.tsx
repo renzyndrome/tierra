@@ -598,11 +598,11 @@ function FinancesPage() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="bg-white border shadow-sm p-1 h-auto rounded-lg">
-                <TabsTrigger value="overview" className="data-[state=active]:bg-[#8B1538] data-[state=active]:text-white data-[state=active]:shadow-sm px-6 py-2.5 text-sm font-semibold rounded-md transition-all">
+              <TabsList className="bg-white border shadow-sm p-1 h-auto rounded-lg w-full sm:w-auto">
+                <TabsTrigger value="overview" className="data-[state=active]:bg-[#8B1538] data-[state=active]:text-white data-[state=active]:shadow-sm flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-2.5 text-sm font-semibold rounded-md transition-all">
                   Overview
                 </TabsTrigger>
-                <TabsTrigger value="transactions" className="data-[state=active]:bg-[#8B1538] data-[state=active]:text-white data-[state=active]:shadow-sm px-6 py-2.5 text-sm font-semibold rounded-md transition-all">
+                <TabsTrigger value="transactions" className="data-[state=active]:bg-[#8B1538] data-[state=active]:text-white data-[state=active]:shadow-sm flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-2.5 text-sm font-semibold rounded-md transition-all">
                   Transactions
                 </TabsTrigger>
               </TabsList>

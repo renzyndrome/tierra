@@ -131,55 +131,56 @@ function ProfilePage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gradient-to-r from-[#8B1538] to-[#B91C3C] text-white">
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="flex items-center justify-between mb-6">
-            <Link to="/directory" className="text-white/70 hover:text-white flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="max-w-4xl mx-auto px-4 py-5 sm:py-8">
+          <div className="flex items-center justify-between mb-5 sm:mb-6">
+            <Link to="/directory" className="text-white/70 hover:text-white flex items-center gap-1.5 text-sm sm:text-base">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Back to Directory
+              <span className="hidden sm:inline">Back to Directory</span>
+              <span className="sm:hidden">Back</span>
             </Link>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 sm:gap-2">
               <Link
                 to="/profile/settings"
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2"
+                className="p-2 sm:px-4 sm:py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                Settings
+                <span className="hidden sm:inline">Settings</span>
               </Link>
               <button
                 onClick={handleSignOut}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2"
+                className="p-2 sm:px-4 sm:py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
-                Sign Out
+                <span className="hidden sm:inline">Sign Out</span>
               </button>
             </div>
           </div>
 
           {member ? (
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4 sm:gap-6">
               {avatarUrl && (
                 <img
                   src={avatarUrl}
                   alt={member.name}
-                  className="w-24 h-24 rounded-full object-cover border-4 border-white/20"
+                  className="w-16 h-16 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-white/20 shrink-0"
                 />
               )}
-              <div>
-                <h1 className="text-3xl font-bold">{member.name}</h1>
-                <p className="text-white/80 mt-1">{member.city}</p>
-                <div className="flex gap-2 mt-2">
-                  <span className={`px-3 py-1 text-sm font-medium rounded-full ${stageBadgeColor}`}>
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold truncate">{member.name}</h1>
+                <p className="text-white/80 mt-0.5 text-sm sm:text-base">{member.city}</p>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <span className={`px-3 py-1 text-xs sm:text-sm font-medium rounded-full ${stageBadgeColor}`}>
                     {STAGE_LABELS[member.discipleship_stage] || member.discipleship_stage}
                   </span>
                   {satellite && (
-                    <span className="px-3 py-1 text-sm font-medium rounded-full bg-white/20 text-white">
+                    <span className="px-3 py-1 text-xs sm:text-sm font-medium rounded-full bg-white/20 text-white">
                       {satellite.name}
                     </span>
                   )}
@@ -188,8 +189,8 @@ function ProfilePage() {
             </div>
           ) : (
             <div>
-              <h1 className="text-3xl font-bold">My Profile</h1>
-              <p className="text-white/80 mt-1">Complete your profile to connect with the church family</p>
+              <h1 className="text-2xl sm:text-3xl font-bold">My Profile</h1>
+              <p className="text-white/80 mt-1 text-sm sm:text-base">Complete your profile to connect with the church family</p>
             </div>
           )}
         </div>
