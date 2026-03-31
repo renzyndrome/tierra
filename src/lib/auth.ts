@@ -117,7 +117,7 @@ export function getRoleDisplayName(role: UserRole): string {
   const names: Record<UserRole, string> = {
     super_admin: 'Super Admin',
     satellite_leader: 'Satellite Leader',
-    cell_leader: 'Cell Group Leader',
+    cell_leader: 'Quest Circle Leader',
     member: 'Member',
   }
   return names[role]

@@ -75,13 +75,13 @@ function CellGroupDetailPage() {
       const group = await getCellGroupWithRelations({ data: { id: groupId } })
 
       if (!group) {
-        setError('Cell group not found')
+        setError('Quest Circle not found')
       } else {
         setCellGroup(group as CellGroupDetail)
       }
     } catch (err) {
       console.error('Error fetching cell group:', err)
-      setError('Failed to load cell group')
+      setError('Failed to load Quest Circle')
     }
 
     setIsLoading(false)
@@ -212,15 +212,15 @@ function CellGroupDetailPage() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Back to Cell Groups
+              Back to Quest Circles
             </Link>
-            <h1 className="text-2xl font-bold">Cell Group Not Found</h1>
+            <h1 className="text-2xl font-bold">Quest Circle Not Found</h1>
           </div>
         </header>
         <div className="max-w-7xl mx-auto px-4 py-12 text-center">
-          <p className="text-gray-600">{error || 'This cell group does not exist.'}</p>
+          <p className="text-gray-600">{error || 'This Quest Circle does not exist.'}</p>
           <Button onClick={() => navigate({ to: '/admin', search: { tab: 'cell-groups' } })} className="mt-4">
-            Back to Cell Groups
+            Back to Quest Circles
           </Button>
         </div>
       </div>
@@ -278,7 +278,7 @@ function CellGroupDetailPage() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Back to Cell Groups
+              Back to Quest Circles
             </Link>
           </div>
           <div className="max-w-7xl mx-auto w-full px-4 pb-5">
@@ -424,7 +424,7 @@ function CellGroupDetailPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>Members ({activeMembers.length}/{cellGroup.max_members})</CardTitle>
-                    <CardDescription>Active members of this cell group</CardDescription>
+                    <CardDescription>Active members of this Quest Circle</CardDescription>
                   </div>
                   <Button size="sm" onClick={() => { setShowAddDialog(true); setSearchQuery(''); setSearchResults([]) }}>
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

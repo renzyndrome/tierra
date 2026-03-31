@@ -54,7 +54,7 @@ export const EVENT_MEMBER_STATUSES: {
   {
     value: 'Leader',
     label: 'Leader',
-    description: 'Cell group leader or ministry head',
+    description: 'Quest Circle leader or ministry head',
   },
 ]
 
@@ -80,7 +80,7 @@ export const FOLLOW_THROUGH_STAGES: { value: FollowThrough; label: string; descr
   { value: 'Prayer', label: 'Prayer', description: 'Active in prayer' },
   { value: 'Bible and Devotion', label: 'Bible & Devotion', description: 'Regular Bible reading' },
   { value: 'Transformation', label: 'Transformation', description: 'Active growth and change' },
-  { value: 'Cell and Church', label: 'Cell & Church', description: 'Integrated into cell group and church' },
+  { value: 'Cell and Church', label: 'Cell & Church', description: 'Integrated into Quest Circle and church' },
 ]
 
 // Discipleship journey stages (ordered 1-9)
@@ -91,12 +91,13 @@ export const DISCIPLESHIP_JOURNEY_STAGES: {
   simpleStage: DiscipleshipStage
 }[] = [
   { value: 'Consolidations', label: 'Consolidations', description: 'Initial follow-up after first contact', simpleStage: 'Newbie' },
-  { value: 'Pre Encounter', label: 'Pre Encounter', description: 'Preparing for encounter weekend', simpleStage: 'Growing' },
-  { value: 'Encounter', label: 'Encounter', description: 'Attended encounter weekend', simpleStage: 'Growing' },
-  { value: 'Post-Encounter', label: 'Post-Encounter', description: 'After encounter, starting discipleship', simpleStage: 'Growing' },
+  { value: 'Pre Encounter', label: 'Quest Life Preparation', description: 'Preparing for Quest Retreat', simpleStage: 'Growing' },
+  { value: 'Encounter', label: 'Quest Retreat', description: 'Attended Quest Retreat', simpleStage: 'Growing' },
+  { value: 'Post-Encounter', label: 'Post-Retreat', description: 'After Quest Retreat, starting discipleship', simpleStage: 'Growing' },
   { value: 'SOD1', label: 'SOD 1', description: 'School of Disciples Level 1', simpleStage: 'Growing' },
   { value: 'SOD2', label: 'SOD 2', description: 'School of Disciples Level 2', simpleStage: 'Growing' },
   { value: 'SOD3', label: 'SOD 3', description: 'School of Disciples Level 3', simpleStage: 'Growing' },
+  { value: 'Bible School', label: 'Bible School', description: 'Bible School program', simpleStage: 'Growing' },
   { value: 'QBS Theology 101', label: 'QBS Theology 101', description: 'Quest Bible Seminary - Theology', simpleStage: 'Growing' },
   { value: 'QBS Preaching 101', label: 'QBS Preaching 101', description: 'Quest Bible Seminary - Preaching', simpleStage: 'Growing' },
 ]

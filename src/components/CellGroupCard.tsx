@@ -85,7 +85,7 @@ export function CellGroupCard({ cellGroup, showActions = false, onEdit, onDelete
                 <p className="text-sm font-medium text-gray-900 truncate">
                   {cellGroup.leader.name}
                 </p>
-                <p className="text-xs text-gray-500">Cell Leader</p>
+                <p className="text-xs text-gray-500">Circle Leader</p>
               </div>
             </div>
           )}

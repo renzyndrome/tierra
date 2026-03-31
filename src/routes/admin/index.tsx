@@ -39,7 +39,8 @@ import { MinistryCard, MinistryCardSkeleton } from '../../components/MinistryCar
 import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, EventWithStats, FinancialOverview } from '../../lib/types'
 import { getEvents } from '../../server/functions/events'
 import { getFinancialOverview } from '../../server/functions/finances'
-import { ADMIN_PIN, formatCurrency, STAGE_LABELS } from '../../lib/constants'
+import { ADMIN_PIN, formatCurrency } from '../../lib/constants'
+import { downloadExcel, downloadPDF } from '../../lib/export'
 
 export const Route = createFileRoute('/admin/')({
   component: AdminDashboard,
@@ -79,6 +80,90 @@ function AdminDashboard() {
   const [expandedJourneyGroups, setExpandedJourneyGroups] = useState<Record<string, boolean>>({})
   const isJourneyGroupExpanded = (key: string) => expandedJourneyGroups[key] !== false
   const toggleJourneyGroup = (key: string) => setExpandedJourneyGroups(prev => ({ ...prev, [key]: !isJourneyGroupExpanded(key) }))
+
+  // Export menus
+  const [showExportMenu, setShowExportMenu] = useState<string | null>(null)
+  const toggleExportMenu = (key: string) => setShowExportMenu(prev => prev === key ? null : key)
+
+  const exportOverview = (format: 'excel' | 'pdf') => {
+    setShowExportMenu(null)
+    const headers = ['Metric', 'Count']
+    const rows = [
+      ['Total Members', String(members.length)],
+      ['Quest Circles', String(cellGroups.length)],
+      ['Ministries', String(ministries.length)],
+      ['New Friends', String(members.filter(m => m.discipleship_stage === 'Newbie').length)],
+      ['Growing', String(members.filter(m => m.discipleship_stage === 'Growing').length)],
+      ['Disciple Makers', String(members.filter(m => m.leadership_level === 'Disciple Maker').length)],
+    ]
+    if (format === 'excel') downloadExcel('overview', headers, rows, 'Overview')
+    else downloadPDF('overview', headers, rows, 'Dashboard Overview')
+  }
+
+  const exportCellGroups = (format: 'excel' | 'pdf') => {
+    setShowExportMenu(null)
+    const headers = ['Name', 'Satellite', 'Leader', 'Co-Leader', 'Meeting Day', 'Meeting Time', 'Location', 'Members', 'Active']
+    const rows = cellGroups.map(g => [
+      g.name,
+      g.satellite?.name || '',
+      g.leader?.name || '',
+      g.co_leader?.name || '',
+      g.meeting_day || '',
+      g.meeting_time || '',
+      g.meeting_location || '',
+      String(g.members?.filter(m => m.is_active).length || 0),
+      g.is_active ? 'Yes' : 'No',
+    ])
+    if (format === 'excel') downloadExcel('quest-circles', headers, rows, 'Quest Circles')
+    else downloadPDF('quest-circles', headers, rows, 'Quest Circles')
+  }
+
+  const exportMinistries = (format: 'excel' | 'pdf') => {
+    setShowExportMenu(null)
+    const headers = ['Name', 'Department', 'Head', 'Active Members', 'Active']
+    const rows = ministries.map(m => [
+      m.name,
+      m.department || '',
+      m.head?.name || '',
+      String(m.members?.filter((mm: any) => mm.is_active).length || 0),
+      m.is_active ? 'Yes' : 'No',
+    ])
+    if (format === 'excel') downloadExcel('ministries', headers, rows, 'Ministries')
+    else downloadPDF('ministries', headers, rows, 'Ministries')
+  }
+
+  const exportEvents = (format: 'excel' | 'pdf') => {
+    setShowExportMenu(null)
+    const headers = ['Name', 'Date', 'Time', 'Location', 'Registrations', 'Expected', 'Active']
+    const rows = (events || []).map(e => [
+      e.name,
+      e.event_date || '',
+      e.event_time || '',
+      e.location || '',
+      String(e.registration_count ?? 0),
+      String(e.expected_attendees ?? ''),
+      e.is_active ? 'Yes' : 'No',
+    ])
+    if (format === 'excel') downloadExcel('events', headers, rows, 'Events')
+    else downloadPDF('events', headers, rows, 'Events')
+  }
+
+  const exportSatellites = (format: 'excel' | 'pdf') => {
+    setShowExportMenu(null)
+    const headers = ['Name', 'Address', 'Pastor', 'Contact Email', 'Contact Phone', 'Members', 'Quest Circles', 'Active']
+    const rows = satellites.map(s => [
+      s.name,
+      s.address || '',
+      members.find(m => m.id === s.pastor_id)?.name || '',
+      s.contact_email || '',
+      s.contact_phone || '',
+      String(members.filter(m => m.satellite_id === s.id).length),
+      String(cellGroups.filter(g => g.satellite_id === s.id).length),
+      s.is_active ? 'Yes' : 'No',
+    ])
+    if (format === 'excel') downloadExcel('satellites', headers, rows, 'Satellites')
+    else downloadPDF('satellites', headers, rows, 'Satellites')
+  }
 
   // Dialogs
   const [showPurgeDialog, setShowPurgeDialog] = useState(false)
@@ -179,7 +264,7 @@ function AdminDashboard() {
           supabase.from('ministries').select(`
             *,
             head:members(id, name, photo_url, city, discipleship_stage),
-            ministry_members:member_ministries(id, role, is_active)
+            members:member_ministries(id, role, is_active)
           `).eq('is_active', true).order('name'),
         ])
 
@@ -194,7 +279,13 @@ function AdminDashboard() {
           }))
           setCellGroups(groupsWithCount as CellGroupWithRelations[])
         }
-        if (minsRes.data) setMinistries(minsRes.data as MinistryWithRelations[])
+        if (minsRes.data) {
+          const minsWithCount = minsRes.data.map(m => ({
+            ...m,
+            member_count: ((m as any).members || []).filter((mm: any) => mm.is_active).length,
+          }))
+          setMinistries(minsWithCount as MinistryWithRelations[])
+        }
       } catch (err) {
         console.error('[Dashboard] fetchData error:', err)
       }
@@ -355,7 +446,7 @@ function AdminDashboard() {
       setCellGroupGenResult(result.results)
     } catch (error) {
       console.error('Generate cell groups failed:', error)
-      alert(error instanceof Error ? error.message : 'Failed to generate cell groups')
+      alert(error instanceof Error ? error.message : 'Failed to generate Quest Circles')
     } finally {
       setIsGeneratingCellGroups(false)
     }
@@ -376,7 +467,8 @@ function AdminDashboard() {
         `).eq('is_active', true).order('name'),
         supabase.from('ministries').select(`
           *,
-          head:members(id, name, photo_url, city, discipleship_stage)
+          head:members(id, name, photo_url, city, discipleship_stage),
+          members:member_ministries(id, role, is_active)
         `).eq('is_active', true).order('name'),
       ])
 
@@ -389,7 +481,13 @@ function AdminDashboard() {
         }))
         setCellGroups(groupsWithCount as CellGroupWithRelations[])
       }
-      if (minsRes.data) setMinistries(minsRes.data as MinistryWithRelations[])
+      if (minsRes.data) {
+        const minsWithCount = minsRes.data.map(m => ({
+          ...m,
+          member_count: ((m as any).members || []).filter((mm: any) => mm.is_active).length,
+        }))
+        setMinistries(minsWithCount as MinistryWithRelations[])
+      }
 
       try {
         const [eventsData, finOverview] = await Promise.all([
@@ -467,7 +565,7 @@ function AdminDashboard() {
       setShowCGDialog(false)
       await refreshData()
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to save cell group')
+      alert(error instanceof Error ? error.message : 'Failed to save Quest Circle')
     } finally {
       setIsSavingCG(false)
     }
@@ -481,7 +579,7 @@ function AdminDashboard() {
       setCGToDelete(null)
       await refreshData()
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to delete cell group')
+      alert(error instanceof Error ? error.message : 'Failed to delete Quest Circle')
     } finally {
       setIsSavingCG(false)
     }
@@ -627,7 +725,7 @@ function AdminDashboard() {
   const ministryRoleCounts = useMemo(() => {
     let volunteers = 0, coordinators = 0, heads = 0
     for (const m of ministries) {
-      const activeMembers = ((m as any).ministry_members || []).filter((mm: any) => mm.is_active)
+      const activeMembers = (m.members || []).filter((mm: any) => mm.is_active)
       for (const mm of activeMembers) {
         if (mm.role === 'volunteer') volunteers++
         else if (mm.role === 'coordinator') coordinators++
@@ -655,6 +753,7 @@ function AdminDashboard() {
     'SOD1': members.filter(m => m.discipleship_journey === 'SOD1').length,
     'SOD2': members.filter(m => m.discipleship_journey === 'SOD2').length,
     'SOD3': members.filter(m => m.discipleship_journey === 'SOD3').length,
+    'Bible School': members.filter(m => m.discipleship_journey === 'Bible School').length,
     'QBS Theology 101': members.filter(m => m.discipleship_journey === 'QBS Theology 101').length,
     'QBS Preaching 101': members.filter(m => m.discipleship_journey === 'QBS Preaching 101').length,
   }
@@ -712,6 +811,28 @@ function AdminDashboard() {
     return null // Will redirect
   }
 
+  const ExportBtn = ({ id, onExport }: { id: string; onExport: (f: 'excel' | 'pdf') => void }) => (
+    <div className="relative">
+      <Button size="sm" variant="outline" onClick={() => toggleExportMenu(id)}>
+        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+        Export
+      </Button>
+      {showExportMenu === id && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(null)} />
+          <div className="absolute right-0 mt-1 bg-white border rounded-lg shadow-lg z-20 py-1 w-40">
+            <button onClick={() => onExport('excel')} className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2">
+              <span className="text-green-600 font-bold text-xs">XLS</span> Excel
+            </button>
+            <button onClick={() => onExport('pdf')} className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2">
+              <span className="text-red-600 font-bold text-xs">PDF</span> PDF
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -754,7 +875,7 @@ function AdminDashboard() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="satellites">Satellites</TabsTrigger>
             <TabsTrigger value="members">Members</TabsTrigger>
-            <TabsTrigger value="cell-groups">Cell Groups</TabsTrigger>
+            <TabsTrigger value="cell-groups">Quest Circles</TabsTrigger>
             <TabsTrigger value="ministries">Ministries</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
             <TabsTrigger value="finances">Finances</TabsTrigger>
@@ -764,6 +885,9 @@ function AdminDashboard() {
           {/* Overview Tab */}
           <TabsContent value="overview">
             <div className="space-y-6">
+              <div className="flex justify-end">
+                <ExportBtn id="overview" onExport={exportOverview} />
+              </div>
               {/* Stats Overview */}
               <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                 <Card>
@@ -775,7 +899,7 @@ function AdminDashboard() {
                 <Card>
                   <CardContent className="p-3 text-center">
                     <p className="text-2xl font-bold text-teal-600">{totalCellGroups}</p>
-                    <p className="text-xs text-gray-500">Cell Groups</p>
+                    <p className="text-xs text-gray-500">Quest Circles</p>
                   </CardContent>
                 </Card>
                 <Card>
@@ -894,9 +1018,9 @@ function AdminDashboard() {
                           {isJourneyGroupExpanded('growing') && (
                             <div className="space-y-2 mt-2 ml-5">
                               {([
-                                { label: 'Pre Encounter', count: journeyCounts['Pre Encounter'] },
-                                { label: 'Encounter', count: journeyCounts['Encounter'] },
-                                { label: 'Post-Encounter', count: journeyCounts['Post-Encounter'] },
+                                { label: 'Quest Life Preparation', count: journeyCounts['Pre Encounter'] },
+                                { label: 'Quest Retreat', count: journeyCounts['Encounter'] },
+                                { label: 'Post-Retreat', count: journeyCounts['Post-Encounter'] },
                               ] as const).map((item) => (
                                 <div key={item.label} className="flex items-center justify-between">
                                   <span className="text-sm text-gray-600">{item.label}</span>
@@ -916,7 +1040,7 @@ function AdminDashboard() {
 
                     {/* Schooling */}
                     {(() => {
-                      const schoolingTotal = journeyCounts['SOD1'] + journeyCounts['SOD2'] + journeyCounts['SOD3'] + journeyCounts['QBS Theology 101'] + journeyCounts['QBS Preaching 101']
+                      const schoolingTotal = journeyCounts['SOD1'] + journeyCounts['SOD2'] + journeyCounts['SOD3'] + journeyCounts['Bible School'] + journeyCounts['QBS Theology 101'] + journeyCounts['QBS Preaching 101']
                       return (
                         <div>
                           <button type="button" onClick={() => toggleJourneyGroup('schooling')} className="flex items-center gap-2 mb-1 w-full hover:opacity-80 transition-opacity">
@@ -930,6 +1054,7 @@ function AdminDashboard() {
                                 { label: 'SOD 1', count: journeyCounts['SOD1'] },
                                 { label: 'SOD 2', count: journeyCounts['SOD2'] },
                                 { label: 'SOD 3', count: journeyCounts['SOD3'] },
+                                { label: 'Bible School', count: journeyCounts['Bible School'] },
                                 { label: 'QBS Theology 101', count: journeyCounts['QBS Theology 101'] },
                                 { label: 'QBS Preaching 101', count: journeyCounts['QBS Preaching 101'] },
                               ] as const).map((item) => (
@@ -1142,10 +1267,10 @@ function AdminDashboard() {
                   </CardContent>
                 </Card>
 
-                {/* Cell Group Meeting Days */}
+                {/* Quest Circle Meeting Days */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Cell Group Schedules</CardTitle>
+                    <CardTitle>Quest Circle Schedules</CardTitle>
                     <CardDescription>Meeting days distribution</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -1230,6 +1355,9 @@ function AdminDashboard() {
 
           {/* Satellites Tab */}
           <TabsContent value="satellites">
+            <div className="flex justify-end mb-4">
+              <ExportBtn id="satellites" onExport={exportSatellites} />
+            </div>
             {selectedSatelliteId ? (
               // Satellite Detail View
               (() => {
@@ -1262,6 +1390,7 @@ function AdminDashboard() {
                   'SOD1': satMembers.filter(m => m.discipleship_journey === 'SOD1').length,
                   'SOD2': satMembers.filter(m => m.discipleship_journey === 'SOD2').length,
                   'SOD3': satMembers.filter(m => m.discipleship_journey === 'SOD3').length,
+                  'Bible School': satMembers.filter(m => m.discipleship_journey === 'Bible School').length,
                   'QBS Theology 101': satMembers.filter(m => m.discipleship_journey === 'QBS Theology 101').length,
                   'QBS Preaching 101': satMembers.filter(m => m.discipleship_journey === 'QBS Preaching 101').length,
                 }
@@ -1346,7 +1475,7 @@ function AdminDashboard() {
                       <Card>
                         <CardContent className="p-3 text-center">
                           <p className="text-2xl font-bold text-teal-600">{satCellGroups.length}</p>
-                          <p className="text-xs text-gray-500">Cell Groups</p>
+                          <p className="text-xs text-gray-500">Quest Circles</p>
                         </CardContent>
                       </Card>
                       <Card className="bg-emerald-50 border-emerald-200">
@@ -1411,11 +1540,11 @@ function AdminDashboard() {
 
                       <Card>
                         <CardHeader>
-                          <CardTitle className="text-lg">Cell Groups</CardTitle>
+                          <CardTitle className="text-lg">Quest Circles</CardTitle>
                         </CardHeader>
                         <CardContent>
                           {satCellGroups.length === 0 ? (
-                            <div className="h-[200px] flex items-center justify-center text-gray-400">No cell groups</div>
+                            <div className="h-[200px] flex items-center justify-center text-gray-400">No Quest Circles</div>
                           ) : (
                             <div className="space-y-2">
                               {satCellGroups.map(group => (
@@ -1517,9 +1646,9 @@ function AdminDashboard() {
                                   {isJourneyGroupExpanded(`sat-${sat.id}-growing`) && (
                                     <div className="space-y-2 mt-2 ml-5">
                                       {([
-                                        { label: 'Pre Encounter', count: satJourneyCounts['Pre Encounter'] },
-                                        { label: 'Encounter', count: satJourneyCounts['Encounter'] },
-                                        { label: 'Post-Encounter', count: satJourneyCounts['Post-Encounter'] },
+                                        { label: 'Quest Life Preparation', count: satJourneyCounts['Pre Encounter'] },
+                                        { label: 'Quest Retreat', count: satJourneyCounts['Encounter'] },
+                                        { label: 'Post-Retreat', count: satJourneyCounts['Post-Encounter'] },
                                       ] as const).map((item) => (
                                         <div key={item.label} className="flex items-center justify-between">
                                           <span className="text-sm text-gray-600">{item.label}</span>
@@ -1539,7 +1668,7 @@ function AdminDashboard() {
 
                             {/* Schooling */}
                             {(() => {
-                              const satSchoolingTotal = satJourneyCounts['SOD1'] + satJourneyCounts['SOD2'] + satJourneyCounts['SOD3'] + satJourneyCounts['QBS Theology 101'] + satJourneyCounts['QBS Preaching 101']
+                              const satSchoolingTotal = satJourneyCounts['SOD1'] + satJourneyCounts['SOD2'] + satJourneyCounts['SOD3'] + satJourneyCounts['Bible School'] + satJourneyCounts['QBS Theology 101'] + satJourneyCounts['QBS Preaching 101']
                               return (
                                 <div>
                                   <button type="button" onClick={() => toggleJourneyGroup(`sat-${sat.id}-schooling`)} className="flex items-center gap-2 mb-1 w-full hover:opacity-80 transition-opacity">
@@ -1553,6 +1682,7 @@ function AdminDashboard() {
                                         { label: 'SOD 1', count: satJourneyCounts['SOD1'] },
                                         { label: 'SOD 2', count: satJourneyCounts['SOD2'] },
                                         { label: 'SOD 3', count: satJourneyCounts['SOD3'] },
+                                        { label: 'Bible School', count: satJourneyCounts['Bible School'] },
                                         { label: 'QBS Theology 101', count: satJourneyCounts['QBS Theology 101'] },
                                         { label: 'QBS Preaching 101', count: satJourneyCounts['QBS Preaching 101'] },
                                       ] as const).map((item) => (
@@ -1659,7 +1789,7 @@ function AdminDashboard() {
                   <Card>
                     <CardContent className="p-3 text-center">
                       <p className="text-2xl font-bold text-blue-600">{cellGroups.length}</p>
-                      <p className="text-xs text-gray-500">Cell Groups</p>
+                      <p className="text-xs text-gray-500">Quest Circles</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -1695,7 +1825,7 @@ function AdminDashboard() {
                           <TableRow>
                             <TableHead className="font-semibold">Satellite</TableHead>
                             <TableHead className="text-center">Members</TableHead>
-                            <TableHead className="text-center">Cell Groups</TableHead>
+                            <TableHead className="text-center">Quest Circles</TableHead>
                             <TableHead className="text-center">New Friends</TableHead>
                             <TableHead className="text-center">Schooling</TableHead>
                             <TableHead className="text-center">Leader</TableHead>
@@ -1903,16 +2033,19 @@ function AdminDashboard() {
             />
           </TabsContent>
 
-          {/* Cell Groups Tab */}
+          {/* Quest Circles Tab */}
           <TabsContent value="cell-groups">
             <Card>
               <CardHeader>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
-                    <CardTitle>Cell Groups</CardTitle>
+                    <CardTitle>Quest Circles</CardTitle>
                     <CardDescription>{filteredCellGroups.length} groups found</CardDescription>
                   </div>
-                  <Button size="sm" onClick={() => openCGDialog()}>Add Cell Group</Button>
+                  <div className="flex gap-2">
+                    <ExportBtn id="cell-groups" onExport={exportCellGroups} />
+                    <Button size="sm" onClick={() => openCGDialog()}>Add Quest Circle</Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -1943,7 +2076,7 @@ function AdminDashboard() {
                   </div>
                 ) : filteredCellGroups.length === 0 ? (
                   <div className="text-center py-12 text-gray-500">
-                    <p>No cell groups found</p>
+                    <p>No Quest Circles found</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1964,6 +2097,9 @@ function AdminDashboard() {
 
           {/* Ministries Tab */}
           <TabsContent value="ministries">
+            <div className="flex justify-end mb-4">
+              <ExportBtn id="ministries" onExport={exportMinistries} />
+            </div>
             {/* Ministry Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               <Card>
@@ -2040,6 +2176,9 @@ function AdminDashboard() {
           {/* Events Tab */}
           <TabsContent value="events">
             <div className="space-y-6">
+              <div className="flex justify-end">
+                <ExportBtn id="events" onExport={exportEvents} />
+              </div>
               {/* Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card>
@@ -2368,21 +2507,21 @@ function AdminDashboard() {
                   </CardContent>
                 </Card>
 
-                {/* Generate Cell Groups */}
+                {/* Generate Quest Circles */}
                 <Card className="border-teal-200">
                   <CardHeader>
-                    <CardTitle className="text-teal-700">Generate Cell Groups</CardTitle>
-                    <CardDescription>Auto-create cell groups from discipler-disciple relationships. Each discipler becomes a cell group leader, their disciples become members.</CardDescription>
+                    <CardTitle className="text-teal-700">Generate Quest Circles</CardTitle>
+                    <CardDescription>Auto-create Quest Circles from discipler-disciple relationships. Each discipler becomes a Quest Circle leader, their disciples become members.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button onClick={handleGenerateCellGroups} disabled={isGeneratingCellGroups} className="bg-teal-600 hover:bg-teal-700">
-                      {isGeneratingCellGroups ? 'Generating...' : 'Generate Cell Groups'}
+                      {isGeneratingCellGroups ? 'Generating...' : 'Generate Quest Circles'}
                     </Button>
                     {cellGroupGenResult && (
                       <div className="mt-3 p-3 bg-teal-50 border border-teal-200 rounded-lg text-sm">
-                        <p className="font-medium text-teal-800">Cell groups generated!</p>
+                        <p className="font-medium text-teal-800">Quest Circles generated!</p>
                         <ul className="mt-1 text-teal-700 space-y-0.5">
-                          <li>{cellGroupGenResult.cellGroupsCreated} cell groups created</li>
+                          <li>{cellGroupGenResult.cellGroupsCreated} Quest Circles created</li>
                           <li>{cellGroupGenResult.membershipsCreated} memberships created</li>
                           <li>{cellGroupGenResult.disciplerLinksUpdated} discipler links updated</li>
                           {cellGroupGenResult.disciplersAutoCreated > 0 && (
@@ -2430,7 +2569,7 @@ function AdminDashboard() {
                 <p className="font-medium text-red-800 mb-2">Data purged successfully!</p>
                 <ul className="text-sm text-red-700 space-y-1">
                   <li>{purgeResult.members} members deleted</li>
-                  <li>{purgeResult.cell_groups} cell groups deleted</li>
+                  <li>{purgeResult.cell_groups} Quest Circles deleted</li>
                   <li>{purgeResult.ministries} ministries deleted</li>
                   <li>{purgeResult.member_cell_groups} cell memberships deleted</li>
                   <li>{purgeResult.member_ministries} ministry memberships deleted</li>
@@ -2439,7 +2578,7 @@ function AdminDashboard() {
             ) : (
               <div className="space-y-4">
                 <p className="text-gray-600">
-                  This will permanently delete all members, cell groups, ministries, and their relationships.
+                  This will permanently delete all members, Quest Circles, ministries, and their relationships.
                 </p>
                 <div>
                   <Label>Type "DELETE ALL DATA" to confirm</Label>
@@ -2532,13 +2671,13 @@ function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Cell Group Create/Edit Dialog */}
+      {/* Quest Circle Create/Edit Dialog */}
       <Dialog open={showCGDialog} onOpenChange={setShowCGDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingCG ? 'Edit Cell Group' : 'Add Cell Group'}</DialogTitle>
+            <DialogTitle>{editingCG ? 'Edit Quest Circle' : 'Add Quest Circle'}</DialogTitle>
             <DialogDescription>
-              {editingCG ? 'Update the cell group details below.' : 'Fill in the details to create a new cell group.'}
+              {editingCG ? 'Update the Quest Circle details below.' : 'Fill in the details to create a new Quest Circle.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -2672,11 +2811,11 @@ function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Cell Group Delete Confirmation Dialog */}
+      {/* Quest Circle Delete Confirmation Dialog */}
       <Dialog open={!!cgToDelete} onOpenChange={(open) => { if (!open) setCGToDelete(null) }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-red-700">Delete Cell Group</DialogTitle>
+            <DialogTitle className="text-red-700">Delete Quest Circle</DialogTitle>
             <DialogDescription>
               Are you sure you want to delete "{cgToDelete?.name}"? This action cannot be undone.
             </DialogDescription>

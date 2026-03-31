@@ -259,7 +259,7 @@ function MemberProfilePage() {
   }
 
   const handleAddCellGroup = async () => {
-    if (!selectedCellGroupId) return setActionError('Select a cell group')
+    if (!selectedCellGroupId) return setActionError('Select a Quest Circle')
     setIsSaving(true)
     setActionError('')
     try {
@@ -269,7 +269,7 @@ function MemberProfilePage() {
       setSelectedCellGroupRole('member')
       router.invalidate()
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to add to cell group')
+      setActionError(error instanceof Error ? error.message : 'Failed to add to Quest Circle')
     } finally {
       setIsSaving(false)
     }
@@ -495,9 +495,9 @@ function MemberProfilePage() {
               )}
             </SectionCardWithAction>
 
-            {/* Cell Groups */}
+            {/* Quest Circles */}
             <SectionCardWithAction
-              title="Cell Groups"
+              title="Quest Circles"
               icon="👥"
               actionLabel="+ Add"
               onAction={() => { setActionError(''); setShowCellGroupDialog(true) }}
@@ -507,7 +507,7 @@ function MemberProfilePage() {
                   {cellGroups.map((cg: any, i: number) => (
                     <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">{cg.cell_group?.name || 'Unknown Cell Group'}</p>
+                        <p className="text-sm font-medium text-gray-900">{cg.cell_group?.name || 'Unknown Quest Circle'}</p>
                         {(cg.cell_group?.meeting_day || cg.cell_group?.meeting_time) && (
                           <p className="text-xs text-gray-500">
                             {[cg.cell_group.meeting_day, cg.cell_group.meeting_time].filter(Boolean).join(' at ')}
@@ -519,7 +519,7 @@ function MemberProfilePage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-400 italic">Not a member of any cell group.</p>
+                <p className="text-sm text-gray-400 italic">Not a member of any Quest Circle.</p>
               )}
             </SectionCardWithAction>
 
@@ -753,9 +753,9 @@ function MemberProfilePage() {
       <Dialog open={showCellGroupDialog} onOpenChange={setShowCellGroupDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add to Cell Group</DialogTitle>
+            <DialogTitle>Add to Quest Circle</DialogTitle>
             <DialogDescription>
-              Assign {member.name} to a cell group with a role.
+              Assign {member.name} to a Quest Circle with a role.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -763,13 +763,13 @@ function MemberProfilePage() {
               <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">{actionError}</p>
             )}
             <div className="space-y-2">
-              <Label>Cell Group</Label>
+              <Label>Quest Circle</Label>
               <select
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B1538]/30 focus:border-[#8B1538]"
                 value={selectedCellGroupId}
                 onChange={(e) => setSelectedCellGroupId(e.target.value)}
               >
-                <option value="">Select a cell group...</option>
+                <option value="">Select a Quest Circle...</option>
                 {availableCellGroups.map((cg) => (
                   <option key={cg.id} value={cg.id}>
                     {cg.name}{cg.meeting_day ? ` (${cg.meeting_day})` : ''}
@@ -777,7 +777,7 @@ function MemberProfilePage() {
                 ))}
               </select>
               {availableCellGroups.length === 0 && allCellGroups.length > 0 && (
-                <p className="text-xs text-gray-500 italic">Already a member of all cell groups.</p>
+                <p className="text-xs text-gray-500 italic">Already a member of all Quest Circles.</p>
               )}
             </div>
             <div className="space-y-2">
@@ -802,7 +802,7 @@ function MemberProfilePage() {
               disabled={isSaving || !selectedCellGroupId}
               className="bg-[#8B1538] hover:bg-[#6B0F2B] text-white"
             >
-              {isSaving ? 'Adding...' : 'Add to Cell Group'}
+              {isSaving ? 'Adding...' : 'Add to Quest Circle'}
             </Button>
           </DialogFooter>
         </DialogContent>
