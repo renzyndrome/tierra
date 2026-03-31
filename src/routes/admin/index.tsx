@@ -76,6 +76,21 @@ function AdminDashboard() {
   const [isSettingUpAdmin, setIsSettingUpAdmin] = useState(false)
   const [adminSetupResult, setAdminSetupResult] = useState<string | null>(null)
 
+  // Finances PIN gate
+  const [financesUnlocked, setFinancesUnlocked] = useState(false)
+  const [financesPinInput, setFinancesPinInput] = useState('')
+  const [financesPinError, setFinancesPinError] = useState('')
+
+  const handleFinancesPinSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (financesPinInput === ADMIN_PIN) {
+      setFinancesUnlocked(true)
+      setFinancesPinError('')
+    } else {
+      setFinancesPinError('Invalid PIN. Please try again.')
+    }
+  }
+
   // Journey collapsible sections
   const [expandedJourneyGroups, setExpandedJourneyGroups] = useState<Record<string, boolean>>({})
   const isJourneyGroupExpanded = (key: string) => expandedJourneyGroups[key] !== false
@@ -870,7 +885,7 @@ function AdminDashboard() {
             Loading dashboard data...
           </div>
         )}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(tab) => { setActiveTab(tab); if (tab !== 'finances') { setFinancesUnlocked(false); setFinancesPinInput(''); setFinancesPinError('') } }}>
           <div className="w-full overflow-x-auto pb-1 mb-6">
             <TabsList className="w-max">
               <TabsTrigger value="overview" className="text-xs sm:text-sm px-2 sm:px-3">Overview</TabsTrigger>
@@ -2312,6 +2327,33 @@ function AdminDashboard() {
 
           {/* Finances Tab */}
           <TabsContent value="finances">
+            {!financesUnlocked ? (
+              <div className="flex items-center justify-center py-24">
+                <Card className="w-full max-w-sm">
+                  <CardHeader className="text-center">
+                    <CardTitle className="text-xl">Finances</CardTitle>
+                    <CardDescription>Enter your PIN to view financial data</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleFinancesPinSubmit} className="space-y-4">
+                      <Input
+                        type="password"
+                        placeholder="Enter PIN"
+                        value={financesPinInput}
+                        onChange={(e) => setFinancesPinInput(e.target.value)}
+                        className="text-center text-2xl tracking-widest"
+                        maxLength={10}
+                        autoFocus
+                      />
+                      {financesPinError && <p className="text-red-500 text-sm text-center">{financesPinError}</p>}
+                      <Button type="submit" className="w-full bg-[#8B1538] hover:bg-[#6B0F2B]">
+                        Continue
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
             <div className="space-y-6">
               {/* Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -2350,7 +2392,7 @@ function AdminDashboard() {
                       <CardDescription>Track tithes, offerings, and expenses</CardDescription>
                     </div>
                     <Link to="/finances">
-                      <Button variant="outline" size="sm">
+                      <Button size="sm" className="bg-[#8B1538] hover:bg-[#6B0F2B] text-white">
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>
@@ -2454,6 +2496,7 @@ function AdminDashboard() {
                 </Card>
               ) : null}
             </div>
+            )}
           </TabsContent>
 
           {/* Settings Tab */}
@@ -2542,6 +2585,22 @@ function AdminDashboard() {
                         )}
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+
+                {/* Admin PIN */}
+                <Card className="border-gray-200">
+                  <CardHeader>
+                    <CardTitle>Admin PIN</CardTitle>
+                    <CardDescription>PIN required to access protected sections (Finances, etc.)</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-3">
+                      <code className="px-3 py-1.5 bg-gray-100 rounded-md text-sm font-mono tracking-widest">
+                        {ADMIN_PIN}
+                      </code>
+                      <span className="text-xs text-gray-500">Set via <code className="bg-gray-100 px-1 rounded">VITE_ADMIN_PIN</code> in your .env file</span>
+                    </div>
                   </CardContent>
                 </Card>
 

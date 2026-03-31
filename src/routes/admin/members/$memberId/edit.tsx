@@ -7,11 +7,9 @@ import { getSatellites } from '../../../../server/functions/satellites'
 import { getAllCellGroups, addMemberToCellGroup, removeMemberFromCellGroup } from '../../../../server/functions/cellGroups'
 import { MemberForm } from '../../../../components/MemberForm'
 import type { Member, MemberInsert, SatelliteRow, CellGroup } from '../../../../lib/types'
-import { ADMIN_PIN } from '../../../../lib/constants'
 
 // shadcn/ui components
 import { Button } from '../../../../components/ui/button'
-import { Input } from '../../../../components/ui/input'
 import {
   Card,
   CardContent,
@@ -26,74 +24,7 @@ export const Route = createFileRoute('/admin/members/$memberId/edit')({
 
 function EditMemberPage() {
   const { memberId } = Route.useParams()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [pin, setPin] = useState('')
-  const [pinError, setPinError] = useState('')
-
-  // Check session storage for existing auth
-  useEffect(() => {
-    const storedAuth = sessionStorage.getItem('admin_authenticated')
-    if (storedAuth === 'true') {
-      setIsAuthenticated(true)
-    }
-  }, [])
-
-  const handlePinSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (pin === ADMIN_PIN) {
-      setIsAuthenticated(true)
-      sessionStorage.setItem('admin_authenticated', 'true')
-      setPinError('')
-    } else {
-      setPinError('Invalid PIN. Please try again.')
-    }
-  }
-
-  if (!isAuthenticated) {
-    return <PinScreen pin={pin} setPin={setPin} error={pinError} onSubmit={handlePinSubmit} />
-  }
-
   return <EditMemberForm memberId={memberId} />
-}
-
-// PIN Entry Screen
-function PinScreen({
-  pin,
-  setPin,
-  error,
-  onSubmit,
-}: {
-  pin: string
-  setPin: (pin: string) => void
-  error: string
-  onSubmit: (e: React.FormEvent) => void
-}) {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1A0A0E] via-[#2D1218] to-[#1A0A0E] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-red-900/30">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Edit Member</CardTitle>
-          <CardDescription>Enter your PIN to edit this member</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <Input
-              type="password"
-              placeholder="Enter PIN"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              className="text-center text-2xl tracking-widest"
-              maxLength={10}
-            />
-            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-            <Button type="submit" className="w-full bg-[#8B1538] hover:bg-[#6B0F2B]">
-              Continue
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
 }
 
 // Edit Member Form

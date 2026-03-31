@@ -106,6 +106,8 @@ function FinancesPage() {
   const [filterStartDate, setFilterStartDate] = useState<string>('')
   const [filterEndDate, setFilterEndDate] = useState<string>('')
   const [filterMemberId, setFilterMemberId] = useState<string>('')
+  const [memberSearchInput, setMemberSearchInput] = useState<string>('')
+  const [showMemberDropdown, setShowMemberDropdown] = useState(false)
   const [filterMinAmount, setFilterMinAmount] = useState<string>('')
   const [filterMaxAmount, setFilterMaxAmount] = useState<string>('')
   const [filterHasReceipt, setFilterHasReceipt] = useState<string>('')
@@ -134,6 +136,11 @@ function FinancesPage() {
   const [isPurging, setIsPurging] = useState(false)
   const [seedMessage, setSeedMessage] = useState('')
 
+  // PIN gate state
+  const [isPinAuthenticated, setIsPinAuthenticated] = useState(false)
+  const [pinInput, setPinInput] = useState('')
+  const [pinInputError, setPinInputError] = useState('')
+
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'satellite_leader'
   const isSuperAdmin = profile?.role === 'super_admin'
   const userSatelliteId = profile?.role === 'satellite_leader' ? profile.satellite_id : null
@@ -145,6 +152,16 @@ function FinancesPage() {
       navigate({ to: '/auth/login' })
     }
   }, [authLoading, isAuthenticated, navigate])
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (pinInput === ADMIN_PIN) {
+      setIsPinAuthenticated(true)
+      setPinInputError('')
+    } else {
+      setPinInputError('Invalid PIN. Please try again.')
+    }
+  }
 
   // Fetch satellites and members for dropdowns
   useEffect(() => {
@@ -458,6 +475,36 @@ function FinancesPage() {
     )
   }
 
+  if (!isPinAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#1A0A0E] via-[#2D1218] to-[#1A0A0E] flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-red-900/30">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Financial Management</CardTitle>
+            <CardDescription>Enter your PIN to access financial data</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handlePinSubmit} className="space-y-4">
+              <Input
+                type="password"
+                placeholder="Enter PIN"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                className="text-center text-2xl tracking-widest"
+                maxLength={10}
+                autoFocus
+              />
+              {pinInputError && <p className="text-red-500 text-sm text-center">{pinInputError}</p>}
+              <Button type="submit" className="w-full bg-[#8B1538] hover:bg-[#6B0F2B]">
+                Continue
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const categories = getCategoriesByType(formType)
 
   return (
@@ -487,16 +534,6 @@ function FinancesPage() {
               <Button variant="outline" onClick={handleExportCSV} disabled={!transactions?.data.length}>
                 Export CSV
               </Button>
-              {isSuperAdmin && (
-                <>
-                  <Button variant="outline" onClick={handleSeedFinancial} disabled={isSeeding}>
-                    {isSeeding ? 'Seeding...' : 'Seed Test Data'}
-                  </Button>
-                  <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={handlePurgeFinancial} disabled={isPurging}>
-                    {isPurging ? 'Purging...' : 'Purge All'}
-                  </Button>
-                </>
-              )}
             </div>
             {seedMessage && (
               <p className={`text-sm mt-2 ${seedMessage.startsWith('Error') ? 'text-red-600' : 'text-emerald-600'}`}>
@@ -1086,17 +1123,52 @@ function FinancesPage() {
                             </optgroup>
                           )}
                         </select>
-                        {/* Member */}
-                        <select
-                          className="border rounded-md px-3 py-1.5 text-sm"
-                          value={filterMemberId}
-                          onChange={(e) => { setFilterMemberId(e.target.value); setCurrentPage(1) }}
-                        >
-                          <option value="">All Members</option>
-                          {members.map((m) => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </select>
+                        {/* Member Search */}
+                        <div className="relative">
+                          <Input
+                            type="text"
+                            placeholder="Search member..."
+                            className="text-sm h-8 w-44"
+                            value={memberSearchInput}
+                            onChange={(e) => {
+                              setMemberSearchInput(e.target.value)
+                              setShowMemberDropdown(true)
+                              if (!e.target.value) { setFilterMemberId(''); setCurrentPage(1) }
+                            }}
+                            onFocus={() => setShowMemberDropdown(true)}
+                            onBlur={() => setTimeout(() => setShowMemberDropdown(false), 150)}
+                          />
+                          {memberSearchInput && (
+                            <button
+                              onClick={() => { setMemberSearchInput(''); setFilterMemberId(''); setCurrentPage(1) }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                              ×
+                            </button>
+                          )}
+                          {showMemberDropdown && memberSearchInput && (
+                            <div className="absolute z-20 top-full mt-1 w-56 bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                              {members.filter(m => m.name.toLowerCase().includes(memberSearchInput.toLowerCase())).length === 0 ? (
+                                <div className="px-3 py-2 text-sm text-gray-500">No members found</div>
+                              ) : (
+                                members.filter(m => m.name.toLowerCase().includes(memberSearchInput.toLowerCase())).map((m) => (
+                                  <button
+                                    key={m.id}
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                                    onMouseDown={() => {
+                                      setFilterMemberId(m.id)
+                                      setMemberSearchInput(m.name)
+                                      setShowMemberDropdown(false)
+                                      setCurrentPage(1)
+                                    }}
+                                  >
+                                    {m.name}
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
                         {/* Receipt */}
                         <select
                           className="border rounded-md px-3 py-1.5 text-sm"
@@ -1176,7 +1248,7 @@ function FinancesPage() {
                           {filterMemberId && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium">
                               Member: {members.find(m => m.id === filterMemberId)?.name || 'Unknown'}
-                              <button onClick={() => { setFilterMemberId(''); setCurrentPage(1) }} className="hover:text-indigo-900">
+                              <button onClick={() => { setFilterMemberId(''); setMemberSearchInput(''); setCurrentPage(1) }} className="hover:text-indigo-900">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                               </button>
                             </span>
