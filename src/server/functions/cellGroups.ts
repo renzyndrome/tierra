@@ -73,7 +73,7 @@ export const getCellGroups = createServerFn({ method: 'GET' })
 
     if (error) {
       console.error('Error fetching cell groups:', error)
-      throw new Error('Failed to fetch cell groups')
+      throw new Error('Failed to fetch Quest Circles')
     }
 
     return {
@@ -111,7 +111,7 @@ export const getAllCellGroups = createServerFn({ method: 'GET' })
 
     if (error) {
       console.error('Error fetching cell groups:', error)
-      throw new Error('Failed to fetch cell groups')
+      throw new Error('Failed to fetch Quest Circles')
     }
 
     return groups as CellGroup[]
@@ -137,7 +137,7 @@ export const getCellGroup = createServerFn({ method: 'GET' })
         return null // Not found
       }
       console.error('Error fetching cell group:', error)
-      throw new Error('Failed to fetch cell group')
+      throw new Error('Failed to fetch Quest Circle')
     }
 
     return group as CellGroup
@@ -175,7 +175,7 @@ export const getCellGroupWithRelations = createServerFn({ method: 'GET' })
         return null
       }
       console.error('Error fetching cell group with relations:', error)
-      throw new Error('Failed to fetch cell group')
+      throw new Error('Failed to fetch Quest Circle')
     }
 
     return group
@@ -198,7 +198,7 @@ export const createCellGroup = createServerFn({ method: 'POST' })
 
     if (error) {
       console.error('Error creating cell group:', error)
-      throw new Error('Failed to create cell group')
+      throw new Error('Failed to create Quest Circle')
     }
 
     return group as CellGroup
@@ -227,7 +227,7 @@ export const updateCellGroup = createServerFn({ method: 'POST' })
 
     if (error) {
       console.error('Error updating cell group:', error)
-      throw new Error('Failed to update cell group')
+      throw new Error('Failed to update Quest Circle')
     }
 
     return group as CellGroup
@@ -249,7 +249,7 @@ export const deleteCellGroup = createServerFn({ method: 'POST' })
 
     if (error) {
       console.error('Error deleting cell group:', error)
-      throw new Error('Failed to delete cell group')
+      throw new Error('Failed to delete Quest Circle')
     }
 
     return { success: true }
@@ -279,7 +279,7 @@ export const addMemberToCellGroup = createServerFn({ method: 'POST' })
       .single()
 
     if (existing) {
-      throw new Error('Member is already in this cell group')
+      throw new Error('Member is already in this Quest Circle')
     }
 
     const { data: membership, error } = await supabase
@@ -295,7 +295,7 @@ export const addMemberToCellGroup = createServerFn({ method: 'POST' })
 
     if (error) {
       console.error('Error adding member to cell group:', error)
-      throw new Error('Failed to add member to cell group')
+      throw new Error('Failed to add member to Quest Circle')
     }
 
     return membership as MemberCellGroup
@@ -323,7 +323,7 @@ export const removeMemberFromCellGroup = createServerFn({ method: 'POST' })
 
     if (error) {
       console.error('Error removing member from cell group:', error)
-      throw new Error('Failed to remove member from cell group')
+      throw new Error('Failed to remove member from Quest Circle')
     }
 
     return { success: true }
@@ -373,7 +373,7 @@ export const getCellGroupCount = createServerFn({ method: 'GET' })
 
     if (error) {
       console.error('Error getting cell group count:', error)
-      throw new Error('Failed to get cell group count')
+      throw new Error('Failed to get Quest Circle count')
     }
 
     return count || 0
@@ -397,7 +397,7 @@ export const getCellGroupsBySatellite = createServerFn({ method: 'GET' })
 
     if (error) {
       console.error('Error fetching cell groups by satellite:', error)
-      throw new Error('Failed to fetch cell groups')
+      throw new Error('Failed to fetch Quest Circles')
     }
 
     return groups as CellGroup[]

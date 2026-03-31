@@ -768,7 +768,7 @@ function CellGroupSearch({
 
   return (
     <div className="relative">
-      <label className="block text-sm font-medium text-gray-700 mb-1">Cell Group</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Quest Circle</label>
       {selectedGroup ? (
         <div className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
           <span className="text-sm text-gray-900 truncate">{selectedGroup.name}</span>
@@ -776,7 +776,7 @@ function CellGroupSearch({
             type="button"
             onClick={() => handleSelect(null)}
             className="ml-2 text-gray-400 hover:text-red-500 flex-shrink-0"
-            title="Remove cell group"
+            title="Remove Quest Circle"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -789,7 +789,7 @@ function CellGroupSearch({
           value={query}
           onChange={(e) => { setQuery(e.target.value); setIsOpen(true) }}
           onFocus={() => setIsOpen(true)}
-          placeholder="Search cell group..."
+          placeholder="Search Quest Circle..."
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none"
         />
       )}
@@ -800,7 +800,7 @@ function CellGroupSearch({
             onClick={() => handleSelect(null)}
             className="w-full text-left px-3 py-2 text-sm text-gray-400 hover:bg-gray-50"
           >
-            No cell group
+            No Quest Circle
           </button>
           {filtered.length === 0 ? (
             <div className="px-3 py-2 text-sm text-gray-400">No matches</div>

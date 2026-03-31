@@ -1136,7 +1136,7 @@ function Dashboard() {
                   <Card>
                     <CardHeader>
                       <CardTitle>Seed Directory Data</CardTitle>
-                      <CardDescription>Generate members, cell groups, and ministries for testing</CardDescription>
+                      <CardDescription>Generate members, Quest Circles, and ministries for testing</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <Button onClick={() => setShowDirectorySeedDialog(true)} className="bg-[#8B1538] hover:bg-[#6B0F2B]">
@@ -1148,7 +1148,7 @@ function Dashboard() {
                   <Card className="border-red-200">
                     <CardHeader>
                       <CardTitle className="text-red-600">Purge Directory</CardTitle>
-                      <CardDescription>Delete all members, cell groups, and ministries</CardDescription>
+                      <CardDescription>Delete all members, Quest Circles, and ministries</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <Button variant="destructive" onClick={() => setShowDirectoryPurgeDialog(true)}>
@@ -1375,7 +1375,7 @@ function Dashboard() {
           <DialogHeader>
             <DialogTitle>Seed Directory Data</DialogTitle>
             <DialogDescription>
-              This will create sample members, cell groups, and ministries for testing.
+              This will create sample members, Quest Circles, and ministries for testing.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -1385,7 +1385,7 @@ function Dashboard() {
                 <ul className="text-sm text-green-700 space-y-1">
                   <li>• {seedResult.satellites} satellites</li>
                   <li>• {seedResult.members} members</li>
-                  <li>• {seedResult.cellGroups} cell groups</li>
+                  <li>• {seedResult.cellGroups} Quest Circles</li>
                   <li>• {seedResult.ministries} ministries</li>
                   <li>• {seedResult.memberships} memberships</li>
                 </ul>
@@ -1396,7 +1396,7 @@ function Dashboard() {
                 <ul className="list-disc ml-5 mt-2 space-y-1">
                   <li>15 satellite locations</li>
                   <li>60 sample members</li>
-                  <li>25 cell groups</li>
+                  <li>25 Quest Circles</li>
                   <li>40 ministries</li>
                   <li>~95 member relationships</li>
                 </ul>
@@ -1431,7 +1431,7 @@ function Dashboard() {
           <DialogHeader>
             <DialogTitle className="text-red-600">Purge Directory Data</DialogTitle>
             <DialogDescription>
-              This will permanently delete all members, cell groups, and ministries. This action cannot be undone.
+              This will permanently delete all members, Quest Circles, and ministries. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -1440,16 +1440,16 @@ function Dashboard() {
                 <p className="font-medium text-red-800">Data purged successfully!</p>
                 <ul className="text-sm text-red-700 space-y-1">
                   <li>• {purgeResult.members} members deleted</li>
-                  <li>• {purgeResult.cell_groups} cell groups deleted</li>
+                  <li>• {purgeResult.cell_groups} Quest Circles deleted</li>
                   <li>• {purgeResult.ministries} ministries deleted</li>
-                  <li>• {purgeResult.member_cell_groups} cell group memberships deleted</li>
+                  <li>• {purgeResult.member_cell_groups} Quest Circle memberships deleted</li>
                   <li>• {purgeResult.member_ministries} ministry memberships deleted</li>
                 </ul>
               </div>
             ) : (
               <div className="space-y-4">
                 <p className="text-red-600 font-medium">
-                  ⚠️ This will delete ALL directory data including members, cell groups, and ministries.
+                  ⚠️ This will delete ALL directory data including members, Quest Circles, and ministries.
                 </p>
                 <div>
                   <Label htmlFor="directory-purge-confirm">Type "DELETE ALL DATA" to confirm</Label>

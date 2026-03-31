@@ -217,17 +217,17 @@ function ProfilePage() {
                 </div>
               )}
 
-              {/* Cell Groups */}
+              {/* Quest Circles */}
               <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">My Cell Groups</h2>
+                <h2 className="text-lg font-bold text-gray-900 mb-4">My Quest Circles</h2>
                 {cellGroups.length === 0 ? (
                   <div className="text-center py-6">
-                    <p className="text-gray-500 mb-3">You're not part of any cell group yet.</p>
+                    <p className="text-gray-500 mb-3">You're not part of any Quest Circle yet.</p>
                     <Link
                       to="/directory/cell-groups"
                       className="text-[#8B1538] hover:underline"
                     >
-                      Browse Cell Groups
+                      Browse Quest Circles
                     </Link>
                   </div>
                 ) : (

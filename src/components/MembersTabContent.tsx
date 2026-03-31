@@ -7,6 +7,7 @@ import { archiveMember, restoreMember, deleteMember } from '../server/functions/
 import { getPlaceholderAvatar } from '../lib/storage'
 import { MEMBER_CATEGORIES, LEADERSHIP_LEVELS, DISCIPLESHIP_JOURNEY_STAGES, STAGE_LABELS } from '../lib/constants'
 import type { Member, Satellite } from '../lib/types'
+import { downloadExcel, downloadPDF } from '../lib/export'
 
 // shadcn/ui
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card'
@@ -95,6 +96,30 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
     setFilterDiscipler('')
     setSortBy('name')
     setSortOrder('asc')
+  }
+
+  // Export helpers
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const exportMembers = (format: 'excel' | 'pdf') => {
+    setShowExportMenu(false)
+    const headers = ['Name', 'Email', 'Phone', 'Age', 'Gender', 'City', 'Satellite', 'Stage', 'Status', 'Leadership', 'Journey', 'Category', 'Joined Date']
+    const rows = filteredMembers.map(m => [
+      m.name,
+      m.email || '',
+      m.phone || '',
+      m.age?.toString() || '',
+      m.gender || '',
+      m.city || '',
+      satellites.find(s => s.id === m.satellite_id)?.name || '',
+      STAGE_LABELS[m.discipleship_stage] || m.discipleship_stage,
+      m.membership_status || '',
+      m.leadership_level || '',
+      DISCIPLESHIP_JOURNEY_STAGES.find(j => j.value === m.discipleship_journey)?.label || m.discipleship_journey || '',
+      m.member_category || '',
+      m.joined_date || '',
+    ])
+    if (format === 'excel') downloadExcel('members', headers, rows, 'Members')
+    else downloadPDF('members', headers, rows, 'Members Directory')
   }
 
   // Filter + sort
@@ -206,6 +231,25 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                   </svg>
                 </button>
+              </div>
+              <div className="relative">
+                <Button size="sm" variant="outline" onClick={() => setShowExportMenu(!showExportMenu)}>
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  Export
+                </Button>
+                {showExportMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                    <div className="absolute right-0 mt-1 bg-white border rounded-lg shadow-lg z-20 py-1 w-40">
+                      <button onClick={() => exportMembers('excel')} className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2">
+                        <span className="text-green-600 font-bold text-xs">XLS</span> Excel
+                      </button>
+                      <button onClick={() => exportMembers('pdf')} className="w-full px-4 py-2 text-sm text-left hover:bg-gray-50 flex items-center gap-2">
+                        <span className="text-red-600 font-bold text-xs">PDF</span> PDF
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
               <Link to="/admin/members/new">
                 <Button size="sm">Add Member</Button>
@@ -325,9 +369,9 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
                 onChange={(e) => setFilterCellGroup(e.target.value)}
                 className="px-3 py-1.5 border rounded-md text-sm bg-white"
               >
-                <option value="">Cell Group</option>
-                <option value="no">No Cell Group</option>
-                <option value="yes">Has Cell Group</option>
+                <option value="">Quest Circle</option>
+                <option value="no">No Quest Circle</option>
+                <option value="yes">Has Quest Circle</option>
               </select>
             )}
             <select
@@ -410,8 +454,8 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
               )}
               {filterCellGroup && (
                 <FilterTag
-                  label="Cell Group"
-                  value={filterCellGroup === 'no' ? 'No Cell Group' : 'Has Cell Group'}
+                  label="Quest Circle"
+                  value={filterCellGroup === 'no' ? 'No Quest Circle' : 'Has Quest Circle'}
                   color="bg-orange-50 text-orange-700"
                   onRemove={() => setFilterCellGroup('')}
                 />

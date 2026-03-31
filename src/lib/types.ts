@@ -16,7 +16,7 @@ export type MeetingDay = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursd
 export type CivilStatus = 'single' | 'married' | 'widowed'
 export type MemberCategory = 'Kid' | 'Student' | 'Young Pro' | 'Mother' | 'Father'
 export type FollowThrough = 'Salvation' | 'Prayer' | 'Bible and Devotion' | 'Transformation' | 'Cell and Church'
-export type DiscipleshipJourney = 'Consolidations' | 'Pre Encounter' | 'Encounter' | 'Post-Encounter' | 'SOD1' | 'SOD2' | 'SOD3' | 'QBS Theology 101' | 'QBS Preaching 101'
+export type DiscipleshipJourney = 'Consolidations' | 'Pre Encounter' | 'Encounter' | 'Post-Encounter' | 'SOD1' | 'SOD2' | 'SOD3' | 'Bible School' | 'QBS Theology 101' | 'QBS Preaching 101'
 export type LeadershipLevel = 'Member' | 'Disciple Maker' | 'Eagle' | 'Pastor' | 'Head Pastor'
 
 // ============================================

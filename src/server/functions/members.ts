@@ -36,7 +36,7 @@ const memberInsertSchema = z.object({
   member_category: z.enum(['Kid', 'Student', 'Young Pro', 'Mother', 'Father']).optional().nullable(),
   discipler_id: z.string().uuid().optional().nullable(),
   follow_through: z.enum(['Salvation', 'Prayer', 'Bible and Devotion', 'Transformation', 'Cell and Church']).optional().nullable(),
-  discipleship_journey: z.enum(['Consolidations', 'Pre Encounter', 'Encounter', 'Post-Encounter', 'SOD1', 'SOD2', 'SOD3', 'QBS Theology 101', 'QBS Preaching 101']).optional().nullable(),
+  discipleship_journey: z.enum(['Consolidations', 'Pre Encounter', 'Encounter', 'Post-Encounter', 'SOD1', 'SOD2', 'SOD3', 'Bible School', 'QBS Theology 101', 'QBS Preaching 101']).optional().nullable(),
   leadership_level: z.enum(['Member', 'Disciple Maker', 'Eagle', 'Pastor', 'Head Pastor']).default('Member'),
   spiritual_name: z.string().optional().nullable(),
   is_vision_keeper: z.boolean().optional(),

@@ -217,6 +217,7 @@ function normalizeDiscipleshipJourney(raw: string | undefined): DiscipleshipJour
   if (lower === 'sod1') return 'SOD1'
   if (lower === 'sod2') return 'SOD2'
   if (lower === 'sod3') return 'SOD3'
+  if (lower === 'bible school') return 'Bible School'
   if (lower.includes('theology')) return 'QBS Theology 101'
   if (lower.includes('preaching')) return 'QBS Preaching 101'
 
@@ -1395,6 +1396,6 @@ export const generateCellGroupsFromDisciplers = createServerFn({ method: 'POST' 
     return {
       success: true,
       results,
-      summary: `Created ${results.cellGroupsCreated} cell groups, ${results.membershipsCreated} memberships, updated ${results.disciplerLinksUpdated} discipler links. ${results.skipped} skipped (already exist). ${results.errors.length} errors.`,
+      summary: `Created ${results.cellGroupsCreated} Quest Circles, ${results.membershipsCreated} memberships, updated ${results.disciplerLinksUpdated} discipler links. ${results.skipped} skipped (already exist). ${results.errors.length} errors.`,
     }
   })
