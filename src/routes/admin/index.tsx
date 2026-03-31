@@ -837,22 +837,22 @@ function AdminDashboard() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gradient-to-r from-[#8B1538] to-[#B91C3C] text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-              <p className="text-white/80 text-sm mt-1">
+              <h1 className="text-xl sm:text-2xl font-bold">Admin Dashboard</h1>
+              <p className="text-white/80 text-xs sm:text-sm mt-0.5">
                 Quest Laguna Directory Management
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-white/70">
+            <div className="flex items-center gap-3">
+              <span className="text-xs sm:text-sm text-white/70">
                 {profile?.role?.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
               </span>
               <Button
                 variant="outline"
                 size="sm"
-                className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs sm:text-sm"
                 onClick={() => signOut()}
               >
                 Sign Out
@@ -863,7 +863,7 @@ function AdminDashboard() {
       </header>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {isLoading && (
           <div className="mb-4 flex items-center gap-2 text-sm text-gray-500">
             <div className="w-4 h-4 border-2 border-[#8B1538] border-t-transparent rounded-full animate-spin" />
@@ -871,16 +871,20 @@ function AdminDashboard() {
           </div>
         )}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="satellites">Satellites</TabsTrigger>
-            <TabsTrigger value="members">Members</TabsTrigger>
-            <TabsTrigger value="cell-groups">Quest Circles</TabsTrigger>
-            <TabsTrigger value="ministries">Ministries</TabsTrigger>
-            <TabsTrigger value="events">Events</TabsTrigger>
-            <TabsTrigger value="finances">Finances</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
+          <div className="w-full overflow-x-auto pb-1 mb-6">
+            <TabsList className="w-max">
+              <TabsTrigger value="overview" className="text-xs sm:text-sm px-2 sm:px-3">Overview</TabsTrigger>
+              <TabsTrigger value="satellites" className="text-xs sm:text-sm px-2 sm:px-3">Satellites</TabsTrigger>
+              <TabsTrigger value="members" className="text-xs sm:text-sm px-2 sm:px-3">Members</TabsTrigger>
+              <TabsTrigger value="cell-groups" className="text-xs sm:text-sm px-2 sm:px-3">
+                <span className="hidden sm:inline">Quest </span>Circles
+              </TabsTrigger>
+              <TabsTrigger value="ministries" className="text-xs sm:text-sm px-2 sm:px-3">Ministries</TabsTrigger>
+              <TabsTrigger value="events" className="text-xs sm:text-sm px-2 sm:px-3">Events</TabsTrigger>
+              <TabsTrigger value="finances" className="text-xs sm:text-sm px-2 sm:px-3">Finances</TabsTrigger>
+              <TabsTrigger value="settings" className="text-xs sm:text-sm px-2 sm:px-3">Settings</TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Overview Tab */}
           <TabsContent value="overview">
@@ -2422,28 +2426,30 @@ function AdminDashboard() {
                     <CardTitle>By Satellite</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Satellite</TableHead>
-                          <TableHead className="text-right">Income</TableHead>
-                          <TableHead className="text-right">Expenses</TableHead>
-                          <TableHead className="text-right">Balance</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {financialOverview.bySatellite.map((s) => (
-                          <TableRow key={s.satelliteId}>
-                            <TableCell className="font-medium">{s.satelliteName}</TableCell>
-                            <TableCell className="text-right text-emerald-600">{formatCurrency(s.income)}</TableCell>
-                            <TableCell className="text-right text-red-600">{formatCurrency(s.expenses)}</TableCell>
-                            <TableCell className={`text-right font-medium ${s.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {formatCurrency(s.balance)}
-                            </TableCell>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Satellite</TableHead>
+                            <TableHead className="text-right">Income</TableHead>
+                            <TableHead className="text-right">Expenses</TableHead>
+                            <TableHead className="text-right">Balance</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {financialOverview.bySatellite.map((s) => (
+                            <TableRow key={s.satelliteId}>
+                              <TableCell className="font-medium">{s.satelliteName}</TableCell>
+                              <TableCell className="text-right text-emerald-600">{formatCurrency(s.income)}</TableCell>
+                              <TableCell className="text-right text-red-600">{formatCurrency(s.expenses)}</TableCell>
+                              <TableCell className={`text-right font-medium ${s.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {formatCurrency(s.balance)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </CardContent>
                 </Card>
               ) : null}
@@ -2459,7 +2465,7 @@ function AdminDashboard() {
                     <CardTitle className="text-blue-700">Admin Account</CardTitle>
                     <CardDescription>Create or update the admin login account (admin@questlaguna.org)</CardDescription>
                   </CardHeader>
-                  <CardContent className="flex items-center gap-4">
+                  <CardContent className="flex flex-wrap items-center gap-4">
                     <Button onClick={handleSetupAdmin} disabled={isSettingUpAdmin} className="bg-blue-600 hover:bg-blue-700">
                       {isSettingUpAdmin ? 'Setting up...' : 'Setup Admin Account'}
                     </Button>
