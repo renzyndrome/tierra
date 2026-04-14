@@ -36,10 +36,12 @@ import { MemberCard, MemberCardSkeleton } from '../../components/MemberCard'
 import { MembersTabContent } from '../../components/MembersTabContent'
 import { CellGroupCard, CellGroupCardSkeleton } from '../../components/CellGroupCard'
 import { MinistryCard, MinistryCardSkeleton } from '../../components/MinistryCard'
-import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, EventWithStats, FinancialOverview } from '../../lib/types'
+import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, EventWithStats, FinancialOverview, InventoryItem, InventoryCategory } from '../../lib/types'
 import { getEvents } from '../../server/functions/events'
 import { getFinancialOverview } from '../../server/functions/finances'
-import { ADMIN_PIN, formatCurrency } from '../../lib/constants'
+import { getInventoryItems, createInventoryItem, updateInventoryItem, deleteInventoryItem, getInventoryCategories, createInventoryCategory, deleteInventoryCategory } from '../../server/functions/inventory'
+import { uploadInventoryPhoto } from '../../lib/storage'
+import { ADMIN_PIN, formatCurrency, INVENTORY_LOCATIONS, INVENTORY_CONDITIONS } from '../../lib/constants'
 import { downloadExcel, downloadPDF } from '../../lib/export'
 
 export const Route = createFileRoute('/admin/')({
@@ -90,6 +92,32 @@ function AdminDashboard() {
       setFinancesPinError('Invalid PIN. Please try again.')
     }
   }
+
+  // Inventory state
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
+  const [showInventoryDialog, setShowInventoryDialog] = useState(false)
+  const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null)
+  const [inventoryToDelete, setInventoryToDelete] = useState<InventoryItem | null>(null)
+  const [isSavingInventory, setIsSavingInventory] = useState(false)
+  const [inventoryFilterLocation, setInventoryFilterLocation] = useState('')
+  const [inventoryFilterCategory, setInventoryFilterCategory] = useState('')
+  const [inventorySearch, setInventorySearch] = useState('')
+  const [inventoryPhotoFile, setInventoryPhotoFile] = useState<File | null>(null)
+  const [inventoryPhotoPreview, setInventoryPhotoPreview] = useState<string | null>(null)
+  const [inventoryPhotoRemoved, setInventoryPhotoRemoved] = useState(false)
+  const [inventoryForm, setInventoryForm] = useState({
+    name: '',
+    description: '',
+    location: 'Moriah Hall' as string,
+    quantity: 1,
+    category: '',
+    condition: 'Good' as string,
+  })
+  const [inventoryCategories, setInventoryCategories] = useState<InventoryCategory[]>([])
+  const [showCategoryDialog, setShowCategoryDialog] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [isSavingCategory, setIsSavingCategory] = useState(false)
+  const [inventoryView, setInventoryView] = useState<'grid' | 'list'>('grid')
 
   // Journey collapsible sections
   const [expandedJourneyGroups, setExpandedJourneyGroups] = useState<Record<string, boolean>>({})
@@ -311,18 +339,22 @@ function AdminDashboard() {
         hasFetchedRef.current = true
       }
 
-      // Fetch events and financial overview in the background (server functions)
+      // Fetch events, financial overview, and inventory in the background
       try {
-        const [eventsData, finOverview] = await Promise.all([
+        const [eventsData, finOverview, inventoryData, categoriesData] = await Promise.all([
           getEvents({ data: { activeOnly: false } }),
           getFinancialOverview({ data: {} }),
+          getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } }),
+          getInventoryCategories({ data: {} }),
         ])
         if (!cancelled) {
           setEvents(eventsData)
           setFinancialOverview(finOverview)
+          setInventoryItems(inventoryData)
+          setInventoryCategories(categoriesData)
         }
       } catch (evtErr) {
-        if (!cancelled) console.error('[Dashboard] events/finances fetch error:', evtErr)
+        if (!cancelled) console.error('[Dashboard] events/finances/inventory fetch error:', evtErr)
       }
     }
 
@@ -505,14 +537,18 @@ function AdminDashboard() {
       }
 
       try {
-        const [eventsData, finOverview] = await Promise.all([
+        const [eventsData, finOverview, inventoryData, categoriesData] = await Promise.all([
           getEvents({ data: { activeOnly: false } }),
           getFinancialOverview({ data: {} }),
+          getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } }),
+          getInventoryCategories({ data: {} }),
         ])
         setEvents(eventsData)
         setFinancialOverview(finOverview)
+        setInventoryItems(inventoryData)
+        setInventoryCategories(categoriesData)
       } catch (evtErr) {
-        console.error('[Dashboard] events/finances fetch error:', evtErr)
+        console.error('[Dashboard] events/finances/inventory fetch error:', evtErr)
       }
     } catch (err) {
       console.error('[Dashboard] refreshData error:', err)
@@ -721,6 +757,132 @@ function AdminDashboard() {
     }
   }
 
+  // Inventory CRUD
+  const openInventoryDialog = (item?: InventoryItem) => {
+    if (item) {
+      setEditingInventory(item)
+      setInventoryForm({
+        name: item.name,
+        description: item.description || '',
+        location: item.location,
+        quantity: item.quantity,
+        category: item.category || '',
+        condition: item.condition,
+      })
+      setInventoryPhotoPreview(item.photo_url)
+    } else {
+      setEditingInventory(null)
+      setInventoryForm({ name: '', description: '', location: 'Moriah Hall', quantity: 1, category: '', condition: 'Good' })
+      setInventoryPhotoPreview(null)
+    }
+    setInventoryPhotoFile(null)
+    setInventoryPhotoRemoved(false)
+    setShowInventoryDialog(true)
+  }
+
+  const handleSaveInventory = async () => {
+    if (!inventoryForm.name.trim()) return
+    setIsSavingInventory(true)
+    try {
+      let photoUrl = inventoryPhotoRemoved ? null : (editingInventory?.photo_url || null)
+
+      if (inventoryPhotoFile) {
+        try {
+          const tempId = editingInventory?.id || crypto.randomUUID()
+          const { url, error: uploadErr } = await uploadInventoryPhoto(tempId, inventoryPhotoFile)
+          if (uploadErr) {
+            console.error('Photo upload failed:', uploadErr)
+          } else {
+            photoUrl = url
+          }
+        } catch (uploadError) {
+          console.error('Photo upload failed:', uploadError)
+        }
+      }
+
+      const payload = {
+        name: inventoryForm.name.trim(),
+        description: inventoryForm.description.trim() || null,
+        location: inventoryForm.location as 'Moriah Hall' | 'Nxtgen Hall',
+        quantity: inventoryForm.quantity,
+        category: inventoryForm.category || null,
+        condition: inventoryForm.condition as 'Good' | 'Fair' | 'Needs Repair' | 'Damaged',
+        photo_url: photoUrl,
+      }
+
+      if (editingInventory) {
+        await updateInventoryItem({ data: { id: editingInventory.id, updates: payload } })
+      } else {
+        await createInventoryItem({ data: payload })
+      }
+
+      setShowInventoryDialog(false)
+      const items = await getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } })
+      setInventoryItems(items)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to save inventory item')
+    } finally {
+      setIsSavingInventory(false)
+    }
+  }
+
+  const handleDeleteInventory = async () => {
+    if (!inventoryToDelete) return
+    try {
+      await deleteInventoryItem({ data: { id: inventoryToDelete.id } })
+      setInventoryToDelete(null)
+      const items = await getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } })
+      setInventoryItems(items)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to delete inventory item')
+    }
+  }
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return
+    setIsSavingCategory(true)
+    try {
+      await createInventoryCategory({ data: { name: newCategoryName.trim() } })
+      const cats = await getInventoryCategories({ data: {} })
+      setInventoryCategories(cats)
+      setNewCategoryName('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to add category')
+    } finally {
+      setIsSavingCategory(false)
+    }
+  }
+
+  const handleDeleteCategory = async (cat: InventoryCategory) => {
+    if (!confirm(`Delete category "${cat.name}"?`)) return
+    try {
+      await deleteInventoryCategory({ data: { id: cat.id } })
+      const cats = await getInventoryCategories({ data: {} })
+      setInventoryCategories(cats)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to delete category')
+    }
+  }
+
+  const filteredInventory = inventoryItems.filter((item) => {
+    const matchesSearch = !inventorySearch ||
+      item.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+      item.description?.toLowerCase().includes(inventorySearch.toLowerCase())
+    const matchesLocation = !inventoryFilterLocation || item.location === inventoryFilterLocation
+    const matchesCategory = !inventoryFilterCategory || item.category === inventoryFilterCategory
+    return matchesSearch && matchesLocation && matchesCategory
+  })
+
+  const inventoryStats = useMemo(() => {
+    const totalItems = inventoryItems.reduce((sum, i) => sum + i.quantity, 0)
+    const byLocation: Record<string, number> = {}
+    for (const item of inventoryItems) {
+      byLocation[item.location] = (byLocation[item.location] || 0) + item.quantity
+    }
+    const needsRepair = inventoryItems.filter(i => i.condition === 'Needs Repair' || i.condition === 'Damaged').length
+    return { totalItems, uniqueItems: inventoryItems.length, byLocation, needsRepair }
+  }, [inventoryItems])
+
   const filteredCellGroups = cellGroups.filter((group) => {
     const matchesSearch = !searchQuery ||
       group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -897,6 +1059,7 @@ function AdminDashboard() {
               <TabsTrigger value="ministries" className="text-xs sm:text-sm px-2 sm:px-3">Ministries</TabsTrigger>
               <TabsTrigger value="events" className="text-xs sm:text-sm px-2 sm:px-3">Events</TabsTrigger>
               <TabsTrigger value="finances" className="text-xs sm:text-sm px-2 sm:px-3">Finances</TabsTrigger>
+              <TabsTrigger value="inventory" className="text-xs sm:text-sm px-2 sm:px-3">Inventory</TabsTrigger>
               <TabsTrigger value="settings" className="text-xs sm:text-sm px-2 sm:px-3">Settings</TabsTrigger>
             </TabsList>
           </div>
@@ -2499,6 +2662,225 @@ function AdminDashboard() {
             )}
           </TabsContent>
 
+          {/* Inventory Tab */}
+          <TabsContent value="inventory">
+            <Card>
+              <CardHeader className="px-4 sm:px-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg sm:text-xl">Inventory</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm">
+                      {inventoryStats.uniqueItems} items ({inventoryStats.totalItems} total qty)
+                      {inventoryStats.needsRepair > 0 && (
+                        <span className="text-amber-600 ml-2">
+                          {inventoryStats.needsRepair} need attention
+                        </span>
+                      )}
+                    </CardDescription>
+                  </div>
+                  <Button size="sm" className="w-full sm:w-auto" onClick={() => openInventoryDialog()}>
+                    + Add Item
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4 sm:px-6">
+                {/* Filters */}
+                <div className="flex flex-col gap-3 mb-5">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Search items..."
+                      value={inventorySearch}
+                      onChange={(e) => setInventorySearch(e.target.value)}
+                      className="flex-1"
+                    />
+                    {/* View Toggle */}
+                    <div className="flex border rounded-lg overflow-hidden shrink-0">
+                      <button
+                        onClick={() => setInventoryView('grid')}
+                        className={`px-2.5 py-2 ${inventoryView === 'grid' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setInventoryView('list')}
+                        className={`px-2.5 py-2 ${inventoryView === 'list' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <select
+                      value={inventoryFilterLocation}
+                      onChange={(e) => setInventoryFilterLocation(e.target.value)}
+                      className="px-3 py-1.5 border rounded-lg text-sm"
+                    >
+                      <option value="">All Locations</option>
+                      {INVENTORY_LOCATIONS.map((loc) => (
+                        <option key={loc} value={loc}>{loc}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={inventoryFilterCategory}
+                      onChange={(e) => setInventoryFilterCategory(e.target.value)}
+                      className="px-3 py-1.5 border rounded-lg text-sm"
+                    >
+                      <option value="">All Categories</option>
+                      {inventoryCategories.map((cat) => (
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => setShowCategoryDialog(true)}
+                      className="text-xs text-gray-500 hover:text-gray-700 underline"
+                    >
+                      Manage Categories
+                    </button>
+                  </div>
+                </div>
+
+                {/* Stats Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-5">
+                  <div className="bg-blue-50 rounded-lg p-2.5 sm:p-3 text-center">
+                    <p className="text-xl sm:text-2xl font-bold text-blue-700">{inventoryStats.uniqueItems}</p>
+                    <p className="text-[10px] sm:text-xs text-blue-600">Unique Items</p>
+                  </div>
+                  <div className="bg-emerald-50 rounded-lg p-2.5 sm:p-3 text-center">
+                    <p className="text-xl sm:text-2xl font-bold text-emerald-700">{inventoryStats.totalItems}</p>
+                    <p className="text-[10px] sm:text-xs text-emerald-600">Total Quantity</p>
+                  </div>
+                  {INVENTORY_LOCATIONS.map((loc) => (
+                    <div key={loc} className="bg-gray-50 rounded-lg p-2.5 sm:p-3 text-center">
+                      <p className="text-xl sm:text-2xl font-bold text-gray-700">{inventoryStats.byLocation[loc] || 0}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500">{loc}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Items */}
+                {isLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="animate-pulse border rounded-lg p-4 flex gap-3">
+                        <div className="w-16 h-16 bg-gray-200 rounded shrink-0" />
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                          <div className="h-3 bg-gray-200 rounded w-1/2" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredInventory.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <p className="font-medium">No items found</p>
+                    <p className="text-sm mt-1">Add your first inventory item to get started</p>
+                  </div>
+                ) : inventoryView === 'grid' ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {filteredInventory.map((item) => (
+                      <div key={item.id} className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="h-24 sm:h-32 bg-gray-100 flex items-center justify-center overflow-hidden">
+                          {item.photo_url ? (
+                            <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="p-2.5">
+                          <div className="flex items-start justify-between gap-1">
+                            <h3 className="font-semibold text-xs sm:text-sm truncate">{item.name}</h3>
+                            <span className="text-[10px] font-medium text-gray-500 shrink-0 bg-gray-100 px-1 py-0.5 rounded">x{item.quantity}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                              item.location === 'Moriah Hall' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                            }`}>
+                              {item.location}
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                              item.condition === 'Good' ? 'bg-emerald-100 text-emerald-700' :
+                              item.condition === 'Fair' ? 'bg-yellow-100 text-yellow-700' :
+                              item.condition === 'Needs Repair' ? 'bg-amber-100 text-amber-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {item.condition}
+                            </span>
+                          </div>
+                          <div className="flex gap-1.5 mt-2 pt-2 border-t">
+                            <Button size="sm" variant="outline" className="flex-1 text-[10px] sm:text-xs h-7" onClick={() => openInventoryDialog(item)}>
+                              Edit
+                            </Button>
+                            <Button size="sm" variant="outline" className="flex-1 text-[10px] sm:text-xs h-7 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setInventoryToDelete(item)}>
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* List View */
+                  <div className="space-y-2">
+                    {filteredInventory.map((item) => (
+                      <div key={item.id} className="border rounded-lg p-3 flex gap-3 items-center hover:shadow-sm transition-shadow">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gray-100 rounded-lg overflow-hidden shrink-0 flex items-center justify-center">
+                          {item.photo_url ? (
+                            <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-sm truncate">{item.name}</h3>
+                            <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">x{item.quantity}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                              item.location === 'Moriah Hall' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                            }`}>
+                              {item.location}
+                            </span>
+                            {item.category && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-gray-100 text-gray-600">{item.category}</span>
+                            )}
+                            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                              item.condition === 'Good' ? 'bg-emerald-100 text-emerald-700' :
+                              item.condition === 'Fair' ? 'bg-yellow-100 text-yellow-700' :
+                              item.condition === 'Needs Repair' ? 'bg-amber-100 text-amber-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {item.condition}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          <Button size="sm" variant="outline" className="text-xs h-8 px-2.5" onClick={() => openInventoryDialog(item)}>
+                            Edit
+                          </Button>
+                          <Button size="sm" variant="outline" className="text-xs h-8 px-2.5 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setInventoryToDelete(item)}>
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* Settings Tab */}
           <TabsContent value="settings">
               <div className="space-y-6">
@@ -3081,6 +3463,204 @@ function AdminDashboard() {
             <Button variant="destructive" onClick={handleDeleteSat} disabled={isSavingSat}>
               {isSavingSat ? 'Deleting...' : 'Delete'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inventory Add/Edit Dialog */}
+      <Dialog open={showInventoryDialog} onOpenChange={(open) => { if (!open) setShowInventoryDialog(false) }}>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editingInventory ? 'Edit Item' : 'Add Item'}</DialogTitle>
+            <DialogDescription>
+              {editingInventory ? 'Update the inventory item details' : 'Add a new item to the inventory'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5 py-2 max-h-[70vh] overflow-y-auto px-1">
+            <div>
+              <Label htmlFor="inv-name" className="mb-1.5 block">Name *</Label>
+              <Input
+                id="inv-name"
+                value={inventoryForm.name}
+                onChange={(e) => setInventoryForm({ ...inventoryForm, name: e.target.value })}
+                placeholder="e.g. Yamaha Mixer"
+                maxLength={200}
+                className="h-11"
+              />
+            </div>
+            <div>
+              <Label htmlFor="inv-desc" className="mb-1.5 block">Description</Label>
+              <Textarea
+                id="inv-desc"
+                value={inventoryForm.description}
+                onChange={(e) => setInventoryForm({ ...inventoryForm, description: e.target.value })}
+                placeholder="Optional description..."
+                maxLength={1000}
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="inv-location" className="mb-1.5 block">Location *</Label>
+                <select
+                  id="inv-location"
+                  className="w-full h-11 px-3 py-2 border rounded-lg text-sm"
+                  value={inventoryForm.location}
+                  onChange={(e) => setInventoryForm({ ...inventoryForm, location: e.target.value })}
+                >
+                  {INVENTORY_LOCATIONS.map((loc) => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="inv-qty" className="mb-1.5 block">Quantity</Label>
+                <Input
+                  id="inv-qty"
+                  type="number"
+                  min={1}
+                  max={9999}
+                  value={inventoryForm.quantity}
+                  onChange={(e) => setInventoryForm({ ...inventoryForm, quantity: parseInt(e.target.value) || 1 })}
+                  className="h-11"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="inv-category" className="mb-1.5 block">Category</Label>
+                <select
+                  id="inv-category"
+                  className="w-full h-11 px-3 py-2 border rounded-lg text-sm"
+                  value={inventoryForm.category}
+                  onChange={(e) => setInventoryForm({ ...inventoryForm, category: e.target.value })}
+                >
+                  <option value="">None</option>
+                  {inventoryCategories.map((cat) => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="inv-condition" className="mb-1.5 block">Condition</Label>
+                <select
+                  id="inv-condition"
+                  className="w-full h-11 px-3 py-2 border rounded-lg text-sm"
+                  value={inventoryForm.condition}
+                  onChange={(e) => setInventoryForm({ ...inventoryForm, condition: e.target.value })}
+                >
+                  {INVENTORY_CONDITIONS.map((cond) => (
+                    <option key={cond} value={cond}>{cond}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="inv-photo" className="mb-1.5 block">Photo (optional)</Label>
+              <input
+                id="inv-photo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="block w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border file:border-gray-300 file:text-sm file:font-medium file:bg-white file:text-gray-700 hover:file:bg-gray-50 file:cursor-pointer"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    setInventoryPhotoFile(file)
+                    setInventoryPhotoPreview(URL.createObjectURL(file))
+                  }
+                }}
+              />
+              {inventoryPhotoPreview && (
+                <div className="mt-3 relative inline-block">
+                  <img src={inventoryPhotoPreview} alt="Preview" className="max-h-36 rounded border" />
+                  <button
+                    type="button"
+                    className="absolute top-1 right-1 bg-white rounded-full p-1 shadow text-gray-500 hover:text-red-600"
+                    onClick={() => {
+                      setInventoryPhotoFile(null)
+                      setInventoryPhotoPreview(null)
+                      setInventoryPhotoRemoved(true)
+                      const input = document.getElementById('inv-photo') as HTMLInputElement
+                      if (input) input.value = ''
+                    }}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setShowInventoryDialog(false)} className="w-full sm:w-auto">Cancel</Button>
+            <Button onClick={handleSaveInventory} disabled={isSavingInventory || !inventoryForm.name.trim()} className="w-full sm:w-auto">
+              {isSavingInventory ? 'Saving...' : editingInventory ? 'Update' : 'Add Item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inventory Delete Confirmation */}
+      <Dialog open={!!inventoryToDelete} onOpenChange={(open) => { if (!open) setInventoryToDelete(null) }}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-red-700">Delete Item</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{inventoryToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setInventoryToDelete(null)} className="w-full sm:w-auto">Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteInventory} className="w-full sm:w-auto">
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Inventory Categories Dialog */}
+      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Categories</DialogTitle>
+            <DialogDescription>Add or remove inventory categories</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto">
+            <div className="flex gap-2">
+              <Input
+                placeholder="New category name..."
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory() }}
+                className="h-10"
+              />
+              <Button onClick={handleAddCategory} disabled={isSavingCategory || !newCategoryName.trim()} size="sm" className="h-10 px-4 shrink-0">
+                {isSavingCategory ? '...' : 'Add'}
+              </Button>
+            </div>
+            {inventoryCategories.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">No categories yet</p>
+            ) : (
+              <div className="space-y-1">
+                {inventoryCategories.map((cat) => (
+                  <div key={cat.id} className="flex items-center justify-between px-3 py-2 rounded-lg border bg-gray-50">
+                    <span className="text-sm">{cat.name}</span>
+                    <button
+                      onClick={() => handleDeleteCategory(cat)}
+                      className="text-gray-400 hover:text-red-600 p-1"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCategoryDialog(false)} className="w-full sm:w-auto">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

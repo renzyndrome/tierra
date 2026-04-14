@@ -15,7 +15,6 @@ import {
 import type { TitheInsights } from '../../server/functions/finances'
 import { supabase } from '../../lib/supabase'
 import { uploadReceipt } from '../../lib/storage'
-import { seedFinancialData, purgeFinancialData } from '../../server/functions/seedData'
 import type {
   FinancialOverview,
   FinancialTransactionWithRelations,
@@ -130,11 +129,6 @@ function FinancesPage() {
   const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null)
   const [formNotes, setFormNotes] = useState('')
   const [formError, setFormError] = useState('')
-
-  // Seed/purge state
-  const [isSeeding, setIsSeeding] = useState(false)
-  const [isPurging, setIsPurging] = useState(false)
-  const [seedMessage, setSeedMessage] = useState('')
 
   // PIN gate state
   const [isPinAuthenticated, setIsPinAuthenticated] = useState(false)
@@ -414,39 +408,6 @@ function FinancesPage() {
     URL.revokeObjectURL(link.href)
   }
 
-  // Seed financial test data
-  const handleSeedFinancial = async () => {
-    setIsSeeding(true)
-    setSeedMessage('')
-    try {
-      const adminPin = ADMIN_PIN
-      const result = await seedFinancialData({ data: { adminPin } })
-      setSeedMessage(`Seeded ${result.count} transactions (${result.summary.income} income, ${result.summary.expenses} expenses)`)
-      await Promise.all([fetchOverviewData(), fetchTransactions()])
-    } catch (error) {
-      setSeedMessage(`Error: ${error instanceof Error ? error.message : 'Failed to seed'}`)
-    } finally {
-      setIsSeeding(false)
-    }
-  }
-
-  // Purge financial data
-  const handlePurgeFinancial = async () => {
-    if (!confirm('Are you sure you want to delete ALL financial transactions? This cannot be undone.')) return
-    setIsPurging(true)
-    setSeedMessage('')
-    try {
-      const adminPin = ADMIN_PIN
-      const result = await purgeFinancialData({ data: { adminPin } })
-      setSeedMessage(`Purged ${result.deleted} transactions`)
-      await Promise.all([fetchOverviewData(), fetchTransactions()])
-    } catch (error) {
-      setSeedMessage(`Error: ${error instanceof Error ? error.message : 'Failed to purge'}`)
-    } finally {
-      setIsPurging(false)
-    }
-  }
-
   // Auth loading
   if (authLoading) {
     return (
@@ -535,11 +496,6 @@ function FinancesPage() {
                 Export CSV
               </Button>
             </div>
-            {seedMessage && (
-              <p className={`text-sm mt-2 ${seedMessage.startsWith('Error') ? 'text-red-600' : 'text-emerald-600'}`}>
-                {seedMessage}
-              </p>
-            )}
           </div>
 
           {/* Filters */}
@@ -569,6 +525,53 @@ function FinancesPage() {
               onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1) }}
               placeholder="End date"
             />
+            {/* Member Search */}
+            <div className="relative">
+              <Input
+                type="text"
+                placeholder="Search member..."
+                className="text-sm w-44"
+                value={memberSearchInput}
+                onChange={(e) => {
+                  setMemberSearchInput(e.target.value)
+                  setShowMemberDropdown(true)
+                  if (!e.target.value) { setFilterMemberId(''); setCurrentPage(1) }
+                }}
+                onFocus={() => setShowMemberDropdown(true)}
+                onBlur={() => setTimeout(() => setShowMemberDropdown(false), 150)}
+              />
+              {memberSearchInput && (
+                <button
+                  onClick={() => { setMemberSearchInput(''); setFilterMemberId(''); setCurrentPage(1) }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ×
+                </button>
+              )}
+              {showMemberDropdown && memberSearchInput && (
+                <div className="absolute z-20 top-full mt-1 w-56 bg-white border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {members.filter(m => m.name.toLowerCase().includes(memberSearchInput.toLowerCase())).length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-500">No members found</div>
+                  ) : (
+                    members.filter(m => m.name.toLowerCase().includes(memberSearchInput.toLowerCase())).map((m) => (
+                      <button
+                        key={m.id}
+                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 ${filterMemberId === m.id ? 'bg-blue-50 text-blue-700' : ''}`}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setFilterMemberId(m.id)
+                          setMemberSearchInput(m.name)
+                          setShowMemberDropdown(false)
+                          setCurrentPage(1)
+                        }}
+                      >
+                        {m.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
             {(filterSatelliteId || filterStartDate || filterEndDate || filterType || filterCategory || filterSearch || filterMemberId || filterMinAmount || filterMaxAmount || filterHasReceipt) && (
               <Button
                 variant="outline"

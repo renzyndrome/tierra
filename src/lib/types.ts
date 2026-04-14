@@ -18,6 +18,8 @@ export type MemberCategory = 'Kid' | 'Student' | 'Young Pro' | 'Mother' | 'Fathe
 export type FollowThrough = 'Salvation' | 'Prayer' | 'Bible and Devotion' | 'Transformation' | 'Cell and Church'
 export type DiscipleshipJourney = 'Consolidations' | 'Pre Encounter' | 'Encounter' | 'Post-Encounter' | 'SOD1' | 'SOD2' | 'SOD3' | 'Bible School' | 'QBS Theology 101' | 'QBS Preaching 101'
 export type LeadershipLevel = 'Member' | 'Disciple Maker' | 'Eagle' | 'Pastor' | 'Head Pastor'
+export type InventoryLocation = 'Moriah Hall' | 'Nxtgen Hall'
+export type InventoryCondition = 'Good' | 'Fair' | 'Needs Repair' | 'Damaged'
 
 // ============================================
 // SATELLITE TYPES
@@ -754,6 +756,50 @@ export interface FinancialOverview {
 }
 
 // ============================================
+// INVENTORY TYPES
+// ============================================
+
+export interface InventoryCategory {
+  id: string
+  name: string
+  created_at: string
+}
+
+export interface InventoryItem {
+  id: string
+  name: string
+  description: string | null
+  location: InventoryLocation
+  quantity: number
+  photo_url: string | null
+  category: string | null
+  condition: InventoryCondition
+  created_at: string
+  updated_at: string
+}
+
+export interface InventoryItemInsert {
+  id?: string
+  name: string
+  description?: string | null
+  location: InventoryLocation
+  quantity?: number
+  photo_url?: string | null
+  category?: string | null
+  condition?: InventoryCondition
+}
+
+export interface InventoryItemUpdate {
+  name?: string
+  description?: string | null
+  location?: InventoryLocation
+  quantity?: number
+  photo_url?: string | null
+  category?: string | null
+  condition?: InventoryCondition
+}
+
+// ============================================
 // SUPABASE DATABASE TYPE (for type-safe queries)
 // ============================================
 
@@ -809,6 +855,16 @@ export type Database = {
         Row: FinancialTransaction
         Insert: FinancialTransactionInsert
         Update: FinancialTransactionUpdate
+      }
+      inventory_items: {
+        Row: InventoryItem
+        Insert: InventoryItemInsert
+        Update: InventoryItemUpdate
+      }
+      inventory_categories: {
+        Row: InventoryCategory
+        Insert: { name: string }
+        Update: { name?: string }
       }
     }
   }

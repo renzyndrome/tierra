@@ -215,3 +215,20 @@ export function formatCurrency(amount: number): string {
     minimumFractionDigits: 2,
   }).format(amount)
 }
+
+// ============================================
+// INVENTORY
+// ============================================
+
+export const INVENTORY_LOCATIONS = ['Moriah Hall', 'Nxtgen Hall'] as const
+export const INVENTORY_CONDITIONS = ['Good', 'Fair', 'Needs Repair', 'Damaged'] as const
+export const INVENTORY_CATEGORIES = [
+  'Sound Equipment',
+  'Musical Instruments',
+  'Furniture',
+  'Electronics',
+  'Kitchen',
+  'Office Supplies',
+  'Decor',
+  'Other',
+] as const

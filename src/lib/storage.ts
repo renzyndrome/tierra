@@ -7,6 +7,7 @@ const MEMBER_PHOTOS_FOLDER = 'member-photos'
 const EVENT_BANNERS_FOLDER = 'event-banners'
 const RECEIPTS_FOLDER = 'receipts'
 const MINISTRY_PHOTOS_FOLDER = 'ministry-photos'
+const INVENTORY_PHOTOS_FOLDER = 'inventory-photos'
 
 // ============================================
 // UPLOAD MEMBER PHOTO
@@ -254,6 +255,64 @@ export function getPhotoUrl(path: string): string {
     .getPublicUrl(path)
 
   return publicUrl
+}
+
+// ============================================
+// UPLOAD INVENTORY PHOTO
+// ============================================
+
+export async function uploadInventoryPhoto(
+  itemId: string,
+  file: File
+): Promise<{ url: string; error: Error | null }> {
+  try {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!allowedTypes.includes(file.type)) {
+      return {
+        url: '',
+        error: new Error('Invalid file type. Please upload a JPEG, PNG, WebP, or GIF image.'),
+      }
+    }
+
+    const maxSize = 5 * 1024 * 1024
+    if (file.size > maxSize) {
+      return {
+        url: '',
+        error: new Error('File too large. Maximum size is 5MB.'),
+      }
+    }
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const fileName = `${itemId}-${Date.now()}.${fileExt}`
+    const filePath = `${INVENTORY_PHOTOS_FOLDER}/${fileName}`
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      })
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError)
+      return {
+        url: '',
+        error: new Error('Failed to upload photo. Please try again.'),
+      }
+    }
+
+    // Store file path — signed URLs are generated server-side for private buckets
+    return {
+      url: filePath,
+      error: null,
+    }
+  } catch (err) {
+    console.error('Upload error:', err)
+    return {
+      url: '',
+      error: err as Error,
+    }
+  }
 }
 
 // ============================================
