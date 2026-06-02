@@ -1,6 +1,6 @@
 // Quest Laguna Directory - Members Tab Content (Card/Table Toggle)
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { MemberCard, MemberCardSkeleton } from './MemberCard'
 import { archiveMember, restoreMember, deleteMember } from '../server/functions/members'
@@ -80,7 +80,10 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
   const [isDeleting, setIsDeleting] = useState(false)
 
   // Derived data
-  const uniqueCities = [...new Set(members.map(m => m.city).filter(Boolean))].sort()
+  const uniqueCities = useMemo(
+    () => [...new Set(members.map(m => m.city).filter(Boolean))].sort(),
+    [members],
+  )
 
   const hasFilters = filterSatellite || filterStage || filterStatus || filterCity || filterCategory || filterLeadership || filterJourney || filterCellGroup || filterDiscipler || sortBy !== 'name' || sortOrder !== 'asc'
 
@@ -123,7 +126,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
   }
 
   // Filter + sort
-  const filteredMembers = members
+  const filteredMembers = useMemo(() => members
     .filter((member) => {
       if (searchQuery) {
         const q = searchQuery.toLowerCase()
@@ -156,13 +159,22 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
         case 'newest': cmp = new Date(b.created_at).getTime() - new Date(a.created_at).getTime(); break
       }
       return sortOrder === 'desc' ? -cmp : cmp
-    })
+    }), [
+      members, searchQuery, filterSatellite, filterStage, filterStatus, filterCity,
+      filterCategory, filterLeadership, filterJourney, filterCellGroup, filterDiscipler,
+      memberIdsInCellGroups, sortBy, sortOrder,
+    ])
 
   // Actions
+  const satelliteNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const s of satellites) map.set(s.id, s.name)
+    return map
+  }, [satellites])
+
   const getSatelliteName = (satelliteId: string | null) => {
     if (!satelliteId) return 'N/A'
-    const sat = satellites.find(s => s.id === satelliteId)
-    return sat?.name?.replace('Quest ', '') || 'N/A'
+    return satelliteNameById.get(satelliteId)?.replace('Quest ', '') || 'N/A'
   }
 
   const handleArchive = async (member: Member) => {
@@ -260,12 +272,23 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
         <CardContent>
           {/* Search and Sort */}
           <div className="flex flex-col md:flex-row gap-3 mb-3">
-            <div className="flex-1">
+            <div className="relative flex-1">
               <Input
                 placeholder="Search by name, city, or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                className={searchQuery ? 'pr-9' : undefined}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
             </div>
             <div className="flex gap-2">
               <select
@@ -284,6 +307,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
                 onClick={() => setSortOrder(o => o === 'asc' ? 'desc' : 'asc')}
                 className="px-3 py-2 border rounded-lg text-sm bg-white hover:bg-gray-50"
                 title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                aria-label={sortOrder === 'asc' ? 'Sort ascending' : 'Sort descending'}
               >
                 {sortOrder === 'asc' ? '↑' : '↓'}
               </button>
@@ -478,7 +502,16 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
             </div>
           ) : filteredMembers.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              <p>No members found</p>
+              <p>{(hasFilters || searchQuery) ? 'No members match your filters' : 'No members found'}</p>
+              {(hasFilters || searchQuery) && (
+                <button
+                  type="button"
+                  onClick={() => { clearFilters(); setSearchQuery('') }}
+                  className="mt-3 text-sm text-[#8B1538] hover:underline"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           ) : viewMode === 'card' ? (
             /* ===== CARD VIEW ===== */
@@ -486,8 +519,8 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
               {filteredMembers.map((member) => (
                 <div key={member.id} className="group relative">
                   <MemberCard member={member} />
-                  {/* Action menu overlay */}
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Action menu overlay — always visible on touch, hover-reveal on desktop */}
+                  <div className="absolute top-2 right-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <MemberActionMenu
                       member={member}
                       onArchive={() => handleArchive(member)}
@@ -575,7 +608,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
                       </TableCell>
                       <TableCell>
                         <span
-                          className={`px-2 py-1 rounded-full text-xs ${
+                          className={`px-2 py-1 rounded-full text-xs capitalize ${
                             member.membership_status === 'active'
                               ? 'bg-emerald-100 text-emerald-800'
                               : member.membership_status === 'inactive'

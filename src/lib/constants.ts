@@ -216,6 +216,12 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
+// Group large counts with thousands separators (e.g. 1,234) for consistency with
+// the currency figures shown alongside them.
+export function formatNumber(n: number): string {
+  return new Intl.NumberFormat('en-PH').format(n)
+}
+
 // ============================================
 // INVENTORY
 // ============================================

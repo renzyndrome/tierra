@@ -71,33 +71,56 @@ export const getEvents = createServerFn({ method: 'GET' })
       throw new Error('Failed to fetch events')
     }
 
-    // Get registration counts for each event
-    const eventsWithStats = await Promise.all(
-      (events || []).map(async (event) => {
-        const { count: registrationCount } = await supabase
-          .from('event_registrations')
-          .select('*', { count: 'exact', head: true })
-          .eq('event_id', event.id)
+    // Get registration stats for all events. Fetch every relevant registration in ONE
+    // query and aggregate in memory, instead of issuing up to 2 count queries per event
+    // (previously 2N+1 round-trips).
+    const eventList = events || []
+    const eventIds = eventList.map((e) => e.id)
 
-        // Calculate early bird count based on early_bird_cutoff
-        let earlyBirdCount = 0
-        if (event.early_bird_cutoff) {
-          const { count } = await supabase
-            .from('event_registrations')
-            .select('*', { count: 'exact', head: true })
-            .eq('event_id', event.id)
-            .lt('registered_at', `${event.event_date}T${event.early_bird_cutoff}`)
+    const registeredAtByEvent = new Map<string, string[]>()
+    if (eventIds.length > 0) {
+      const { data: regs, error: regError } = await supabase
+        .from('event_registrations')
+        .select('event_id, registered_at')
+        .in('event_id', eventIds)
 
-          earlyBirdCount = count || 0
+      if (regError) {
+        console.error('Error fetching event registrations:', regError)
+      } else {
+        const regRows = (regs || []) as Array<{ event_id: string; registered_at: string }>
+        for (const r of regRows) {
+          const list = registeredAtByEvent.get(r.event_id) ?? []
+          list.push(r.registered_at)
+          registeredAtByEvent.set(r.event_id, list)
         }
+      }
+    }
 
-        return {
-          ...event,
-          registration_count: registrationCount || 0,
-          early_bird_count: earlyBirdCount,
-        } as EventWithStats
-      })
-    )
+    const eventsWithStats: EventWithStats[] = eventList.map((event) => {
+      const timestamps = registeredAtByEvent.get(event.id) ?? []
+
+      // Early-bird = registered before `${event_date}T${cutoff}`. registered_at is a
+      // timestamptz (UTC), so compare absolute instants against the cutoff read as UTC.
+      let earlyBirdCount = 0
+      if (event.early_bird_cutoff) {
+        // Normalize 'HH:MM' or 'HH:MM:SS' to a full UTC instant.
+        const cutoff = event.early_bird_cutoff
+        const cutoffTime = cutoff.length === 5 ? `${cutoff}:00` : cutoff
+        const cutoffMs = Date.parse(`${event.event_date}T${cutoffTime}Z`)
+        if (!Number.isNaN(cutoffMs)) {
+          earlyBirdCount = timestamps.filter((ts) => {
+            const t = Date.parse(ts)
+            return !Number.isNaN(t) && t < cutoffMs
+          }).length
+        }
+      }
+
+      return {
+        ...event,
+        registration_count: timestamps.length,
+        early_bird_count: earlyBirdCount,
+      } as EventWithStats
+    })
 
     return eventsWithStats
   })

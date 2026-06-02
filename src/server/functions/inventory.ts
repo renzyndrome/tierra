@@ -68,36 +68,52 @@ export const getInventoryItems = createServerFn({ method: 'GET' })
       throw new Error('Failed to fetch inventory items')
     }
 
-    // Generate signed URLs for items with photo paths (private bucket)
-    const itemsWithSignedUrls = await Promise.all(
-      (items as InventoryItem[]).map(async (item) => {
-        if (!item.photo_url) return item
+    // Generate signed URLs for items with photo paths (private bucket).
+    // Resolve every item's storage path first, then sign them all in ONE batch
+    // request instead of one round-trip per item.
+    const itemList = items as InventoryItem[]
 
-        // Extract file path from stored value
-        let filePath = item.photo_url
-        if (filePath.startsWith('http')) {
-          // Legacy: full public URL stored — extract path after bucket name
-          const pathMatch = filePath.match(/\/storage\/v1\/object\/public\/media\/(.+)$/)
-          if (pathMatch) {
-            filePath = pathMatch[1]
-          } else {
-            console.error('[inventory] Could not extract path from URL:', filePath)
-            return item
-          }
+    const resolvedPaths: (string | null)[] = itemList.map((item) => {
+      if (!item.photo_url) return null
+
+      let filePath = item.photo_url
+      if (filePath.startsWith('http')) {
+        // Legacy: full public URL stored — extract path after bucket name
+        const pathMatch = filePath.match(/\/storage\/v1\/object\/public\/media\/(.+)$/)
+        if (pathMatch) {
+          filePath = pathMatch[1]
+        } else {
+          console.error('[inventory] Could not extract path from URL:', filePath)
+          return null
         }
+      }
+      return filePath
+    })
 
-        const { data: signedData, error: signError } = await supabase.storage
-          .from('media')
-          .createSignedUrl(filePath, 3600)
-
-        if (signError) {
-          console.error('[inventory] Signed URL error for', filePath, signError)
-          return { ...item, photo_url: null }
-        }
-
-        return { ...item, photo_url: signedData.signedUrl }
-      })
+    const uniquePaths = Array.from(
+      new Set(resolvedPaths.filter((p): p is string => p !== null)),
     )
+
+    const signedByPath = new Map<string, string | null>()
+    if (uniquePaths.length > 0) {
+      const { data: signedList, error: signError } = await supabase.storage
+        .from('media')
+        .createSignedUrls(uniquePaths, 3600)
+
+      if (signError) {
+        console.error('[inventory] Batch signed URL error:', signError)
+      } else if (signedList) {
+        for (const entry of signedList) {
+          signedByPath.set(entry.path as string, entry.error ? null : entry.signedUrl)
+        }
+      }
+    }
+
+    const itemsWithSignedUrls = itemList.map((item, i) => {
+      const filePath = resolvedPaths[i]
+      if (filePath === null) return item // no photo, or unextractable legacy URL — leave as-is
+      return { ...item, photo_url: signedByPath.get(filePath) ?? null }
+    })
 
     return itemsWithSignedUrls
   })

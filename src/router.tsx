@@ -10,7 +10,9 @@ export const getRouter = () => {
     context: {},
 
     scrollRestoration: true,
-    defaultPreloadStaleTime: 0,
+    // Warm loader-backed routes on hover/touch for snappier navigation. The framework
+    // default staleTime (30s) keeps preloaded data fresh enough without redundant fetches.
+    defaultPreload: 'intent',
   })
 
   return router

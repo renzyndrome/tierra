@@ -216,7 +216,7 @@ export const getEarlyBirdCount = createServerFn({ method: 'GET' }).handler(
     const supabase = getSupabase()
 
     const { data: attendees, error } = await supabase
-      .from('attendees')
+      .from('event_registrations')
       .select('registered_at')
 
     if (error) {
@@ -244,7 +244,7 @@ export const getStatsBySatellite = createServerFn({ method: 'GET' }).handler(
     const supabase = getSupabase()
 
     const { data: attendees, error } = await supabase
-      .from('attendees')
+      .from('event_registrations')
       .select('satellite')
 
     if (error) {
@@ -254,15 +254,17 @@ export const getStatsBySatellite = createServerFn({ method: 'GET' }).handler(
 
     const rows = (attendees || []) as { satellite: string }[]
 
-    const counts: Record<Satellite, number> = {
+    // Seed the known satellites at 0 so they always render, then count every row —
+    // including any satellite not in the seed list — instead of dropping unknowns.
+    const counts: Record<string, number> = {
       'Quest Laguna Main': 0,
       'Quest Biñan': 0,
       'Quest Sta. Rosa': 0,
     }
 
     rows.forEach((a) => {
-      if (a.satellite in counts) {
-        counts[a.satellite as Satellite]++
+      if (a.satellite) {
+        counts[a.satellite] = (counts[a.satellite] || 0) + 1
       }
     })
 

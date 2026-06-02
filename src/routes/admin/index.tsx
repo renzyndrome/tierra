@@ -41,7 +41,7 @@ import { getEvents } from '../../server/functions/events'
 import { getFinancialOverview } from '../../server/functions/finances'
 import { getInventoryItems, createInventoryItem, updateInventoryItem, deleteInventoryItem, getInventoryCategories, createInventoryCategory, deleteInventoryCategory } from '../../server/functions/inventory'
 import { uploadInventoryPhoto } from '../../lib/storage'
-import { ADMIN_PIN, formatCurrency, INVENTORY_LOCATIONS, INVENTORY_CONDITIONS } from '../../lib/constants'
+import { ADMIN_PIN, formatCurrency, formatNumber, INVENTORY_LOCATIONS, INVENTORY_CONDITIONS } from '../../lib/constants'
 import { downloadExcel, downloadPDF } from '../../lib/export'
 
 export const Route = createFileRoute('/admin/')({
@@ -70,6 +70,20 @@ function AdminDashboard() {
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const { tab: searchTab } = Route.useSearch()
   const [activeTab, setActiveTab] = useState(searchTab || 'overview')
+
+  // Keep the visible tab in sync with the URL search param. Without this, the tab is
+  // seeded from the URL only on first mount, so browser back/forward and deep links
+  // to /admin?tab=X (while the dashboard is already mounted) would not switch the tab
+  // until a full browser refresh. Re-lock the finances gate when leaving that tab.
+  useEffect(() => {
+    const next = searchTab || 'overview'
+    setActiveTab(prev => (prev === next ? prev : next))
+    if (next !== 'finances') {
+      setFinancesUnlocked(false)
+      setFinancesPinInput('')
+      setFinancesPinError('')
+    }
+  }, [searchTab])
 
   // Satellite detail view
   const [selectedSatelliteId, setSelectedSatelliteId] = useState<string | null>(null)
@@ -282,6 +296,21 @@ function AdminDashboard() {
     }
   }, [authLoading, isAuthenticated, navigate])
 
+  // Opening/closing the inline satellite detail is a state switch (not a route change),
+  // so the browser keeps the current scroll and you land mid-page. Scroll to top so the
+  // detail (or the returned-to list) starts at the beginning, like a real page change.
+  // Skip the initial mount so this doesn't override the router's scroll restoration.
+  const satelliteScrollInit = useRef(true)
+  useEffect(() => {
+    if (satelliteScrollInit.current) {
+      satelliteScrollInit.current = false
+      return
+    }
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'auto' })
+    }
+  }, [selectedSatelliteId])
+
   // Fetch all dashboard data
   const hasFetchedRef = useRef(false)
 
@@ -302,7 +331,7 @@ function AdminDashboard() {
             leader:members!cell_groups_leader_id_fkey(id, name, photo_url),
             co_leader:members!cell_groups_co_leader_id_fkey(id, name, photo_url),
             satellite:satellites(id, name),
-            members:member_cell_groups(id, member_id)
+            members:member_cell_groups(id, member_id, is_active)
           `).eq('is_active', true).order('name'),
           supabase.from('ministries').select(`
             *,
@@ -318,7 +347,9 @@ function AdminDashboard() {
         if (groupsRes.data) {
           const groupsWithCount = groupsRes.data.map(g => ({
             ...g,
-            member_count: (g as any).members?.length || 0,
+            // Count only ACTIVE memberships (exclude members who left the circle),
+            // matching how ministry member_count is computed just below.
+            member_count: ((g as any).members || []).filter((mm: any) => mm.is_active).length,
           }))
           setCellGroups(groupsWithCount as CellGroupWithRelations[])
         }
@@ -361,15 +392,25 @@ function AdminDashboard() {
     // Start fetch immediately (no debounce)
     doFetch(!hasFetchedRef.current)
 
-    // Silently refresh on window focus
-    const onFocus = () => {
-      if (!cancelled) doFetch(false)
+    // Silently refresh when the user returns to this tab/window. 'visibilitychange'
+    // fires on browser-tab switches and 'focus' on window/app switches; neither alone
+    // is reliable. They often fire together, so throttle to coalesce into one refetch.
+    let lastRefetchAt = Date.now()
+    const maybeRefetch = () => {
+      if (cancelled) return
+      if (document.visibilityState !== 'visible') return
+      const now = Date.now()
+      if (now - lastRefetchAt < 1000) return
+      lastRefetchAt = now
+      doFetch(false)
     }
-    window.addEventListener('focus', onFocus)
+    window.addEventListener('focus', maybeRefetch)
+    document.addEventListener('visibilitychange', maybeRefetch)
 
     return () => {
       cancelled = true
-      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('focus', maybeRefetch)
+      document.removeEventListener('visibilitychange', maybeRefetch)
     }
   }, [isAuthenticated, refreshTrigger])
 
@@ -510,7 +551,7 @@ function AdminDashboard() {
           leader:members!cell_groups_leader_id_fkey(id, name, photo_url),
           co_leader:members!cell_groups_co_leader_id_fkey(id, name, photo_url),
           satellite:satellites(id, name),
-          members:member_cell_groups(id)
+          members:member_cell_groups(id, is_active)
         `).eq('is_active', true).order('name'),
         supabase.from('ministries').select(`
           *,
@@ -524,7 +565,8 @@ function AdminDashboard() {
       if (groupsRes.data) {
         const groupsWithCount = groupsRes.data.map(g => ({
           ...g,
-          member_count: (g as any).members?.length || 0,
+          // Count only ACTIVE memberships (exclude members who left the circle).
+          member_count: ((g as any).members || []).filter((mm: any) => mm.is_active).length,
         }))
         setCellGroups(groupsWithCount as CellGroupWithRelations[])
       }
@@ -864,14 +906,14 @@ function AdminDashboard() {
     }
   }
 
-  const filteredInventory = inventoryItems.filter((item) => {
+  const filteredInventory = useMemo(() => inventoryItems.filter((item) => {
     const matchesSearch = !inventorySearch ||
       item.name.toLowerCase().includes(inventorySearch.toLowerCase()) ||
       item.description?.toLowerCase().includes(inventorySearch.toLowerCase())
     const matchesLocation = !inventoryFilterLocation || item.location === inventoryFilterLocation
     const matchesCategory = !inventoryFilterCategory || item.category === inventoryFilterCategory
     return matchesSearch && matchesLocation && matchesCategory
-  })
+  }), [inventoryItems, inventorySearch, inventoryFilterLocation, inventoryFilterCategory])
 
   const inventoryStats = useMemo(() => {
     const totalItems = inventoryItems.reduce((sum, i) => sum + i.quantity, 0)
@@ -883,20 +925,20 @@ function AdminDashboard() {
     return { totalItems, uniqueItems: inventoryItems.length, byLocation, needsRepair }
   }, [inventoryItems])
 
-  const filteredCellGroups = cellGroups.filter((group) => {
+  const filteredCellGroups = useMemo(() => cellGroups.filter((group) => {
     const matchesSearch = !searchQuery ||
       group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       group.description?.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesSatellite = !selectedSatellite || group.satellite_id === selectedSatellite
     return matchesSearch && matchesSatellite
-  })
+  }), [cellGroups, searchQuery, selectedSatellite])
 
-  const filteredMinistries = ministries.filter((ministry) => {
+  const filteredMinistries = useMemo(() => ministries.filter((ministry) => {
     const matchesSearch = !searchQuery ||
       ministry.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       ministry.description?.toLowerCase().includes(searchQuery.toLowerCase())
     return matchesSearch
-  })
+  }), [ministries, searchQuery])
 
   // Ministry role counts (from member_ministries join)
   const ministryRoleCounts = useMemo(() => {
@@ -976,6 +1018,20 @@ function AdminDashboard() {
       })
   }, [members])
 
+  // Most recently ADDED members. The `members` array is ordered by name, so slicing it
+  // shows the alphabetically-first members (static), not the newest — sort by created_at.
+  const recentMembers = useMemo(
+    () =>
+      [...members]
+        .sort((a, b) => {
+          const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+          const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+          return tb - ta
+        })
+        .slice(0, 6),
+    [members],
+  )
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -1042,15 +1098,22 @@ function AdminDashboard() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {isLoading && (
-          <div className="mb-4 flex items-center gap-2 text-sm text-gray-500">
+          <div className="mb-4 flex items-center gap-2 text-sm text-gray-500" role="status" aria-live="polite">
             <div className="w-4 h-4 border-2 border-[#8B1538] border-t-transparent rounded-full animate-spin" />
             Loading dashboard data...
           </div>
         )}
-        <Tabs value={activeTab} onValueChange={(tab) => { setActiveTab(tab); if (tab !== 'finances') { setFinancesUnlocked(false); setFinancesPinInput(''); setFinancesPinError('') } }}>
-          <div className="w-full overflow-x-auto pb-1 mb-6">
-            <TabsList className="w-max">
-              <TabsTrigger value="overview" className="text-xs sm:text-sm px-2 sm:px-3">Overview</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={(tab) => {
+          // Update local state for instant feedback and write the tab to the URL so
+          // it survives reloads, deep-links and back/forward (replace + no scroll jump).
+          setActiveTab(tab)
+          navigate({ to: '/admin', search: { tab }, replace: true, resetScroll: false })
+          if (tab !== 'finances') { setFinancesUnlocked(false); setFinancesPinInput(''); setFinancesPinError('') }
+        }}>
+          <div className="relative">
+            <div className="w-full overflow-x-auto pb-1 mb-6">
+              <TabsList className="w-max">
+                <TabsTrigger value="overview" className="text-xs sm:text-sm px-2 sm:px-3">Overview</TabsTrigger>
               <TabsTrigger value="satellites" className="text-xs sm:text-sm px-2 sm:px-3">Satellites</TabsTrigger>
               <TabsTrigger value="members" className="text-xs sm:text-sm px-2 sm:px-3">Members</TabsTrigger>
               <TabsTrigger value="cell-groups" className="text-xs sm:text-sm px-2 sm:px-3">
@@ -1062,6 +1125,9 @@ function AdminDashboard() {
               <TabsTrigger value="inventory" className="text-xs sm:text-sm px-2 sm:px-3">Inventory</TabsTrigger>
               <TabsTrigger value="settings" className="text-xs sm:text-sm px-2 sm:px-3">Settings</TabsTrigger>
             </TabsList>
+            </div>
+            {/* Right-edge fade hints that more tabs are scrollable on mobile */}
+            <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-gray-50 to-transparent sm:hidden" />
           </div>
 
           {/* Overview Tab */}
@@ -1074,37 +1140,37 @@ function AdminDashboard() {
               <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                 <Card>
                   <CardContent className="p-3 text-center">
-                    <p className="text-2xl font-bold text-[#8B1538]">{totalMembers}</p>
+                    <p className="text-2xl font-bold text-[#8B1538]">{isLoading ? '—' : formatNumber(totalMembers)}</p>
                     <p className="text-xs text-gray-500">Members</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-3 text-center">
-                    <p className="text-2xl font-bold text-teal-600">{totalCellGroups}</p>
+                    <p className="text-2xl font-bold text-teal-600">{isLoading ? '—' : formatNumber(totalCellGroups)}</p>
                     <p className="text-xs text-gray-500">Quest Circles</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-3 text-center">
-                    <p className="text-2xl font-bold text-amber-600">{totalMinistries}</p>
+                    <p className="text-2xl font-bold text-amber-600">{isLoading ? '—' : formatNumber(totalMinistries)}</p>
                     <p className="text-xs text-gray-500">Ministries</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-purple-50 border-purple-200">
                   <CardContent className="p-3 text-center">
-                    <p className="text-2xl font-bold text-purple-600">{newbies}</p>
+                    <p className="text-2xl font-bold text-purple-600">{isLoading ? '—' : formatNumber(newbies)}</p>
                     <p className="text-xs text-purple-500">New Friends</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-yellow-50 border-yellow-200">
                   <CardContent className="p-3 text-center">
-                    <p className="text-2xl font-bold text-yellow-600">{growing}</p>
+                    <p className="text-2xl font-bold text-yellow-600">{isLoading ? '—' : formatNumber(growing)}</p>
                     <p className="text-xs text-yellow-600">Schooling</p>
                   </CardContent>
                 </Card>
                 <Card className="bg-orange-50 border-orange-200">
                   <CardContent className="p-3 text-center">
-                    <p className="text-2xl font-bold text-orange-600">{discipleMakers}</p>
+                    <p className="text-2xl font-bold text-orange-600">{isLoading ? '—' : formatNumber(discipleMakers)}</p>
                     <p className="text-xs text-orange-500">Disciple Makers</p>
                   </CardContent>
                 </Card>
@@ -1525,8 +1591,8 @@ function AdminDashboard() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {members.slice(0, 6).map((member) => (
-                        <MemberCard key={member.id} member={member} compact />
+                      {recentMembers.map((member) => (
+                        <MemberCard key={member.id} member={member} />
                       ))}
                     </div>
                   )}
@@ -2026,7 +2092,7 @@ function AdminDashboard() {
                                 <TableCell className="text-center text-purple-600">{sm.filter(m => m.discipleship_stage === 'Newbie').length}</TableCell>
                                 <TableCell className="text-center text-yellow-600">{sm.filter(m => m.discipleship_stage === 'Growing').length}</TableCell>
                                 <TableCell className="text-center text-orange-600">{sm.filter(m => m.discipleship_stage === 'Leader').length}</TableCell>
-                                <TableCell className="text-center text-blue-600">{sm.filter(m => m.leadership_level === 'Disciple Maker' || m.leadership_level === 'Eagle').length}</TableCell>
+                                <TableCell className="text-center text-blue-600">{sm.filter(m => m.leadership_level === 'Disciple Maker').length}</TableCell>
                                 <TableCell className="text-center text-emerald-600">{sm.filter(m => m.is_full_time).length}</TableCell>
                               </TableRow>
                             )
@@ -2039,7 +2105,7 @@ function AdminDashboard() {
                             <TableCell className="text-center text-purple-600">{members.filter(m => m.discipleship_stage === 'Newbie').length}</TableCell>
                             <TableCell className="text-center text-yellow-600">{members.filter(m => m.discipleship_stage === 'Growing').length}</TableCell>
                             <TableCell className="text-center text-orange-600">{members.filter(m => m.discipleship_stage === 'Leader').length}</TableCell>
-                            <TableCell className="text-center text-blue-600">{members.filter(m => m.leadership_level === 'Disciple Maker' || m.leadership_level === 'Eagle').length}</TableCell>
+                            <TableCell className="text-center text-blue-600">{members.filter(m => m.leadership_level === 'Disciple Maker').length}</TableCell>
                             <TableCell className="text-center text-emerald-600">{members.filter(m => m.is_full_time).length}</TableCell>
                           </TableRow>
                         </TableBody>
@@ -2056,12 +2122,17 @@ function AdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
-                        {satellites
-                          .filter(s => s.is_active)
-                          .map(sat => {
-                            const count = members.filter(m => m.satellite_id === sat.id).length
-                            const maxCount = Math.max(...satellites.filter(s => s.is_active).map(s => members.filter(m => m.satellite_id === s.id).length), 1)
-                            return (
+                        {(() => {
+                          // Rank satellites by member count (descending). Compute counts and
+                          // the max ONCE, then sort, then render — the old code sorted JSX
+                          // elements with a no-op comparator, so bars stayed in name order.
+                          const withCounts = satellites
+                            .filter(s => s.is_active)
+                            .map(sat => ({ sat, count: members.filter(m => m.satellite_id === sat.id).length }))
+                          const maxCount = Math.max(...withCounts.map(w => w.count), 1)
+                          return withCounts
+                            .sort((a, b) => b.count - a.count)
+                            .map(({ sat, count }) => (
                               <div key={sat.id} className="cursor-pointer hover:bg-gray-50 rounded p-1 -m-1" onClick={() => setSelectedSatelliteId(sat.id)}>
                                 <div className="flex justify-between text-sm mb-1">
                                   <span className="font-medium text-gray-700">{sat.name.replace('Quest ', '')}</span>
@@ -2071,9 +2142,8 @@ function AdminDashboard() {
                                   <div className="bg-[#8B1538] h-3 rounded-full transition-all" style={{ width: `${(count / maxCount) * 100}%` }} />
                                 </div>
                               </div>
-                            )
-                          })
-                          .sort((a, b) => 0)}
+                            ))
+                        })()}
                       </div>
                     </CardContent>
                   </Card>
@@ -2135,11 +2205,12 @@ function AdminDashboard() {
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-lg">{sat.name}</CardTitle>
                             <div className="flex items-center gap-2">
-                              <span className={`w-2.5 h-2.5 rounded-full ${sat.is_active ? 'bg-green-500' : 'bg-gray-300'}`} />
+                              <span className={`w-2.5 h-2.5 rounded-full ${sat.is_active ? 'bg-green-500' : 'bg-gray-300'}`} role="img" aria-label={sat.is_active ? 'Active' : 'Inactive'} />
                               <button
                                 onClick={(e) => { e.stopPropagation(); setSatToDelete(sat) }}
                                 className="p-1 text-gray-400 hover:text-red-600 rounded"
                                 title="Delete satellite"
+                                aria-label={`Delete ${sat.name}`}
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2222,7 +2293,7 @@ function AdminDashboard() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <CardTitle>Quest Circles</CardTitle>
-                    <CardDescription>{filteredCellGroups.length} groups found</CardDescription>
+                    <CardDescription>{isLoading ? 'Loading Quest Circles…' : `${filteredCellGroups.length} groups found`}</CardDescription>
                   </div>
                   <div className="flex gap-2">
                     <ExportBtn id="cell-groups" onExport={exportCellGroups} />
@@ -2315,7 +2386,7 @@ function AdminDashboard() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <CardTitle>Ministries</CardTitle>
-                    <CardDescription>{filteredMinistries.length} ministries found</CardDescription>
+                    <CardDescription>{isLoading ? 'Loading ministries…' : `${filteredMinistries.length} ministries found`}</CardDescription>
                   </div>
                   <Button size="sm" onClick={() => openMinDialog()}>Add Ministry</Button>
                 </div>
@@ -2388,7 +2459,10 @@ function AdminDashboard() {
                 <Card>
                   <CardContent className="p-4 text-center">
                     <p className="text-3xl font-bold text-slate-600">
-                      {events.filter(e => new Date(e.event_date) >= new Date()).length}
+                      {events.filter(e => {
+                        const t = e.event_date ? new Date(e.event_date).getTime() : NaN
+                        return !Number.isNaN(t) && t >= Date.now()
+                      }).length}
                     </p>
                     <p className="text-sm text-gray-500">Upcoming</p>
                   </CardContent>
@@ -2443,7 +2517,8 @@ function AdminDashboard() {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {events.map((event) => {
-                        const isPast = new Date(event.event_date) < new Date()
+                        const eventTime = event.event_date ? new Date(event.event_date).getTime() : NaN
+                        const isPast = !Number.isNaN(eventTime) && eventTime < Date.now()
                         return (
                           <Link key={event.id} to="/event/$eventId" params={{ eventId: event.id }}>
                             <Card className={`hover:shadow-md transition-shadow cursor-pointer h-full ${isPast ? 'opacity-70' : ''}`}>
@@ -2473,7 +2548,7 @@ function AdminDashboard() {
                                 <div className="flex items-center justify-between text-sm">
                                   <span>
                                     <span className="font-semibold text-[#8B1538]">{event.registration_count}</span>
-                                    <span className="text-gray-500"> / {event.expected_attendees} registered</span>
+                                    <span className="text-gray-500">{event.expected_attendees ? ` / ${event.expected_attendees}` : ''} registered</span>
                                   </span>
                                 </div>
                               </CardContent>
@@ -2698,6 +2773,9 @@ function AdminDashboard() {
                       <button
                         onClick={() => setInventoryView('grid')}
                         className={`px-2.5 py-2 ${inventoryView === 'grid' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                        title="Grid view"
+                        aria-label="Grid view"
+                        aria-pressed={inventoryView === 'grid'}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -2706,6 +2784,9 @@ function AdminDashboard() {
                       <button
                         onClick={() => setInventoryView('list')}
                         className={`px-2.5 py-2 ${inventoryView === 'list' ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                        title="List view"
+                        aria-label="List view"
+                        aria-pressed={inventoryView === 'list'}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

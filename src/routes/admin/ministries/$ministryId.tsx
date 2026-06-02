@@ -4,6 +4,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../../../components/AuthProvider'
 import { supabase } from '../../../lib/supabase'
+import { useRefetchOnFocus } from '../../../lib/useRefetchOnFocus'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Button } from '../../../components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../components/ui/dialog'
@@ -136,6 +137,9 @@ function MinistryDetailPage() {
       clearTimeout(timer)
     }
   }, [isAuthenticated, fetchMinistry])
+
+  // Silently refresh this ministry when returning to the tab.
+  useRefetchOnFocus(() => fetchMinistry(false), isAuthenticated)
 
   // Debounced member search
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

@@ -137,6 +137,14 @@ function RegisterPage() {
         fieldErrors[field] = issue.message
       })
       setErrors(fieldErrors)
+      // Bring the first invalid field into view (the form is long on mobile, so a
+      // silent validation failure below the fold looks like the button did nothing).
+      const firstField = result.error.issues[0]?.path[0] as string | undefined
+      if (firstField && typeof document !== 'undefined') {
+        const el = document.getElementById(firstField)
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el?.focus({ preventScroll: true })
+      }
       return
     }
 
@@ -266,6 +274,7 @@ function RegisterPage() {
       <main className="px-4 pb-8">
         <form
           onSubmit={handleSubmit}
+          noValidate
           className="max-w-md mx-auto bg-white rounded-2xl shadow-2xl shadow-red-900/30 p-6 md:p-8"
         >
           <h2 className="text-xl font-semibold text-gray-800 mb-6 text-center">
@@ -273,7 +282,7 @@ function RegisterPage() {
           </h2>
 
           {errors.form && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+            <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
               {errors.form}
             </div>
           )}
@@ -286,6 +295,7 @@ function RegisterPage() {
             <input
               type="text"
               id="name"
+              autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={`w-full px-4 py-3 rounded-lg border ${errors.name ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition`}
@@ -302,6 +312,8 @@ function RegisterPage() {
             <input
               type="email"
               id="email"
+              autoComplete="email"
+              inputMode="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={`w-full px-4 py-3 rounded-lg border ${errors.email ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition`}
@@ -318,6 +330,8 @@ function RegisterPage() {
             <input
               type="tel"
               id="contact_number"
+              autoComplete="tel"
+              inputMode="tel"
               value={contactNumber}
               onChange={(e) => setContactNumber(e.target.value)}
               className={`w-full px-4 py-3 rounded-lg border ${errors.contact_number ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition`}
@@ -334,6 +348,7 @@ function RegisterPage() {
             <input
               type="number"
               id="age"
+              inputMode="numeric"
               value={age}
               onChange={(e) => setAge(e.target.value)}
               min="1"
@@ -352,6 +367,7 @@ function RegisterPage() {
             <input
               type="text"
               id="city"
+              autoComplete="address-level2"
               value={city}
               onChange={(e) => setCity(e.target.value)}
               className={`w-full px-4 py-3 rounded-lg border ${errors.city ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition`}
@@ -369,7 +385,7 @@ function RegisterPage() {
               id="satellite"
               value={satellite}
               onChange={(e) => setSatellite(e.target.value)}
-              className={`w-full px-4 py-3 rounded-lg border ${errors.satellite ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition bg-white appearance-none cursor-pointer`}
+              className={`w-full px-4 py-3 rounded-lg border ${errors.satellite ? 'border-red-500' : 'border-gray-300'} focus:ring-2 focus:ring-red-500 focus:border-transparent transition bg-white cursor-pointer`}
             >
               <option value="">Select your satellite</option>
               {satellites.map((sat) => (

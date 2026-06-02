@@ -7,6 +7,13 @@ import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
 
 const config = defineConfig({
+  // Recharts (and its dep decimal.js-light) expose a CJS `main` whose file Nitro does
+  // not copy when externalizing for SSR, causing ERR_MODULE_NOT_FOUND for
+  // 'decimal.js-light/decimal' at runtime when the dashboard charts are server-rendered.
+  // Bundling them into the server build resolves the import at build time.
+  ssr: {
+    noExternal: ['recharts', 'decimal.js-light'],
+  },
   plugins: [
     devtools(),
     nitro(),

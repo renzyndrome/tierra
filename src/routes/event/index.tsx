@@ -3,6 +3,7 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../components/AuthProvider'
+import { useRefetchOnFocus } from '../../lib/useRefetchOnFocus'
 import { getEvents, createEvent, deleteEvent, toggleEventRegistration, getRegistrationStatus } from '../../server/functions/events'
 import type { EventWithStats, EventInsert } from '../../lib/types'
 import { uploadEventBanner } from '../../lib/storage'
@@ -64,15 +65,15 @@ function EventsDashboard() {
   }, [authLoading, isAuthenticated, navigate])
 
   // Fetch events
-  const fetchEvents = async () => {
-    setIsLoading(true)
+  const fetchEvents = async (showLoader = true) => {
+    if (showLoader) setIsLoading(true)
     try {
       const data = await getEvents({ data: { activeOnly: false } })
       setEvents(data)
     } catch (error) {
       console.error('Error fetching events:', error)
     } finally {
-      setIsLoading(false)
+      if (showLoader) setIsLoading(false)
     }
   }
 
@@ -81,6 +82,9 @@ function EventsDashboard() {
       fetchEvents()
     }
   }, [isAuthenticated])
+
+  // Silently refresh the events list when returning to the tab.
+  useRefetchOnFocus(() => fetchEvents(false), isAuthenticated)
 
   // Create event
   const handleCreateEvent = async () => {

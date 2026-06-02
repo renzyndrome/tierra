@@ -1,5 +1,6 @@
 // Quest Laguna Directory - Member Card Component
 
+import { memo } from 'react'
 import { Link } from '@tanstack/react-router'
 import type { Member } from '../lib/types'
 import { getPlaceholderAvatar } from '../lib/storage'
@@ -12,7 +13,7 @@ interface MemberCardProps {
   onArchive?: (member: Member) => void
 }
 
-export function MemberCard({ member, showActions = false, onEdit, onArchive }: MemberCardProps) {
+function MemberCardImpl({ member, showActions = false, onEdit, onArchive }: MemberCardProps) {
   const avatarUrl = member.photo_url || getPlaceholderAvatar(member.name)
 
   const stageBadgeColor = {
@@ -35,6 +36,8 @@ export function MemberCard({ member, showActions = false, onEdit, onArchive }: M
         <img
           src={avatarUrl}
           alt={member.name}
+          loading="lazy"
+          decoding="async"
           className="w-16 h-16 rounded-full object-cover flex-shrink-0"
         />
 
@@ -55,7 +58,7 @@ export function MemberCard({ member, showActions = false, onEdit, onArchive }: M
             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${stageBadgeColor}`}>
               {STAGE_LABELS[member.discipleship_stage] || member.discipleship_stage}
             </span>
-            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusBadgeColor}`}>
+            <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${statusBadgeColor}`}>
               {member.membership_status}
             </span>
             {member.needs_support && (
@@ -90,6 +93,7 @@ export function MemberCard({ member, showActions = false, onEdit, onArchive }: M
                 onClick={() => onEdit(member)}
                 className="p-2 text-gray-500 hover:text-[#8B1538] hover:bg-gray-100 rounded"
                 title="Edit"
+                aria-label={`Edit ${member.name}`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -101,6 +105,7 @@ export function MemberCard({ member, showActions = false, onEdit, onArchive }: M
                 onClick={() => onArchive(member)}
                 className="p-2 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded"
                 title="Archive"
+                aria-label={`Archive ${member.name}`}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
@@ -113,6 +118,8 @@ export function MemberCard({ member, showActions = false, onEdit, onArchive }: M
     </div>
   )
 }
+
+export const MemberCard = memo(MemberCardImpl)
 
 // ============================================
 // MEMBER CARD SKELETON
@@ -145,7 +152,7 @@ interface CompactMemberCardProps {
   onClick?: () => void
 }
 
-export function CompactMemberCard({ member, onClick }: CompactMemberCardProps) {
+function CompactMemberCardImpl({ member, onClick }: CompactMemberCardProps) {
   const avatarUrl = member.photo_url || getPlaceholderAvatar(member.name)
 
   return (
@@ -158,6 +165,8 @@ export function CompactMemberCard({ member, onClick }: CompactMemberCardProps) {
       <img
         src={avatarUrl}
         alt={member.name}
+        loading="lazy"
+        decoding="async"
         className="w-10 h-10 rounded-full object-cover"
       />
       <div className="flex-1 min-w-0">
@@ -174,3 +183,5 @@ export function CompactMemberCard({ member, onClick }: CompactMemberCardProps) {
     </div>
   )
 }
+
+export const CompactMemberCard = memo(CompactMemberCardImpl)

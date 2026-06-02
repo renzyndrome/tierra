@@ -18,7 +18,6 @@ import { Route as EventIndexRouteImport } from './routes/event/index'
 import { Route as DirectoryIndexRouteImport } from './routes/directory/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ProfileSettingsRouteImport } from './routes/profile/settings'
-import { Route as EventOldIndexBackupRouteImport } from './routes/event/old-index-backup'
 import { Route as EventEventIdRouteImport } from './routes/event/$eventId'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
@@ -79,11 +78,6 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const ProfileSettingsRoute = ProfileSettingsRouteImport.update({
   id: '/profile/settings',
   path: '/profile/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EventOldIndexBackupRoute = EventOldIndexBackupRouteImport.update({
-  id: '/event/old-index-backup',
-  path: '/event/old-index-backup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EventEventIdRoute = EventEventIdRouteImport.update({
@@ -183,7 +177,6 @@ export interface FileRoutesByFullPath {
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/event/$eventId': typeof EventEventIdRoute
-  '/event/old-index-backup': typeof EventOldIndexBackupRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
@@ -211,7 +204,6 @@ export interface FileRoutesByTo {
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/event/$eventId': typeof EventEventIdRoute
-  '/event/old-index-backup': typeof EventOldIndexBackupRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
@@ -240,7 +232,6 @@ export interface FileRoutesById {
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
   '/event/$eventId': typeof EventEventIdRoute
-  '/event/old-index-backup': typeof EventOldIndexBackupRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin/': typeof AdminIndexRoute
   '/directory/': typeof DirectoryIndexRoute
@@ -270,7 +261,6 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/register'
     | '/event/$eventId'
-    | '/event/old-index-backup'
     | '/profile/settings'
     | '/admin'
     | '/directory'
@@ -298,7 +288,6 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/register'
     | '/event/$eventId'
-    | '/event/old-index-backup'
     | '/profile/settings'
     | '/admin'
     | '/directory'
@@ -326,7 +315,6 @@ export interface FileRouteTypes {
     | '/auth/login'
     | '/auth/register'
     | '/event/$eventId'
-    | '/event/old-index-backup'
     | '/profile/settings'
     | '/admin/'
     | '/directory/'
@@ -355,7 +343,6 @@ export interface RootRouteChildren {
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
   EventEventIdRoute: typeof EventEventIdRoute
-  EventOldIndexBackupRoute: typeof EventOldIndexBackupRoute
   ProfileSettingsRoute: typeof ProfileSettingsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   DirectoryIndexRoute: typeof DirectoryIndexRoute
@@ -438,13 +425,6 @@ declare module '@tanstack/react-router' {
       path: '/profile/settings'
       fullPath: '/profile/settings'
       preLoaderRoute: typeof ProfileSettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/event/old-index-backup': {
-      id: '/event/old-index-backup'
-      path: '/event/old-index-backup'
-      fullPath: '/event/old-index-backup'
-      preLoaderRoute: typeof EventOldIndexBackupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/event/$eventId': {
@@ -571,7 +551,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
   EventEventIdRoute: EventEventIdRoute,
-  EventOldIndexBackupRoute: EventOldIndexBackupRoute,
   ProfileSettingsRoute: ProfileSettingsRoute,
   AdminIndexRoute: AdminIndexRoute,
   DirectoryIndexRoute: DirectoryIndexRoute,

@@ -92,7 +92,10 @@ export const getAllMinistries = createServerFn({ method: 'GET' })
     z.object({ activeOnly: z.boolean().optional().default(true) }).parse(data)
   )
   .handler(async ({ data }): Promise<Ministry[]> => {
-    const supabase = createServerSupabaseClient()
+    // Use the admin client: the anon server client has no user session, so the
+    // `ministries_read_auth` RLS policy (auth.role() = 'authenticated') returns zero
+    // rows, leaving the "Add to Ministry" dropdown empty. Mirrors getAllCellGroups.
+    const supabase = createServerAdminClient()
 
     let query = supabase
       .from('ministries')

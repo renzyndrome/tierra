@@ -1,12 +1,16 @@
-// Export utilities for Excel and PDF
-
-import * as XLSX from 'xlsx'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+// Export utilities for Excel and PDF.
+//
+// xlsx / jspdf / jspdf-autotable are browser-only (they trigger file downloads) and
+// heavy, so they are imported DYNAMICALLY inside the functions. This keeps them out of
+// the SSR module graph — avoiding ERR_MODULE_NOT_FOUND when Nitro externalizes them for
+// the server build — and code-splits them out of the initial client bundle (they load
+// only when the user actually exports).
 
 const datestamp = () => new Date().toISOString().split('T')[0]
 
-export function downloadExcel(filename: string, headers: string[], rows: string[][], sheetName = 'Data') {
+export async function downloadExcel(filename: string, headers: string[], rows: string[][], sheetName = 'Data') {
+  const XLSX = await import('xlsx')
+
   const data = [headers, ...rows]
   const ws = XLSX.utils.aoa_to_sheet(data)
 
@@ -22,7 +26,10 @@ export function downloadExcel(filename: string, headers: string[], rows: string[
   XLSX.writeFile(wb, `${filename}-${datestamp()}.xlsx`)
 }
 
-export function downloadPDF(filename: string, headers: string[], rows: string[][], title?: string) {
+export async function downloadPDF(filename: string, headers: string[], rows: string[][], title?: string) {
+  const { default: jsPDF } = await import('jspdf')
+  const { default: autoTable } = await import('jspdf-autotable')
+
   const doc = new jsPDF({ orientation: headers.length > 6 ? 'landscape' : 'portrait' })
 
   if (title) {

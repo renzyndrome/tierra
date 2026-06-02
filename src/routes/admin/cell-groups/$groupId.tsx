@@ -12,6 +12,7 @@ import { getCellGroupWithRelations, addMemberToCellGroup, removeMemberFromCellGr
 import { searchMembers } from '../../../server/functions/members'
 import type { CellGroupWithRelations, Member } from '../../../lib/types'
 import { STAGE_LABELS } from '../../../lib/constants'
+import { useRefetchOnFocus } from '../../../lib/useRefetchOnFocus'
 
 export const Route = createFileRoute('/admin/cell-groups/$groupId')({
   component: CellGroupDetailPage,
@@ -102,6 +103,9 @@ function CellGroupDetailPage() {
       clearTimeout(timer)
     }
   }, [isAuthenticated, fetchCellGroup])
+
+  // Silently refresh this Quest Circle when returning to the tab.
+  useRefetchOnFocus(() => fetchCellGroup(false), isAuthenticated)
 
   // Debounced member search
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

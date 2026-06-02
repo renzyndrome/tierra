@@ -1,6 +1,6 @@
 // Quest Laguna Directory - Auth Provider Component
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { UserProfile, Member } from '../lib/types'
@@ -33,6 +33,13 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [state, setState] = useState<AuthState>(initialAuthState)
+
+  // Mirror the latest state so async auth-event handlers can read it without
+  // re-subscribing. Supabase re-emits SIGNED_IN every time a backgrounded browser
+  // tab becomes visible again; this lets us detect "same user returning" and avoid
+  // needlessly re-fetching (and possibly blanking) the profile on every tab switch.
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   // Fetch user profile from database
   const fetchUserProfile = useCallback(async (userId: string): Promise<UserProfile | null> => {
@@ -100,14 +107,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (!mounted) return
 
         if (event === 'SIGNED_IN' && session?.user) {
+          // Supabase re-emits SIGNED_IN on every tab refocus. If this is the same
+          // user we already have, just refresh the session/user references and KEEP
+          // the existing profile. Re-fetching here would (a) hit the DB on every tab
+          // switch and (b) blank the profile (and the admin gate that reads it) if the
+          // request transiently fails on wake — which is exactly the "data disappears,
+          // must refresh the browser" symptom.
+          const prev = stateRef.current
+          if (prev.isAuthenticated && prev.user?.id === session.user.id && prev.profile) {
+            setState({
+              user: session.user,
+              session,
+              profile: prev.profile,
+              isLoading: false,
+              isAuthenticated: true,
+            })
+            return
+          }
+
           const profile = await fetchUserProfile(session.user.id)
-          setState({
+          if (!mounted) return
+          setState(cur => ({
             user: session.user,
             session,
-            profile,
+            // Preserve any existing profile if the fetch failed transiently.
+            profile: profile ?? cur.profile,
             isLoading: false,
             isAuthenticated: true,
-          })
+          }))
         } else if (event === 'SIGNED_OUT') {
           setState({
             ...initialAuthState,
@@ -120,10 +147,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }))
         } else if (event === 'USER_UPDATED' && session?.user) {
           const profile = await fetchUserProfile(session.user.id)
+          if (!mounted) return
           setState(prev => ({
             ...prev,
             user: session.user,
-            profile,
+            profile: profile ?? prev.profile,
           }))
         }
       }

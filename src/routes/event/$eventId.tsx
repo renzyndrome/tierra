@@ -9,6 +9,7 @@ import { purgeAllAttendees, seedTestData } from '../../server/functions/attendee
 import { getSatellites } from '../../server/functions/satellites'
 import { generateOverallInsights } from '../../server/functions/ai'
 import { ADMIN_PIN } from '../../lib/constants'
+import { useRefetchOnFocus } from '../../lib/useRefetchOnFocus'
 import type { Event, Attendee, SatelliteRow, OverallInsights } from '../../lib/types'
 import { uploadEventBanner } from '../../lib/storage'
 import { QRCodeSVG } from 'qrcode.react'
@@ -158,9 +159,11 @@ function EventDetailPage() {
     }
   }, [authLoading, isAuthenticated, navigate, eventId])
 
-  const fetchData = async () => {
-    setIsLoading(true)
-    setError(null)
+  const fetchData = async (showLoader = true) => {
+    if (showLoader) {
+      setIsLoading(true)
+      setError(null)
+    }
 
     try {
       const [eventData, attendeesData, satellitesData] = await Promise.all([
@@ -170,7 +173,8 @@ function EventDetailPage() {
       ])
 
       if (!eventData) {
-        setError('Event not found')
+        // Don't replace already-shown content with an error on a silent refresh.
+        if (showLoader) setError('Event not found')
         return
       }
 
@@ -192,9 +196,9 @@ function EventDetailPage() {
       })
     } catch (err) {
       console.error('Failed to fetch event data:', err)
-      setError('Failed to load event')
+      if (showLoader) setError('Failed to load event')
     } finally {
-      setIsLoading(false)
+      if (showLoader) setIsLoading(false)
     }
   }
 
@@ -203,6 +207,9 @@ function EventDetailPage() {
       fetchData()
     }
   }, [isAuthenticated, eventId])
+
+  // Silently refresh this event's data when returning to the tab.
+  useRefetchOnFocus(() => fetchData(false), isAuthenticated)
 
   const handleUpdateEvent = async () => {
     if (!event) return
@@ -486,7 +493,7 @@ function EventDetailPage() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={fetchData}
+                onClick={() => fetchData()}
                 className="bg-white/10 text-white border-white/30 hover:bg-white/20"
               >
                 Refresh

@@ -14,6 +14,7 @@ import {
 } from '../../server/functions/finances'
 import type { TitheInsights } from '../../server/functions/finances'
 import { supabase } from '../../lib/supabase'
+import { useRefetchOnFocus } from '../../lib/useRefetchOnFocus'
 import { uploadReceipt } from '../../lib/storage'
 import type {
   FinancialOverview,
@@ -254,6 +255,12 @@ function FinancesPage() {
     if (!isAuthenticated) return
     fetchTransactions()
   }, [isAuthenticated, fetchTransactions])
+
+  // Silently refresh when returning to this tab (both fetchers are non-blocking).
+  useRefetchOnFocus(() => {
+    fetchOverviewData()
+    fetchTransactions()
+  }, isAuthenticated)
 
   // Get default satellite id
   const getDefaultSatelliteId = () => {

@@ -111,10 +111,12 @@ function DisplayPage() {
   // Realtime subscription for immediate updates
   useEffect(() => {
     const channel = supabase
-      .channel('attendees-changes')
+      .channel('event-registrations-changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'attendees' },
+        // Registrations are written to event_registrations (there is no `attendees`
+        // table), so subscribe here for the live screen to update on new sign-ups.
+        { event: '*', schema: 'public', table: 'event_registrations' },
         () => {
           // Refresh stats on any change
           fetchStats()
