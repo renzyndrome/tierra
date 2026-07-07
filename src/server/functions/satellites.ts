@@ -1,18 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
-import { createClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-
-// Server-side Supabase client
-function getSupabase() {
-  const url = process.env.VITE_SUPABASE_URL
-  const key = process.env.VITE_SUPABASE_ANON_KEY
-
-  if (!url || !key) {
-    throw new Error('Missing Supabase environment variables')
-  }
-
-  return createClient(url, key)
-}
+import { createServerSupabaseClient, createServerAdminClient } from '../../lib/supabase'
 
 export interface SatelliteRow {
   id: string
@@ -25,7 +13,7 @@ export interface SatelliteRow {
 export const getSatellites = createServerFn({ method: 'GET' })
   .inputValidator((includeInactive?: boolean) => z.boolean().optional().parse(includeInactive))
   .handler(async ({ data: includeInactive }) => {
-    const supabase = getSupabase()
+    const supabase = createServerSupabaseClient()
 
     let query = supabase
       .from('satellites')
@@ -61,7 +49,7 @@ export const addSatellite = createServerFn({ method: 'POST' })
       throw new Error('Invalid admin PIN')
     }
 
-    const supabase = getSupabase()
+    const supabase = createServerAdminClient()
 
     const { data: satellite, error } = await supabase
       .from('satellites')
@@ -96,7 +84,7 @@ export const toggleSatellite = createServerFn({ method: 'POST' })
       throw new Error('Invalid admin PIN')
     }
 
-    const supabase = getSupabase()
+    const supabase = createServerAdminClient()
 
     const { data: satellite, error } = await supabase
       .from('satellites')
@@ -128,7 +116,7 @@ export const deleteSatellite = createServerFn({ method: 'POST' })
       throw new Error('Invalid admin PIN')
     }
 
-    const supabase = getSupabase()
+    const supabase = createServerAdminClient()
 
     // First check if any attendees are using this satellite
     const { data: satellite } = await supabase
