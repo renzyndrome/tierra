@@ -149,10 +149,9 @@ describe('Satellite Server Functions', () => {
   // DELETE SATELLITE TESTS
   // ============================================
   describe('deleteSatellite', () => {
-    it('should delete a satellite with no attendees', async () => {
+    it('should delete a satellite', async () => {
       const satellite = createMockSatelliteRow({ id: 'delete-sat-id' })
       seedMockData('satellites', [satellite])
-      seedMockData('attendees', [])
 
       expect(getMockData('satellites')).toHaveLength(1)
 
@@ -162,37 +161,6 @@ describe('Satellite Server Functions', () => {
         .eq('id', 'delete-sat-id')
 
       expect(getMockData('satellites')).toHaveLength(0)
-    })
-
-    it('should check for attendees before deletion', async () => {
-      const satellite = createMockSatelliteRow({
-        id: 'busy-sat-id',
-        name: 'Quest Busy'
-      })
-      seedMockData('satellites', [satellite])
-
-      // First, get the satellite name
-      const satResult = await mockSupabaseClient
-        .from('satellites')
-        .select('name')
-        .eq('id', 'busy-sat-id')
-        .single()
-
-      expect(satResult.data?.name).toBe('Quest Busy')
-
-      // Then check attendees count
-      const attendees = [
-        { id: 'a1', satellite: 'Quest Busy' },
-        { id: 'a2', satellite: 'Quest Busy' },
-      ]
-      seedMockData('attendees', attendees)
-
-      const countResult = await mockSupabaseClient
-        .from('attendees')
-        .select('*', { count: 'exact', head: true })
-        .eq('satellite', 'Quest Busy')
-
-      expect(countResult.count).toBe(2)
     })
   })
 

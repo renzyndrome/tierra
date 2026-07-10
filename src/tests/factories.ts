@@ -9,7 +9,6 @@ import type {
   UserProfile,
   MemberCellGroup,
   MemberMinistry,
-  EventRegistration,
   FunFact
 } from '../lib/types'
 
@@ -207,32 +206,6 @@ export function createMockMemberMinistry(overrides?: Partial<MemberMinistry>): M
 }
 
 // ============================================
-// EVENT REGISTRATION FACTORIES
-// ============================================
-
-let eventRegCounter = 0
-export function createMockEventRegistration(overrides?: Partial<EventRegistration>): EventRegistration {
-  eventRegCounter++
-  return {
-    id: `event-reg-${eventRegCounter}`,
-    member_id: null,
-    name: `Attendee ${eventRegCounter}`,
-    age: 25 + (eventRegCounter % 30),
-    city: 'Test City',
-    satellite: 'Quest Laguna Main',
-    discipleship_stage: 'Growing',
-    spiritual_description: 'I am growing in my faith journey.',
-    spiritual_score: 7.0,
-    spiritual_sentiment: 'stable',
-    needs_support: false,
-    event_name: 'Quest 10th Anniversary',
-    registered_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    ...overrides,
-  }
-}
-
-// ============================================
 // FUN FACT FACTORIES
 // ============================================
 
@@ -280,6 +253,5 @@ export function resetFactoryCounters() {
   userProfileCounter = 0
   memberCellGroupCounter = 0
   memberMinistryCounter = 0
-  eventRegCounter = 0
   funFactCounter = 0
 }

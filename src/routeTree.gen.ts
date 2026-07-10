@@ -9,16 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as RegisterRouteImport } from './routes/register'
-import { Route as DisplayRouteImport } from './routes/display'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProfileIndexRouteImport } from './routes/profile/index'
 import { Route as FinancesIndexRouteImport } from './routes/finances/index'
-import { Route as EventIndexRouteImport } from './routes/event/index'
 import { Route as DirectoryIndexRouteImport } from './routes/directory/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ProfileSettingsRouteImport } from './routes/profile/settings'
-import { Route as EventEventIdRouteImport } from './routes/event/$eventId'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
@@ -35,16 +31,6 @@ import { Route as AdminMembersNewRouteImport } from './routes/admin/members/new'
 import { Route as AdminCellGroupsGroupIdRouteImport } from './routes/admin/cell-groups/$groupId'
 import { Route as AdminMembersMemberIdEditRouteImport } from './routes/admin/members/$memberId/edit'
 
-const RegisterRoute = RegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DisplayRoute = DisplayRouteImport.update({
-  id: '/display',
-  path: '/display',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -60,11 +46,6 @@ const FinancesIndexRoute = FinancesIndexRouteImport.update({
   path: '/finances/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EventIndexRoute = EventIndexRouteImport.update({
-  id: '/event/',
-  path: '/event/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DirectoryIndexRoute = DirectoryIndexRouteImport.update({
   id: '/directory/',
   path: '/directory/',
@@ -78,11 +59,6 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const ProfileSettingsRoute = ProfileSettingsRouteImport.update({
   id: '/profile/settings',
   path: '/profile/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EventEventIdRoute = EventEventIdRouteImport.update({
-  id: '/event/$eventId',
-  path: '/event/$eventId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
@@ -170,17 +146,13 @@ const AdminMembersMemberIdEditRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/display': typeof DisplayRoute
-  '/register': typeof RegisterRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
-  '/event/$eventId': typeof EventEventIdRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
-  '/event': typeof EventIndexRoute
   '/finances': typeof FinancesIndexRoute
   '/profile': typeof ProfileIndexRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
@@ -197,17 +169,13 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/display': typeof DisplayRoute
-  '/register': typeof RegisterRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
-  '/event/$eventId': typeof EventEventIdRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
-  '/event': typeof EventIndexRoute
   '/finances': typeof FinancesIndexRoute
   '/profile': typeof ProfileIndexRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
@@ -225,17 +193,13 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/display': typeof DisplayRoute
-  '/register': typeof RegisterRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
-  '/event/$eventId': typeof EventEventIdRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin/': typeof AdminIndexRoute
   '/directory/': typeof DirectoryIndexRoute
-  '/event/': typeof EventIndexRoute
   '/finances/': typeof FinancesIndexRoute
   '/profile/': typeof ProfileIndexRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
@@ -254,17 +218,13 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/display'
-    | '/register'
     | '/auth/callback'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
-    | '/event/$eventId'
     | '/profile/settings'
     | '/admin'
     | '/directory'
-    | '/event'
     | '/finances'
     | '/profile'
     | '/admin/cell-groups/$groupId'
@@ -281,17 +241,13 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/display'
-    | '/register'
     | '/auth/callback'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
-    | '/event/$eventId'
     | '/profile/settings'
     | '/admin'
     | '/directory'
-    | '/event'
     | '/finances'
     | '/profile'
     | '/admin/cell-groups/$groupId'
@@ -308,17 +264,13 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/display'
-    | '/register'
     | '/auth/callback'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
-    | '/event/$eventId'
     | '/profile/settings'
     | '/admin/'
     | '/directory/'
-    | '/event/'
     | '/finances/'
     | '/profile/'
     | '/admin/cell-groups/$groupId'
@@ -336,17 +288,13 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DisplayRoute: typeof DisplayRoute
-  RegisterRoute: typeof RegisterRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
-  EventEventIdRoute: typeof EventEventIdRoute
   ProfileSettingsRoute: typeof ProfileSettingsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   DirectoryIndexRoute: typeof DirectoryIndexRoute
-  EventIndexRoute: typeof EventIndexRoute
   FinancesIndexRoute: typeof FinancesIndexRoute
   ProfileIndexRoute: typeof ProfileIndexRoute
   AdminCellGroupsGroupIdRoute: typeof AdminCellGroupsGroupIdRoute
@@ -364,20 +312,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/register': {
-      id: '/register'
-      path: '/register'
-      fullPath: '/register'
-      preLoaderRoute: typeof RegisterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/display': {
-      id: '/display'
-      path: '/display'
-      fullPath: '/display'
-      preLoaderRoute: typeof DisplayRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -399,13 +333,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinancesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/event/': {
-      id: '/event/'
-      path: '/event'
-      fullPath: '/event'
-      preLoaderRoute: typeof EventIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/directory/': {
       id: '/directory/'
       path: '/directory'
@@ -425,13 +352,6 @@ declare module '@tanstack/react-router' {
       path: '/profile/settings'
       fullPath: '/profile/settings'
       preLoaderRoute: typeof ProfileSettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/event/$eventId': {
-      id: '/event/$eventId'
-      path: '/event/$eventId'
-      fullPath: '/event/$eventId'
-      preLoaderRoute: typeof EventEventIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/register': {
@@ -544,17 +464,13 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DisplayRoute: DisplayRoute,
-  RegisterRoute: RegisterRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
-  EventEventIdRoute: EventEventIdRoute,
   ProfileSettingsRoute: ProfileSettingsRoute,
   AdminIndexRoute: AdminIndexRoute,
   DirectoryIndexRoute: DirectoryIndexRoute,
-  EventIndexRoute: EventIndexRoute,
   FinancesIndexRoute: FinancesIndexRoute,
   ProfileIndexRoute: ProfileIndexRoute,
   AdminCellGroupsGroupIdRoute: AdminCellGroupsGroupIdRoute,
