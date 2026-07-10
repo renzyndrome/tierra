@@ -12,14 +12,11 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-# IMPORTANT: these VITE_* values are baked into the CLIENT bundle at build time
-# (Vite inlines import.meta.env.VITE_*). They are ALSO read at RUNTIME by server
-# functions (see src/lib/supabase.ts). On Dokploy they must therefore be supplied
-# BOTH here as Build Arguments AND as runtime Environment Variables — see DEPLOY.md.
+# No VITE_* build args needed: public config (Supabase URL/anon key, admin PIN) is
+# resolved at RUNTIME from the environment — server via process.env, browser via a
+# window.__ENV__ snippet injected by the SSR document (see src/lib/runtimeEnv.ts).
+# Supply all env vars as runtime Environment Variables only. See DEPLOY.md.
 FROM deps AS build
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
-ARG VITE_ADMIN_PIN
 COPY . .
 RUN pnpm build
 

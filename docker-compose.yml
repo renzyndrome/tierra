@@ -1,11 +1,9 @@
 services:
   tierra:
     build:
+      # Public config is resolved at runtime (see src/lib/runtimeEnv.ts), so no
+      # VITE_* build args are needed — everything comes from the runtime env below.
       context: .
-      args:
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
-        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
-        VITE_ADMIN_PIN: ${VITE_ADMIN_PIN}
     container_name: tierra-app
     restart: unless-stopped
     ports:
