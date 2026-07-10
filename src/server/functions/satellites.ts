@@ -101,7 +101,7 @@ export const toggleSatellite = createServerFn({ method: 'POST' })
     return satellite as SatelliteRow
   })
 
-// Delete a satellite (only if no attendees are using it)
+// Delete a satellite
 const deleteSatelliteSchema = z.object({
   id: z.string().uuid(),
   pin: z.string(),
@@ -117,24 +117,6 @@ export const deleteSatellite = createServerFn({ method: 'POST' })
     }
 
     const supabase = createServerAdminClient()
-
-    // First check if any attendees are using this satellite
-    const { data: satellite } = await supabase
-      .from('satellites')
-      .select('name')
-      .eq('id', data.id)
-      .single()
-
-    if (satellite) {
-      const { count } = await supabase
-        .from('attendees')
-        .select('*', { count: 'exact', head: true })
-        .eq('satellite', satellite.name)
-
-      if (count && count > 0) {
-        throw new Error(`Cannot delete satellite with ${count} registered attendees`)
-      }
-    }
 
     const { error } = await supabase
       .from('satellites')

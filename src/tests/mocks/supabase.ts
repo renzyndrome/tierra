@@ -10,7 +10,6 @@ let mockData: Record<string, any[]> = {
   member_cell_groups: [],
   member_ministries: [],
   user_profiles: [],
-  event_registrations: [],
   fun_facts: [],
 }
 
@@ -24,7 +23,6 @@ export function resetMockData() {
     member_cell_groups: [],
     member_ministries: [],
     user_profiles: [],
-    event_registrations: [],
     fun_facts: [],
   }
 }

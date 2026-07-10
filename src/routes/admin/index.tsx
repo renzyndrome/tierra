@@ -36,8 +36,7 @@ import { MemberCard, MemberCardSkeleton } from '../../components/MemberCard'
 import { MembersTabContent } from '../../components/MembersTabContent'
 import { CellGroupCard, CellGroupCardSkeleton } from '../../components/CellGroupCard'
 import { MinistryCard, MinistryCardSkeleton } from '../../components/MinistryCard'
-import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, EventWithStats, FinancialOverview, InventoryItem, InventoryCategory } from '../../lib/types'
-import { getEvents } from '../../server/functions/events'
+import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, FinancialOverview, InventoryItem, InventoryCategory } from '../../lib/types'
 import { getFinancialOverview } from '../../server/functions/finances'
 import { getInventoryItems, createInventoryItem, updateInventoryItem, deleteInventoryItem, getInventoryCategories, createInventoryCategory, deleteInventoryCategory } from '../../server/functions/inventory'
 import { uploadInventoryPhoto } from '../../lib/storage'
@@ -60,7 +59,6 @@ function AdminDashboard() {
   const [cellGroups, setCellGroups] = useState<CellGroupWithRelations[]>([])
   const [ministries, setMinistries] = useState<MinistryWithRelations[]>([])
   const [satellites, setSatellites] = useState<Satellite[]>([])
-  const [events, setEvents] = useState<EventWithStats[]>([])
   const [financialOverview, setFinancialOverview] = useState<FinancialOverview | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -187,22 +185,6 @@ function AdminDashboard() {
     ])
     if (format === 'excel') downloadExcel('ministries', headers, rows, 'Ministries')
     else downloadPDF('ministries', headers, rows, 'Ministries')
-  }
-
-  const exportEvents = (format: 'excel' | 'pdf') => {
-    setShowExportMenu(null)
-    const headers = ['Name', 'Date', 'Time', 'Location', 'Registrations', 'Expected', 'Active']
-    const rows = (events || []).map(e => [
-      e.name,
-      e.event_date || '',
-      e.event_time || '',
-      e.location || '',
-      String(e.registration_count ?? 0),
-      String(e.expected_attendees ?? ''),
-      e.is_active ? 'Yes' : 'No',
-    ])
-    if (format === 'excel') downloadExcel('events', headers, rows, 'Events')
-    else downloadPDF('events', headers, rows, 'Events')
   }
 
   const exportSatellites = (format: 'excel' | 'pdf') => {
@@ -370,22 +352,20 @@ function AdminDashboard() {
         hasFetchedRef.current = true
       }
 
-      // Fetch events, financial overview, and inventory in the background
+      // Fetch financial overview and inventory in the background
       try {
-        const [eventsData, finOverview, inventoryData, categoriesData] = await Promise.all([
-          getEvents({ data: { activeOnly: false } }),
+        const [finOverview, inventoryData, categoriesData] = await Promise.all([
           getFinancialOverview({ data: {} }),
           getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } }),
           getInventoryCategories({ data: {} }),
         ])
         if (!cancelled) {
-          setEvents(eventsData)
           setFinancialOverview(finOverview)
           setInventoryItems(inventoryData)
           setInventoryCategories(categoriesData)
         }
       } catch (evtErr) {
-        if (!cancelled) console.error('[Dashboard] events/finances/inventory fetch error:', evtErr)
+        if (!cancelled) console.error('[Dashboard] finances/inventory fetch error:', evtErr)
       }
     }
 
@@ -579,18 +559,16 @@ function AdminDashboard() {
       }
 
       try {
-        const [eventsData, finOverview, inventoryData, categoriesData] = await Promise.all([
-          getEvents({ data: { activeOnly: false } }),
+        const [finOverview, inventoryData, categoriesData] = await Promise.all([
           getFinancialOverview({ data: {} }),
           getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } }),
           getInventoryCategories({ data: {} }),
         ])
-        setEvents(eventsData)
         setFinancialOverview(finOverview)
         setInventoryItems(inventoryData)
         setInventoryCategories(categoriesData)
       } catch (evtErr) {
-        console.error('[Dashboard] events/finances/inventory fetch error:', evtErr)
+        console.error('[Dashboard] finances/inventory fetch error:', evtErr)
       }
     } catch (err) {
       console.error('[Dashboard] refreshData error:', err)
@@ -1120,7 +1098,6 @@ function AdminDashboard() {
                 <span className="hidden sm:inline">Quest </span>Circles
               </TabsTrigger>
               <TabsTrigger value="ministries" className="text-xs sm:text-sm px-2 sm:px-3">Ministries</TabsTrigger>
-              <TabsTrigger value="events" className="text-xs sm:text-sm px-2 sm:px-3">Events</TabsTrigger>
               <TabsTrigger value="finances" className="text-xs sm:text-sm px-2 sm:px-3">Finances</TabsTrigger>
               <TabsTrigger value="inventory" className="text-xs sm:text-sm px-2 sm:px-3">Inventory</TabsTrigger>
               <TabsTrigger value="settings" className="text-xs sm:text-sm px-2 sm:px-3">Settings</TabsTrigger>
@@ -1400,16 +1377,6 @@ function AdminDashboard() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
                       <p className="font-medium">Add Member</p>
-                    </CardContent>
-                  </Card>
-                </Link>
-                <Link to="/event">
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-                    <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                      <svg className="w-8 h-8 text-[#8B1538] mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <p className="font-medium">Event Dashboard</p>
                     </CardContent>
                   </Card>
                 </Link>
@@ -2426,143 +2393,6 @@ function AdminDashboard() {
             </Card>
           </TabsContent>
 
-          {/* Events Tab */}
-          <TabsContent value="events">
-            <div className="space-y-6">
-              <div className="flex justify-end">
-                <ExportBtn id="events" onExport={exportEvents} />
-              </div>
-              {/* Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-[#8B1538]">{events.length}</p>
-                    <p className="text-sm text-gray-500">Total Events</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-teal-600">
-                      {events.filter(e => e.registration_open).length}
-                    </p>
-                    <p className="text-sm text-gray-500">Open Registration</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-amber-600">
-                      {events.reduce((sum, e) => sum + e.registration_count, 0)}
-                    </p>
-                    <p className="text-sm text-gray-500">Total Registrations</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-4 text-center">
-                    <p className="text-3xl font-bold text-slate-600">
-                      {events.filter(e => {
-                        const t = e.event_date ? new Date(e.event_date).getTime() : NaN
-                        return !Number.isNaN(t) && t >= Date.now()
-                      }).length}
-                    </p>
-                    <p className="text-sm text-gray-500">Upcoming</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Events List */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>Events</CardTitle>
-                      <CardDescription>Manage church events and registrations</CardDescription>
-                    </div>
-                    <Link to="/event">
-                      <Button variant="outline" size="sm">
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                        Full Events Dashboard
-                      </Button>
-                    </Link>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {[...Array(3)].map((_, i) => (
-                        <Card key={i} className="animate-pulse">
-                          <CardHeader>
-                            <div className="h-5 bg-gray-200 rounded w-3/4 mb-2" />
-                            <div className="h-4 bg-gray-200 rounded w-1/2" />
-                          </CardHeader>
-                          <CardContent>
-                            <div className="h-4 bg-gray-200 rounded w-full mb-2" />
-                            <div className="h-4 bg-gray-200 rounded w-2/3" />
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : events.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                      <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <p className="font-medium mb-2">No events yet</p>
-                      <p className="text-sm mb-4">Create your first event from the Events Dashboard</p>
-                      <Link to="/event">
-                        <Button>Go to Events Dashboard</Button>
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {events.map((event) => {
-                        const eventTime = event.event_date ? new Date(event.event_date).getTime() : NaN
-                        const isPast = !Number.isNaN(eventTime) && eventTime < Date.now()
-                        return (
-                          <Link key={event.id} to="/event/$eventId" params={{ eventId: event.id }}>
-                            <Card className={`hover:shadow-md transition-shadow cursor-pointer h-full ${isPast ? 'opacity-70' : ''}`}>
-                              <CardHeader className="pb-3">
-                                <div className="flex items-start justify-between gap-2">
-                                  <CardTitle className="text-base">{event.name}</CardTitle>
-                                  <div className="flex gap-1 shrink-0">
-                                    {event.registration_open ? (
-                                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800">Open</span>
-                                    ) : (
-                                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-800">Closed</span>
-                                    )}
-                                    {isPast && (
-                                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 text-gray-600">Past</span>
-                                    )}
-                                  </div>
-                                </div>
-                                <CardDescription>
-                                  {new Date(event.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                  {event.event_time && ` at ${event.event_time}`}
-                                </CardDescription>
-                              </CardHeader>
-                              <CardContent className="pt-0">
-                                {event.location && (
-                                  <p className="text-sm text-gray-500 mb-2 truncate">{event.location}</p>
-                                )}
-                                <div className="flex items-center justify-between text-sm">
-                                  <span>
-                                    <span className="font-semibold text-[#8B1538]">{event.registration_count}</span>
-                                    <span className="text-gray-500">{event.expected_attendees ? ` / ${event.expected_attendees}` : ''} registered</span>
-                                  </span>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
           {/* Finances Tab */}
           <TabsContent value="finances">
             {!financesUnlocked ? (
@@ -3536,7 +3366,7 @@ function AdminDashboard() {
           <DialogHeader>
             <DialogTitle className="text-red-700">Delete Satellite</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{satToDelete?.name}"? This will fail if there are attendees registered under this satellite.
+              Are you sure you want to delete "{satToDelete?.name}"? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

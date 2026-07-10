@@ -423,113 +423,6 @@ export interface FunFact {
 export type FunFactRecord = FunFact
 
 // ============================================
-// EVENTS
-// ============================================
-
-export interface Event {
-  id: string
-  name: string
-  description: string | null
-  event_date: string
-  event_time: string | null
-  location: string | null
-  expected_attendees: number
-  early_bird_cutoff: string | null
-  registration_open: boolean
-  is_active: boolean
-  banner_url: string | null
-  registration_start: string | null
-  registration_end: string | null
-  created_by: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface EventInsert {
-  id?: string
-  name: string
-  description?: string | null
-  event_date: string
-  event_time?: string | null
-  location?: string | null
-  expected_attendees?: number
-  early_bird_cutoff?: string | null
-  registration_open?: boolean
-  is_active?: boolean
-  banner_url?: string | null
-  registration_start?: string | null
-  registration_end?: string | null
-}
-
-export interface EventUpdate {
-  name?: string
-  description?: string | null
-  event_date?: string
-  event_time?: string | null
-  location?: string | null
-  expected_attendees?: number
-  early_bird_cutoff?: string | null
-  registration_open?: boolean
-  is_active?: boolean
-  banner_url?: string | null
-  registration_start?: string | null
-  registration_end?: string | null
-}
-
-export interface EventWithStats extends Event {
-  registration_count: number
-  early_bird_count: number
-}
-
-// ============================================
-// EVENT REGISTRATIONS (preserved for events)
-// ============================================
-
-export interface EventRegistration {
-  id: string
-  event_id: string | null
-  member_id: string | null
-  name: string
-  email: string | null
-  contact_number: string | null
-  age: number
-  city: string
-  satellite: string
-  member_status: EventMemberStatus
-  invited_by: string | null
-  discipleship_stage: DiscipleshipStage | null
-  spiritual_description: string | null
-  spiritual_score: number | null
-  spiritual_sentiment: SpiritualSentiment | null
-  needs_support: boolean
-  event_name: string
-  registered_at: string
-  created_at: string
-}
-
-export interface EventRegistrationInsert {
-  id?: string
-  event_id?: string | null
-  member_id?: string | null
-  name: string
-  email?: string | null
-  contact_number?: string | null
-  age: number
-  city: string
-  satellite: string
-  member_status?: EventMemberStatus
-  invited_by?: string | null
-  discipleship_stage?: DiscipleshipStage | null
-  spiritual_description?: string | null
-  event_name?: string
-}
-
-// Legacy aliases for backwards compatibility
-export type Attendee = EventRegistration
-export type AttendeeInsert = EventRegistrationInsert
-export type AttendeeUpdate = Partial<EventRegistrationInsert>
-
-// ============================================
 // DASHBOARD & ANALYTICS TYPES
 // ============================================
 
@@ -547,11 +440,6 @@ export interface DashboardStats {
 
 export interface AgeDistribution {
   bucket: string
-  count: number
-}
-
-export interface RegistrationTimeline {
-  date: string
   count: number
 }
 
@@ -845,11 +733,6 @@ export type Database = {
         Row: FunFact
         Insert: { content: string; is_active?: boolean }
         Update: { content?: string; is_active?: boolean }
-      }
-      event_registrations: {
-        Row: EventRegistration
-        Insert: EventRegistrationInsert
-        Update: Partial<EventRegistrationInsert>
       }
       financial_transactions: {
         Row: FinancialTransaction
