@@ -15,7 +15,9 @@ that is only for bare-metal hosting without Dokploy.
 1. New Application → Source: this Git repository (branch `main`).
 2. Build type: **Dockerfile** (the repo's `Dockerfile`).
 3. Internal port: **3002**.
-4. Add your domain to the service and enable HTTPS (Traefik + Let's Encrypt).
+4. Domains → add **`admin.questlaguna.org`**, container port **3002**, and enable
+   HTTPS (Traefik + Let's Encrypt). Point an `A`/`CNAME` DNS record for
+   `admin.questlaguna.org` at the Dokploy host first, or the certificate will not issue.
 
 ---
 
@@ -35,7 +37,6 @@ Some variables are needed at **build time**, some at **runtime**, and three are 
 | `VITE_SUPABASE_ANON_KEY`     |       ✅       |     ✅      | Supabase anon key                                            |
 | `VITE_ADMIN_PIN`             |       ✅       |     ✅      | ⚠️ Shipped to the client bundle — **not secret** (see §4)   |
 | `SUPABASE_SERVICE_ROLE_KEY`  |       ❌       |     ✅      | Server only — never a build arg, never `VITE_`-prefixed      |
-| `OPENAI_API_KEY`             |       ❌       |     ✅      | Server only                                                  |
 | `ADMIN_EMAIL`                |       ❌       |     ✅      | Server only — used to seed the admin account                 |
 | `ADMIN_PASSWORD`             |       ❌       |     ✅      | Server only                                                  |
 | `NODE_ENV`                   |       —        |     ✅      | `production` (already set by the Dockerfile)                 |
@@ -43,7 +44,29 @@ Some variables are needed at **build time**, some at **runtime**, and three are 
 | `PORT`                       |       —        |     ✅      | `3002` (already set by the Dockerfile)                       |
 
 In Dokploy: put the three `VITE_*` values in **both** the *Build Arguments* section **and**
-the *Environment* section. Put the four server-only secrets in *Environment* **only**.
+the *Environment* section. Put the three server-only values (`SUPABASE_SERVICE_ROLE_KEY`,
+`ADMIN_EMAIL`, `ADMIN_PASSWORD`) in *Environment* **only**.
+
+---
+
+## 2a. Supabase Auth — allow the production domain (required for login)
+
+Auth redirects are built from `window.location.origin` at runtime, so the app adapts to
+whatever host it runs on — but Supabase still has to allow that host. In the Supabase
+dashboard → **Authentication → URL Configuration**:
+
+- **Site URL**: `https://admin.questlaguna.org`
+- **Redirect URLs**: add `https://admin.questlaguna.org/**` (covers `/auth/callback`,
+  password recovery, etc.)
+
+Without this, login / email-confirm / password-reset links fail with a redirect error.
+
+While you are in the dashboard, also finish the production security hardening
+(see the security work applied 2026-07-10):
+
+- **Authentication → Providers → Email**: turn **off** "Allow new users to sign up"
+  (members-only app).
+- **Authentication → Policies**: enable **Leaked Password Protection**.
 
 ---
 

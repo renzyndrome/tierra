@@ -12,7 +12,7 @@ services:
       - "3002:3002"
     env_file:
       # Provides the runtime env: VITE_* (also needed at runtime by server functions),
-      # SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY, ADMIN_EMAIL, ADMIN_PASSWORD.
+      # SUPABASE_SERVICE_ROLE_KEY, ADMIN_EMAIL, ADMIN_PASSWORD.
       - .env
     environment:
       - NODE_ENV=production
