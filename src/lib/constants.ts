@@ -1,4 +1,5 @@
 import type { DiscipleshipStage, EventMemberStatus, CivilStatus, MemberCategory, FollowThrough, DiscipleshipJourney, LeadershipLevel, IncomeCategory, ExpenseCategory, TransactionType } from './types'
+import { PUBLIC_ENV } from './runtimeEnv'
 
 // Discipleship stage options
 export const DISCIPLESHIP_STAGES: {
@@ -133,8 +134,8 @@ export const LOGO_PATH = '/questlogo.jpg'
 // Success message
 export const REGISTRATION_SUCCESS_MESSAGE = `Welcome to ${EVENT_NAME}! You're officially registered. See you at the event!`
 
-// Admin PIN (from environment)
-export const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || 'quest2026'
+// Admin PIN (resolved at runtime; build-time value preferred when present)
+export const ADMIN_PIN = PUBLIC_ENV.VITE_ADMIN_PIN || 'quest2026'
 
 // Theme colors (NEXTLEVEL Stronger 2026 branding - Red/Maroon theme)
 export const THEME_COLORS = {

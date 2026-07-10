@@ -21,31 +21,27 @@ that is only for bare-metal hosting without Dokploy.
 
 ---
 
-## 2. Environment variables — the important part
+## 2. Environment variables — all runtime, one place
 
-Some variables are needed at **build time**, some at **runtime**, and three are needed at
-**both**. This is the most common misconfiguration, so set them exactly as below.
+All config is resolved at **runtime** — no build arguments are required. Put every variable
+below in the Dokploy **Environment** section only. (The client gets its public config from a
+`window.__ENV__` snippet the SSR document injects; see `src/lib/runtimeEnv.ts`.)
 
-> **Why:** `VITE_*` variables are inlined into the **client JS bundle** at build time
-> (Vite). The same three values are *also* read at runtime by server functions
-> (`src/lib/supabase.ts`, etc.). If you set them only as build args, the page loads but
-> every server function throws `Missing Supabase environment variables on server`.
+| Variable                     | Runtime Env | Notes                                                       |
+| ---------------------------- | :---------: | ----------------------------------------------------------- |
+| `VITE_SUPABASE_URL`          |     ✅      | Supabase project URL                                        |
+| `VITE_SUPABASE_ANON_KEY`     |     ✅      | Supabase anon key                                           |
+| `VITE_ADMIN_PIN`             |     ✅      | ⚠️ Exposed to the client — **not secret** (see §4)         |
+| `SUPABASE_SERVICE_ROLE_KEY`  |     ✅      | **Secret.** Server only — never `VITE_`-prefixed            |
+| `ADMIN_EMAIL`                |     ✅      | Server only — used to seed the admin account                |
+| `ADMIN_PASSWORD`             |     ✅      | **Secret.** Server only                                     |
+| `NODE_ENV`                   |     ✅      | `production` (already set by the Dockerfile)                |
+| `HOST`                       |     ✅      | `0.0.0.0` (already set by the Dockerfile)                   |
+| `PORT`                       |     ✅      | `3002` (already set by the Dockerfile)                      |
 
-| Variable                     | Build Argument | Runtime Env | Notes                                                        |
-| ---------------------------- | :------------: | :---------: | ------------------------------------------------------------ |
-| `VITE_SUPABASE_URL`          |       ✅       |     ✅      | Supabase project URL                                         |
-| `VITE_SUPABASE_ANON_KEY`     |       ✅       |     ✅      | Supabase anon key                                            |
-| `VITE_ADMIN_PIN`             |       ✅       |     ✅      | ⚠️ Shipped to the client bundle — **not secret** (see §4)   |
-| `SUPABASE_SERVICE_ROLE_KEY`  |       ❌       |     ✅      | Server only — never a build arg, never `VITE_`-prefixed      |
-| `ADMIN_EMAIL`                |       ❌       |     ✅      | Server only — used to seed the admin account                 |
-| `ADMIN_PASSWORD`             |       ❌       |     ✅      | Server only                                                  |
-| `NODE_ENV`                   |       —        |     ✅      | `production` (already set by the Dockerfile)                 |
-| `HOST`                       |       —        |     ✅      | `0.0.0.0` (already set by the Dockerfile)                    |
-| `PORT`                       |       —        |     ✅      | `3002` (already set by the Dockerfile)                       |
-
-In Dokploy: put the three `VITE_*` values in **both** the *Build Arguments* section **and**
-the *Environment* section. Put the three server-only values (`SUPABASE_SERVICE_ROLE_KEY`,
-`ADMIN_EMAIL`, `ADMIN_PASSWORD`) in *Environment* **only**.
+> **Note:** `VITE_*` values are *not* baked into the build anymore, so you do **not** need
+> the Build Arguments section at all. A missing var no longer crashes the server on boot —
+> it fails with a clear error only where that value is actually used.
 
 ---
 

@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from './types'
+import { PUBLIC_ENV } from './runtimeEnv'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Resolved at runtime (server: process.env, browser: window.__ENV__) with a
+// build-time-inlined value preferred when present. See src/lib/runtimeEnv.ts.
+const supabaseUrl = PUBLIC_ENV.VITE_SUPABASE_URL
+const supabaseAnonKey = PUBLIC_ENV.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')

@@ -9,6 +9,7 @@ import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import appCss from '../styles.css?url'
 import { AuthProvider } from '../components/AuthProvider'
+import { getPublicEnvScript } from '../lib/runtimeEnv'
 
 export const Route = createRootRoute({
   head: () => ({
@@ -49,6 +50,10 @@ function RootComponent() {
   return (
     <html lang="en">
       <head>
+        {/* Publish public runtime config to the browser BEFORE the app bundle
+            runs, so Supabase config works even when VITE_* were not baked in at
+            build time (e.g. Dokploy runtime-only env). See src/lib/runtimeEnv.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: getPublicEnvScript() }} />
         <HeadContent />
       </head>
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
