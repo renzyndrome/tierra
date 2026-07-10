@@ -133,12 +133,6 @@ export const LOGO_PATH = '/questlogo.jpg'
 // Success message
 export const REGISTRATION_SUCCESS_MESSAGE = `Welcome to ${EVENT_NAME}! You're officially registered. See you at the event!`
 
-// Registration URL (update with your actual domain)
-export const REGISTRATION_URL =
-  typeof window !== 'undefined'
-    ? `${window.location.origin}/register`
-    : '/register'
-
 // Admin PIN (from environment)
 export const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN || 'quest2026'
 
