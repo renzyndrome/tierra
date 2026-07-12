@@ -119,20 +119,8 @@ export function getSimpleStageFromJourney(journey: DiscipleshipJourney | null | 
   return mapping?.simpleStage ?? 'Newbie'
 }
 
-// Early bird cutoff time (9:00 AM)
-export const EARLY_BIRD_HOUR = 9
-
-// Event details
-export const EVENT_NAME = 'NEXTLEVEL Stronger 2026'
-export const EVENT_TITLE = "Celebrating Quest Laguna's 10th Anniversary"
-export const EVENT_DATES = 'January 4, 11, 18, 25 | 10AM'
-export const EVENT_VENUE = 'Moriah and NXTGN Hall'
-
 // Logo path
 export const LOGO_PATH = '/questlogo.jpg'
-
-// Success message
-export const REGISTRATION_SUCCESS_MESSAGE = `Welcome to ${EVENT_NAME}! You're officially registered. See you at the event!`
 
 // Admin PIN (resolved at runtime; build-time value preferred when present)
 export const ADMIN_PIN = PUBLIC_ENV.VITE_ADMIN_PIN || 'quest2026'
