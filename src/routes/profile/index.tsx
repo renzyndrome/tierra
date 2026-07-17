@@ -4,8 +4,10 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { getPlaceholderAvatar } from '../../lib/storage'
-import type { Member, Satellite, CellGroupWithRelations, MinistryWithRelations } from '../../lib/types'
+import type { Member, Satellite, CellGroupWithRelations, MinistryWithRelations, MemberAttendanceSummary } from '../../lib/types'
 import { STAGE_LABELS } from '../../lib/constants'
+import { AttendanceHistory } from '../../components/AttendanceHistory'
+import { getMyAttendance } from '../../server/functions/attendance'
 
 export const Route = createFileRoute('/profile/')({
   component: ProfilePage,
@@ -19,6 +21,8 @@ function ProfilePage() {
   const [ministries, setMinistries] = useState<MinistryWithRelations[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [attendance, setAttendance] = useState<MemberAttendanceSummary | null>(null)
+  const [attendanceLoading, setAttendanceLoading] = useState(true)
 
   useEffect(() => {
     const checkAuthAndFetchProfile = async () => {
@@ -34,6 +38,20 @@ function ProfilePage() {
       }
 
       setIsAuthenticated(true)
+
+      // Load service attendance history (resolved from the caller's linked
+      // member server-side; best-effort, never blocks the profile render).
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.access_token) {
+          const summary = await getMyAttendance({ data: { accessToken: session.access_token } })
+          setAttendance(summary)
+        }
+      } catch {
+        /* ignore attendance load errors */
+      } finally {
+        setAttendanceLoading(false)
+      }
 
       // Fetch user profile to get member_id
       const { data: profile } = await supabase
@@ -217,6 +235,14 @@ function ProfilePage() {
                   <p className="text-gray-700">{member.spiritual_description}</p>
                 </div>
               )}
+
+              {/* My Attendance */}
+              <AttendanceHistory
+                summary={attendance}
+                loading={attendanceLoading}
+                title="My Attendance"
+                emptyMessage="No service check-ins recorded yet."
+              />
 
               {/* Quest Circles */}
               <div className="bg-white rounded-lg shadow-md p-6">

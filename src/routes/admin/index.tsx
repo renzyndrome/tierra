@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
+import { AttendanceManager } from '../../components/AttendanceManager'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Input } from '../../components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -36,12 +37,30 @@ import { MemberCard, MemberCardSkeleton } from '../../components/MemberCard'
 import { MembersTabContent } from '../../components/MembersTabContent'
 import { CellGroupCard, CellGroupCardSkeleton } from '../../components/CellGroupCard'
 import { MinistryCard, MinistryCardSkeleton } from '../../components/MinistryCard'
-import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, FinancialOverview, InventoryItem, InventoryCategory } from '../../lib/types'
+import type { Member, CellGroupWithRelations, MinistryWithRelations, Satellite, FinancialOverview, InventoryItem, InventoryCategory, Permission } from '../../lib/types'
+import { hasPermission, type PermissionMatrix } from '../../lib/auth'
+import { getRolePermissions } from '../../server/functions/rolePermissions'
 import { getFinancialOverview } from '../../server/functions/finances'
 import { getInventoryItems, createInventoryItem, updateInventoryItem, deleteInventoryItem, getInventoryCategories, createInventoryCategory, deleteInventoryCategory } from '../../server/functions/inventory'
 import { uploadInventoryPhoto } from '../../lib/storage'
 import { ADMIN_PIN, formatCurrency, formatNumber, INVENTORY_LOCATIONS, INVENTORY_CONDITIONS } from '../../lib/constants'
 import { downloadExcel, downloadPDF } from '../../lib/export'
+import { FinancePinGate } from '../../components/FinancePinGate'
+
+// Which permission each dashboard tab requires. `null` = visible to any
+// privileged user (Overview). Uses the caller's role permissions (code defaults;
+// data operations are still enforced server-side against the editable matrix).
+const TAB_PERMISSIONS: Record<string, Permission | null> = {
+  overview: null,
+  satellites: 'satellites.read',
+  members: 'members.read',
+  'cell-groups': 'cell_groups.read',
+  ministries: 'ministries.read',
+  finances: 'finances.read',
+  inventory: 'inventory.read',
+  attendance: 'registration.read',
+  settings: 'users.manage',
+}
 
 export const Route = createFileRoute('/admin/')({
   component: AdminDashboard,
@@ -52,7 +71,10 @@ export const Route = createFileRoute('/admin/')({
 
 function AdminDashboard() {
   const navigate = useNavigate()
-  const { isAuthenticated, isLoading: authLoading, profile, signOut } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, profile, signOut, session } = useAuth()
+  // Live role -> permission matrix (reflects Manage-Roles edits); falls back to
+  // code defaults until loaded.
+  const [permMatrix, setPermMatrix] = useState<PermissionMatrix | undefined>(undefined)
 
   // Data states
   const [members, setMembers] = useState<Member[]>([])
@@ -78,10 +100,25 @@ function AdminDashboard() {
     setActiveTab(prev => (prev === next ? prev : next))
     if (next !== 'finances') {
       setFinancesUnlocked(false)
-      setFinancesPinInput('')
-      setFinancesPinError('')
     }
   }, [searchTab])
+
+  // Load the live role -> permission matrix so tab visibility reflects Manage-Roles edits.
+  useEffect(() => {
+    const token = session?.access_token
+    if (!token) return
+    getRolePermissions({ data: { accessToken: token } })
+      .then((m) => setPermMatrix(m))
+      .catch(() => {})
+  }, [session?.access_token])
+
+  // If the active tab isn't permitted for this role, fall back to Overview.
+  useEffect(() => {
+    if (profile && !canSeeTab(activeTab)) {
+      setActiveTab('overview')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, activeTab, permMatrix])
 
   // Satellite detail view
   const [selectedSatelliteId, setSelectedSatelliteId] = useState<string | null>(null)
@@ -90,20 +127,8 @@ function AdminDashboard() {
   const [isSettingUpAdmin, setIsSettingUpAdmin] = useState(false)
   const [adminSetupResult, setAdminSetupResult] = useState<string | null>(null)
 
-  // Finances PIN gate
+  // Finances PIN gate (server-verified per-user PIN — see FinancePinGate)
   const [financesUnlocked, setFinancesUnlocked] = useState(false)
-  const [financesPinInput, setFinancesPinInput] = useState('')
-  const [financesPinError, setFinancesPinError] = useState('')
-
-  const handleFinancesPinSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (financesPinInput === ADMIN_PIN) {
-      setFinancesUnlocked(true)
-      setFinancesPinError('')
-    } else {
-      setFinancesPinError('Invalid PIN. Please try again.')
-    }
-  }
 
   // Inventory state
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
@@ -124,6 +149,7 @@ function AdminDashboard() {
     quantity: 1,
     category: '',
     condition: 'Good' as string,
+    date_purchased: '',
   })
   const [inventoryCategories, setInventoryCategories] = useState<InventoryCategory[]>([])
   const [showCategoryDialog, setShowCategoryDialog] = useState(false)
@@ -395,7 +421,12 @@ function AdminDashboard() {
   }, [isAuthenticated, refreshTrigger])
 
   // Check admin access
-  const isAdmin = profile?.role === 'super_admin' || profile?.role === 'satellite_leader'
+  const isAdmin = profile?.role === 'admin'
+  const canSeeTab = (tab: string): boolean => {
+    const perm = TAB_PERMISSIONS[tab]
+    if (perm === null || perm === undefined) return true
+    return profile ? hasPermission(profile.role, perm, permMatrix) : false
+  }
 
   // Handle setup admin account
   const handleSetupAdmin = async () => {
@@ -788,11 +819,12 @@ function AdminDashboard() {
         quantity: item.quantity,
         category: item.category || '',
         condition: item.condition,
+        date_purchased: item.date_purchased || '',
       })
       setInventoryPhotoPreview(item.photo_url)
     } else {
       setEditingInventory(null)
-      setInventoryForm({ name: '', description: '', location: 'Moriah Hall', quantity: 1, category: '', condition: 'Good' })
+      setInventoryForm({ name: '', description: '', location: 'Moriah Hall', quantity: 1, category: '', condition: 'Good', date_purchased: '' })
       setInventoryPhotoPreview(null)
     }
     setInventoryPhotoFile(null)
@@ -827,6 +859,7 @@ function AdminDashboard() {
         quantity: inventoryForm.quantity,
         category: inventoryForm.category || null,
         condition: inventoryForm.condition as 'Good' | 'Fair' | 'Needs Repair' | 'Damaged',
+        date_purchased: inventoryForm.date_purchased || null,
         photo_url: photoUrl,
       }
 
@@ -1091,16 +1124,19 @@ function AdminDashboard() {
           <div className="relative">
             <div className="w-full overflow-x-auto pb-1 mb-6">
               <TabsList className="w-max">
-                <TabsTrigger value="overview" className="text-xs sm:text-sm px-2 sm:px-3">Overview</TabsTrigger>
-              <TabsTrigger value="satellites" className="text-xs sm:text-sm px-2 sm:px-3">Satellites</TabsTrigger>
-              <TabsTrigger value="members" className="text-xs sm:text-sm px-2 sm:px-3">Members</TabsTrigger>
+                {canSeeTab('overview') && <TabsTrigger value="overview" className="text-xs sm:text-sm px-2 sm:px-3">Overview</TabsTrigger>}
+              {canSeeTab('satellites') && <TabsTrigger value="satellites" className="text-xs sm:text-sm px-2 sm:px-3">Satellites</TabsTrigger>}
+              {canSeeTab('members') && <TabsTrigger value="members" className="text-xs sm:text-sm px-2 sm:px-3">Members</TabsTrigger>}
+              {canSeeTab('cell-groups') && (
               <TabsTrigger value="cell-groups" className="text-xs sm:text-sm px-2 sm:px-3">
                 <span className="hidden sm:inline">Quest </span>Circles
               </TabsTrigger>
-              <TabsTrigger value="ministries" className="text-xs sm:text-sm px-2 sm:px-3">Ministries</TabsTrigger>
-              <TabsTrigger value="finances" className="text-xs sm:text-sm px-2 sm:px-3">Finances</TabsTrigger>
-              <TabsTrigger value="inventory" className="text-xs sm:text-sm px-2 sm:px-3">Inventory</TabsTrigger>
-              <TabsTrigger value="settings" className="text-xs sm:text-sm px-2 sm:px-3">Settings</TabsTrigger>
+              )}
+              {canSeeTab('ministries') && <TabsTrigger value="ministries" className="text-xs sm:text-sm px-2 sm:px-3">Ministries</TabsTrigger>}
+              {canSeeTab('finances') && <TabsTrigger value="finances" className="text-xs sm:text-sm px-2 sm:px-3">Finances</TabsTrigger>}
+              {canSeeTab('inventory') && <TabsTrigger value="inventory" className="text-xs sm:text-sm px-2 sm:px-3">Inventory</TabsTrigger>}
+              {canSeeTab('attendance') && <TabsTrigger value="attendance" className="text-xs sm:text-sm px-2 sm:px-3">Attendance</TabsTrigger>}
+              {canSeeTab('settings') && <TabsTrigger value="settings" className="text-xs sm:text-sm px-2 sm:px-3">Settings</TabsTrigger>}
             </TabsList>
             </div>
             {/* Right-edge fade hints that more tabs are scrollable on mobile */}
@@ -1390,6 +1426,30 @@ function AdminDashboard() {
                     </CardContent>
                   </Card>
                 </Link>
+                {hasPermission(profile?.role ?? 'member', 'registration.read', permMatrix) && (
+                  <Link to="/admin/attendance">
+                    <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+                      <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                        <svg className="w-8 h-8 text-[#8B1538] mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                        </svg>
+                        <p className="font-medium">Attendance</p>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                )}
+                {isAdmin && (
+                  <Link to="/admin/users">
+                    <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+                      <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                        <svg className="w-8 h-8 text-[#8B1538] mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-4.65" />
+                        </svg>
+                        <p className="font-medium">Accounts</p>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                )}
                 <Link to="/profile">
                   <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
                     <CardContent className="p-4 flex flex-col items-center justify-center text-center">
@@ -2396,31 +2456,7 @@ function AdminDashboard() {
           {/* Finances Tab */}
           <TabsContent value="finances">
             {!financesUnlocked ? (
-              <div className="flex items-center justify-center py-24">
-                <Card className="w-full max-w-sm">
-                  <CardHeader className="text-center">
-                    <CardTitle className="text-xl">Finances</CardTitle>
-                    <CardDescription>Enter your PIN to view financial data</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <form onSubmit={handleFinancesPinSubmit} className="space-y-4">
-                      <Input
-                        type="password"
-                        placeholder="Enter PIN"
-                        value={financesPinInput}
-                        onChange={(e) => setFinancesPinInput(e.target.value)}
-                        className="text-center text-2xl tracking-widest"
-                        maxLength={10}
-                        autoFocus
-                      />
-                      {financesPinError && <p className="text-red-500 text-sm text-center">{financesPinError}</p>}
-                      <Button type="submit" className="w-full bg-[#8B1538] hover:bg-[#6B0F2B]">
-                        Continue
-                      </Button>
-                    </form>
-                  </CardContent>
-                </Card>
-              </div>
+              <FinancePinGate onUnlock={() => setFinancesUnlocked(true)} />
             ) : (
             <div className="space-y-6">
               {/* Summary Cards */}
@@ -2583,9 +2619,17 @@ function AdminDashboard() {
                       )}
                     </CardDescription>
                   </div>
-                  <Button size="sm" className="w-full sm:w-auto" onClick={() => openInventoryDialog()}>
-                    + Add Item
-                  </Button>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <Link
+                      to="/admin/inventory/requests"
+                      className="inline-flex items-center justify-center rounded-md border border-gray-200 px-3 h-9 text-sm font-medium text-gray-700 hover:bg-gray-50 flex-1 sm:flex-none"
+                    >
+                      📦 Borrow Requests
+                    </Link>
+                    <Button size="sm" className="flex-1 sm:flex-none" onClick={() => openInventoryDialog()}>
+                      + Add Item
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="px-4 sm:px-6">
@@ -2727,6 +2771,13 @@ function AdminDashboard() {
                             </span>
                           </div>
                           <div className="flex gap-1.5 mt-2 pt-2 border-t">
+                            <Link
+                              to="/admin/inventory/$itemId"
+                              params={{ itemId: item.id }}
+                              className="flex-1 inline-flex items-center justify-center rounded-md border border-gray-200 text-[10px] sm:text-xs h-7 hover:bg-gray-50"
+                            >
+                              Manage
+                            </Link>
                             <Button size="sm" variant="outline" className="flex-1 text-[10px] sm:text-xs h-7" onClick={() => openInventoryDialog(item)}>
                               Edit
                             </Button>
@@ -2777,6 +2828,13 @@ function AdminDashboard() {
                           </div>
                         </div>
                         <div className="flex gap-1.5 shrink-0">
+                          <Link
+                            to="/admin/inventory/$itemId"
+                            params={{ itemId: item.id }}
+                            className="inline-flex items-center justify-center rounded-md border border-gray-200 text-xs h-8 px-2.5 hover:bg-gray-50"
+                          >
+                            Manage
+                          </Link>
                           <Button size="sm" variant="outline" className="text-xs h-8 px-2.5" onClick={() => openInventoryDialog(item)}>
                             Edit
                           </Button>
@@ -2792,25 +2850,14 @@ function AdminDashboard() {
             </Card>
           </TabsContent>
 
+          {/* Attendance Tab */}
+          <TabsContent value="attendance">
+            <AttendanceManager embedded />
+          </TabsContent>
+
           {/* Settings Tab */}
           <TabsContent value="settings">
               <div className="space-y-6">
-                {/* Admin Account Setup */}
-                <Card className="border-blue-200">
-                  <CardHeader>
-                    <CardTitle className="text-blue-700">Admin Account</CardTitle>
-                    <CardDescription>Create or update the admin login account (admin@questlaguna.org)</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap items-center gap-4">
-                    <Button onClick={handleSetupAdmin} disabled={isSettingUpAdmin} className="bg-blue-600 hover:bg-blue-700">
-                      {isSettingUpAdmin ? 'Setting up...' : 'Setup Admin Account'}
-                    </Button>
-                    {adminSetupResult && (
-                      <span className="text-sm text-gray-600">{adminSetupResult}</span>
-                    )}
-                  </CardContent>
-                </Card>
-
                 {/* Import Spreadsheet Data */}
                 <Card className="border-amber-200">
                   <CardHeader>
@@ -2824,148 +2871,32 @@ function AdminDashboard() {
                   </CardContent>
                 </Card>
 
-                {/* Re-link Relationships */}
-                <Card className="border-blue-200">
-                  <CardHeader>
-                    <CardTitle className="text-blue-700">Re-link Relationships</CardTitle>
-                    <CardDescription>Re-run discipler and ministry assignment linking on existing members</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button onClick={handleRelinkRelationships} disabled={isRelinking} className="bg-blue-600 hover:bg-blue-700">
-                      {isRelinking ? 'Linking...' : 'Re-link Relationships'}
-                    </Button>
-                    {relinkResult && (
-                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-                        <p className="font-medium text-blue-800">Re-link completed!</p>
-                        <ul className="mt-1 text-blue-700 space-y-0.5">
-                          <li>{relinkResult.disciplerLinks} discipler relationships linked</li>
-                          <li>{relinkResult.ministryLinks} ministry assignments created</li>
-                        </ul>
-                        {relinkResult.errors.length > 0 && (
-                          <p className="mt-1 text-red-600">{relinkResult.errors.length} errors</p>
-                        )}
+                {/* Accounts & Access */}
+                {isAdmin && (
+                  <Card className="border-gray-200">
+                    <CardHeader>
+                      <CardTitle>Accounts &amp; Access</CardTitle>
+                      <CardDescription>Invite users, assign roles, and manage what each role can do.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-3">
+                        <Link to="/admin/users">
+                          <Button className="bg-[#8B1538] hover:bg-[#6B0F2B]">Manage Users</Button>
+                        </Link>
+                        <Link to="/admin/roles">
+                          <Button variant="outline">Roles &amp; Permissions</Button>
+                        </Link>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Generate Quest Circles */}
-                <Card className="border-teal-200">
-                  <CardHeader>
-                    <CardTitle className="text-teal-700">Generate Quest Circles</CardTitle>
-                    <CardDescription>Auto-create Quest Circles from discipler-disciple relationships. Each discipler becomes a Quest Circle leader, their disciples become members.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button onClick={handleGenerateCellGroups} disabled={isGeneratingCellGroups} className="bg-teal-600 hover:bg-teal-700">
-                      {isGeneratingCellGroups ? 'Generating...' : 'Generate Quest Circles'}
-                    </Button>
-                    {cellGroupGenResult && (
-                      <div className="mt-3 p-3 bg-teal-50 border border-teal-200 rounded-lg text-sm">
-                        <p className="font-medium text-teal-800">Quest Circles generated!</p>
-                        <ul className="mt-1 text-teal-700 space-y-0.5">
-                          <li>{cellGroupGenResult.cellGroupsCreated} Quest Circles created</li>
-                          <li>{cellGroupGenResult.membershipsCreated} memberships created</li>
-                          <li>{cellGroupGenResult.disciplerLinksUpdated} discipler links updated</li>
-                          {cellGroupGenResult.disciplersAutoCreated > 0 && (
-                            <li>{cellGroupGenResult.disciplersAutoCreated} disciplers auto-created as new members</li>
-                          )}
-                          {cellGroupGenResult.skipped > 0 && (
-                            <li>{cellGroupGenResult.skipped} skipped (already exist)</li>
-                          )}
-                        </ul>
-                        {cellGroupGenResult.errors.length > 0 && (
-                          <p className="mt-1 text-red-600">{cellGroupGenResult.errors.length} errors</p>
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Admin PIN */}
-                <Card className="border-gray-200">
-                  <CardHeader>
-                    <CardTitle>Admin PIN</CardTitle>
-                    <CardDescription>PIN required to access protected sections (Finances, etc.)</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-3">
-                      <code className="px-3 py-1.5 bg-gray-100 rounded-md text-sm font-mono tracking-widest">
-                        {ADMIN_PIN}
-                      </code>
-                      <span className="text-xs text-gray-500">Set via <code className="bg-gray-100 px-1 rounded">VITE_ADMIN_PIN</code> in your .env file</span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Purge Data */}
-                <Card className="border-red-200">
-                  <CardHeader>
-                    <CardTitle className="text-red-700">Danger Zone</CardTitle>
-                    <CardDescription>Permanently delete all directory data</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button variant="destructive" onClick={() => setShowPurgeDialog(true)}>
-                      Purge All Data
-                    </Button>
-                  </CardContent>
-                </Card>
+                      <p className="mt-3 text-xs text-gray-500">
+                        Finance access is protected by a private per-user PIN, set the first time each finance user opens the Finances page.
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Purge Dialog */}
-      <Dialog open={showPurgeDialog} onOpenChange={(open) => { setShowPurgeDialog(open); if (!open) { setPurgeConfirmText(''); setPurgeResult(null); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-red-700">Purge All Directory Data</DialogTitle>
-            <DialogDescription>This action cannot be undone!</DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            {purgeResult ? (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="font-medium text-red-800 mb-2">Data purged successfully!</p>
-                <ul className="text-sm text-red-700 space-y-1">
-                  <li>{purgeResult.members} members deleted</li>
-                  <li>{purgeResult.cell_groups} Quest Circles deleted</li>
-                  <li>{purgeResult.ministries} ministries deleted</li>
-                  <li>{purgeResult.member_cell_groups} cell memberships deleted</li>
-                  <li>{purgeResult.member_ministries} ministry memberships deleted</li>
-                </ul>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-gray-600">
-                  This will permanently delete all members, Quest Circles, ministries, and their relationships.
-                </p>
-                <div>
-                  <Label>Type "DELETE ALL DATA" to confirm</Label>
-                  <Input
-                    value={purgeConfirmText}
-                    onChange={(e) => setPurgeConfirmText(e.target.value)}
-                    placeholder="DELETE ALL DATA"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowPurgeDialog(false); setPurgeConfirmText(''); setPurgeResult(null); }}>
-              {purgeResult ? 'Close' : 'Cancel'}
-            </Button>
-            {!purgeResult && (
-              <Button
-                variant="destructive"
-                onClick={handlePurgeDirectory}
-                disabled={isPurgingDirectory || purgeConfirmText !== 'DELETE ALL DATA'}
-              >
-                {isPurgingDirectory ? 'Purging...' : 'Purge All Data'}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Import Spreadsheet Dialog */}
       <Dialog open={showImportDialog} onOpenChange={(open) => { setShowImportDialog(open); if (!open) setImportResult(null); }}>
@@ -3501,6 +3432,16 @@ function AdminDashboard() {
                   </button>
                 </div>
               )}
+            </div>
+            <div>
+              <Label htmlFor="inv-date-purchased" className="mb-1.5 block">Date Purchased (optional)</Label>
+              <input
+                id="inv-date-purchased"
+                type="date"
+                className="w-full h-11 px-3 py-2 border rounded-lg text-sm"
+                value={inventoryForm.date_purchased}
+                onChange={(e) => setInventoryForm({ ...inventoryForm, date_purchased: e.target.value })}
+              />
             </div>
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">

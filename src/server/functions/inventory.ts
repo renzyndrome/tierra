@@ -17,6 +17,7 @@ const inventoryItemInsertSchema = z.object({
   photo_url: z.string().optional().nullable(),
   category: z.string().max(100).optional().nullable(),
   condition: z.enum(['Good', 'Fair', 'Needs Repair', 'Damaged']).optional().default('Good'),
+  date_purchased: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date').optional().nullable(),
 })
 
 const inventoryItemUpdateSchema = inventoryItemInsertSchema.partial()
@@ -116,6 +117,42 @@ export const getInventoryItems = createServerFn({ method: 'GET' })
     })
 
     return itemsWithSignedUrls
+  })
+
+// ============================================
+// GET SINGLE INVENTORY ITEM (with signed photo URL)
+// ============================================
+
+export const getInventoryItem = createServerFn({ method: 'GET' })
+  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }): Promise<InventoryItem | null> => {
+    const supabase = createServerAdminClient()
+
+    const { data: item, error } = await supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('id', data.id)
+      .single()
+
+    if (error) {
+      if (error.code === 'PGRST116') return null
+      console.error('Error fetching inventory item:', error)
+      throw new Error('Failed to fetch inventory item')
+    }
+
+    const result = item as InventoryItem
+    if (result.photo_url) {
+      let filePath = result.photo_url
+      if (filePath.startsWith('http')) {
+        const pathMatch = filePath.match(/\/storage\/v1\/object\/public\/media\/(.+)$/)
+        filePath = pathMatch ? pathMatch[1] : ''
+      }
+      if (filePath) {
+        const { data: signed } = await supabase.storage.from('media').createSignedUrl(filePath, 3600)
+        return { ...result, photo_url: signed?.signedUrl ?? null }
+      }
+    }
+    return result
   })
 
 // ============================================

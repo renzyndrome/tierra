@@ -139,9 +139,11 @@ interface AdminRouteProps {
 }
 
 export function AdminRoute({ children, requiredPermissions = [] }: AdminRouteProps) {
+  // Any privileged (non-member) role clears this bar; precise access is decided
+  // by requiredPermissions. 'discipleship' sits at the shared privileged tier.
   return (
     <ProtectedRoute
-      requiredRole="cell_leader"
+      requiredRole="discipleship"
       requiredPermissions={requiredPermissions}
       fallbackPath="/auth/login"
     >
@@ -161,7 +163,7 @@ interface SuperAdminRouteProps {
 export function SuperAdminRoute({ children }: SuperAdminRouteProps) {
   return (
     <ProtectedRoute
-      requiredRole="super_admin"
+      requiredRole="admin"
       fallbackPath="/auth/login"
     >
       {children}
