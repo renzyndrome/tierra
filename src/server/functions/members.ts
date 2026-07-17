@@ -165,13 +165,20 @@ export const getMemberWithRelations = createServerFn({ method: 'GET' })
           role,
           joined_at,
           is_active,
-          cell_group:cell_groups(id, name, meeting_day, meeting_time)
+          cell_group:cell_groups(
+            id, name, meeting_day, meeting_time,
+            leader:members!cell_groups_leader_id_fkey(id, name, photo_url),
+            co_leader:members!cell_groups_co_leader_id_fkey(id, name, photo_url)
+          )
         ),
         ministries:member_ministries(
           role,
           joined_at,
           is_active,
-          ministry:ministries(id, name, department)
+          ministry:ministries(
+            id, name, department,
+            head:members!ministries_head_id_fkey(id, name, photo_url)
+          )
         )
       `)
       .eq('id', data.id)

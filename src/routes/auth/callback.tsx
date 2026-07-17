@@ -4,10 +4,41 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { acceptInvitation } from '../../server/functions/users'
 
 export const Route = createFileRoute('/auth/callback')({
   component: AuthCallbackPage,
 })
+
+// Invite / signup / recovery links land the user in a session but they still
+// need to set (or reset) a password. Route those to the set-password page.
+const PASSWORD_SETUP_TYPES = new Set(['recovery', 'invite', 'signup'])
+
+// After a session is established, record invitation acceptance (best-effort)
+// and route based on the link type.
+function finishSession(
+  type: string | null,
+  navigate: (opts: { to: string }) => void,
+) {
+  // Record invitation acceptance in the BACKGROUND — never block the redirect on
+  // it, or a slow/hung server call leaves the user stuck on "Completing sign in…".
+  supabase.auth
+    .getSession()
+    .then(({ data }) => {
+      const token = data.session?.access_token
+      if (token) acceptInvitation({ data: { accessToken: token } }).catch(() => {})
+    })
+    .catch(() => {})
+
+  if (type && PASSWORD_SETUP_TYPES.has(type)) {
+    navigate({ to: '/auth/reset-password' })
+    return
+  }
+
+  const redirectPath = sessionStorage.getItem('quest_redirect_after_login') || '/directory'
+  sessionStorage.removeItem('quest_redirect_after_login')
+  navigate({ to: redirectPath })
+}
 
 function AuthCallbackPage() {
   const navigate = useNavigate()
@@ -46,16 +77,7 @@ function AuthCallbackPage() {
             return
           }
 
-          // Handle password recovery
-          if (type === 'recovery') {
-            navigate({ to: '/auth/reset-password' })
-            return
-          }
-
-          // Redirect to directory or stored path
-          const redirectPath = sessionStorage.getItem('quest_redirect_after_login') || '/directory'
-          sessionStorage.removeItem('quest_redirect_after_login')
-          navigate({ to: redirectPath })
+          await finishSession(type, navigate)
           return
         }
 
@@ -70,16 +92,7 @@ function AuthCallbackPage() {
             return
           }
 
-          // Handle password recovery
-          if (type === 'recovery') {
-            navigate({ to: '/auth/reset-password' })
-            return
-          }
-
-          // Redirect to directory or stored path
-          const redirectPath = sessionStorage.getItem('quest_redirect_after_login') || '/directory'
-          sessionStorage.removeItem('quest_redirect_after_login')
-          navigate({ to: redirectPath })
+          await finishSession(type, navigate)
           return
         }
 

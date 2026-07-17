@@ -1,11 +1,12 @@
 // Quest Laguna Directory - Member Profile Page
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { useState, useEffect, useCallback } from 'react'
 import { getMemberWithRelations, updateMember } from '../../../server/functions/members'
 import { addMemberToMinistry } from '../../../server/functions/ministries'
 import { getAllMinistries } from '../../../server/functions/ministries'
 import { addMemberToCellGroup } from '../../../server/functions/cellGroups'
 import { getAllCellGroups } from '../../../server/functions/cellGroups'
+import { MemberAttendanceSection } from '../../../components/MemberAttendanceSection'
 import { getPlaceholderAvatar, uploadMemberPhoto } from '../../../lib/storage'
 import {
   DISCIPLESHIP_JOURNEY_STAGES,
@@ -26,13 +27,9 @@ import { Button } from '../../../components/ui/button'
 import { Label } from '../../../components/ui/label'
 
 export const Route = createFileRoute('/directory/members/$memberId')({
-  loader: async ({ params }) => {
-    const member = await getMemberWithRelations({ data: { id: params.memberId } })
-    if (!member) {
-      throw new Error('Member not found')
-    }
-    return { member }
-  },
+  // Member data is fetched CLIENT-SIDE (below), not in an SSR loader, so member
+  // PII is never rendered/serialized server-side for anonymous visitors. The
+  // global AuthGate redirects unauthenticated users before this ever renders.
   component: MemberProfilePage,
   errorComponent: ({ error }) => (
     <div className="min-h-screen flex items-center justify-center">
@@ -195,19 +192,73 @@ function InfoRow({ label, value, href }: { label: string; value: string | null |
 }
 
 // ============================================
+// LEADER CHIP COMPONENT
+// ============================================
+
+function LeaderChip({
+  leader,
+  label,
+}: {
+  leader: { id: string; name: string; photo_url?: string | null } | null | undefined
+  label: string
+}) {
+  if (!leader) return null
+  return (
+    <Link
+      to="/directory/members/$memberId"
+      params={{ memberId: leader.id }}
+      className="inline-flex items-center gap-1.5 group"
+    >
+      <img
+        src={leader.photo_url || getPlaceholderAvatar(leader.name)}
+        alt={leader.name}
+        className="w-5 h-5 rounded-full object-cover"
+      />
+      <span className="text-xs text-gray-600 group-hover:text-[#8B1538] group-hover:underline truncate">
+        {leader.name}
+      </span>
+      <span className="text-[10px] text-gray-400 shrink-0">· {label}</span>
+    </Link>
+  )
+}
+
+// ============================================
 // MAIN PROFILE COMPONENT
 // ============================================
 
 function MemberProfilePage() {
-  const { member } = Route.useLoaderData()
-  const router = useRouter()
+  const { memberId } = Route.useParams()
+  const [member, setMember] = useState<any>(null)
+  const [memberLoading, setMemberLoading] = useState(true)
+  const [memberError, setMemberError] = useState('')
 
-  const avatarUrl = member.photo_url || getPlaceholderAvatar(member.name)
-  const satelliteName = (member as any).satellite?.name || null
+  const reloadMember = useCallback(async () => {
+    try {
+      const data = await getMemberWithRelations({ data: { id: memberId } })
+      if (data) {
+        setMember(data)
+        setMemberError('')
+      } else {
+        setMember(null)
+        setMemberError('Member not found')
+      }
+    } catch (err) {
+      setMemberError(err instanceof Error ? err.message : 'Failed to load member')
+    } finally {
+      setMemberLoading(false)
+    }
+  }, [memberId])
+
+  useEffect(() => {
+    reloadMember()
+  }, [reloadMember])
+
+  const avatarUrl = member ? member.photo_url || getPlaceholderAvatar(member.name) : null
+  const satelliteName = (member as any)?.satellite?.name || null
 
   // Safely access relations
-  const cellGroups = ((member as any).cell_groups || []).filter((cg: any) => cg.is_active)
-  const ministries = ((member as any).ministries || []).filter((m: any) => m.is_active)
+  const cellGroups = ((member as any)?.cell_groups || []).filter((cg: any) => cg.is_active)
+  const ministries = ((member as any)?.ministries || []).filter((m: any) => m.is_active)
 
   // Quick action state
   const [showMinistryDialog, setShowMinistryDialog] = useState(false)
@@ -235,6 +286,26 @@ function MemberProfilePage() {
     }
   }, [showCellGroupDialog, allCellGroups.length])
 
+  // Loading / not-found states (client-side fetch; all hooks are above this).
+  if (memberLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-12 h-12 border-4 border-[#8B1538] border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+  if (memberError || !member) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Member Not Found</h1>
+          <p className="text-gray-600 mb-4">{memberError || 'This member could not be loaded.'}</p>
+          <Link to="/admin/members" className="text-[#8B1538] hover:underline">Back to members</Link>
+        </div>
+      </div>
+    )
+  }
+
   // Filter out ministries/cell groups the member is already in
   const existingMinistryIds = new Set(ministries.map((m: any) => m.ministry?.id).filter(Boolean))
   const existingCellGroupIds = new Set(cellGroups.map((cg: any) => cg.cell_group?.id).filter(Boolean))
@@ -250,7 +321,7 @@ function MemberProfilePage() {
       setShowMinistryDialog(false)
       setSelectedMinistryId('')
       setSelectedMinistryRole('volunteer')
-      router.invalidate()
+      reloadMember()
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to add to ministry')
     } finally {
@@ -267,7 +338,7 @@ function MemberProfilePage() {
       setShowCellGroupDialog(false)
       setSelectedCellGroupId('')
       setSelectedCellGroupRole('member')
-      router.invalidate()
+      reloadMember()
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to add to Quest Circle')
     } finally {
@@ -284,7 +355,7 @@ function MemberProfilePage() {
         return
       }
       await updateMember({ data: { id: member.id, updates: { photo_url: url } } })
-      router.invalidate()
+      reloadMember()
     } catch (error) {
       alert('Failed to upload photo')
     } finally {
@@ -480,10 +551,15 @@ function MemberProfilePage() {
                 <div className="space-y-3">
                   {ministries.map((m: any, i: number) => (
                     <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900">{m.ministry?.name || 'Unknown Ministry'}</p>
                         {m.ministry?.department && (
                           <p className="text-xs text-gray-500">{m.ministry.department}</p>
+                        )}
+                        {m.ministry?.head && (
+                          <div className="mt-1">
+                            <LeaderChip leader={m.ministry.head} label="Ministry Head" />
+                          </div>
                         )}
                       </div>
                       <Badge className="bg-gray-100 text-gray-700 capitalize">{m.role}</Badge>
@@ -506,12 +582,18 @@ function MemberProfilePage() {
                 <div className="space-y-3">
                   {cellGroups.map((cg: any, i: number) => (
                     <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900">{cg.cell_group?.name || 'Unknown Quest Circle'}</p>
                         {(cg.cell_group?.meeting_day || cg.cell_group?.meeting_time) && (
                           <p className="text-xs text-gray-500">
                             {[cg.cell_group.meeting_day, cg.cell_group.meeting_time].filter(Boolean).join(' at ')}
                           </p>
+                        )}
+                        {(cg.cell_group?.leader || cg.cell_group?.co_leader) && (
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                            <LeaderChip leader={cg.cell_group.leader} label="Leader" />
+                            <LeaderChip leader={cg.cell_group.co_leader} label="Co-Leader" />
+                          </div>
                         )}
                       </div>
                       <Badge className="bg-gray-100 text-gray-700 capitalize">{cg.role}</Badge>
@@ -564,6 +646,9 @@ function MemberProfilePage() {
                 </div>
               )}
             </SectionCardWithAction>
+
+            {/* Service Attendance (staff-only; renders nothing without registration.read) */}
+            <MemberAttendanceSection memberId={member.id} />
 
             {/* Spiritual Profile */}
             {hasSpiritualProfile && (

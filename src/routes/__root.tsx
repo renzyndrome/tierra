@@ -9,6 +9,7 @@ import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import appCss from '../styles.css?url'
 import { AuthProvider } from '../components/AuthProvider'
+import { AuthGate } from '../components/AuthGate'
 import { getPublicEnvScript } from '../lib/runtimeEnv'
 
 export const Route = createRootRoute({
@@ -58,7 +59,9 @@ function RootComponent() {
       </head>
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
         <AuthProvider>
-          <Outlet />
+          <AuthGate>
+            <Outlet />
+          </AuthGate>
         </AuthProvider>
         {process.env.NODE_ENV === 'development' && (
           <TanStackDevtools

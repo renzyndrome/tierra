@@ -15,20 +15,31 @@ import { Route as FinancesIndexRouteImport } from './routes/finances/index'
 import { Route as DirectoryIndexRouteImport } from './routes/directory/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ProfileSettingsRouteImport } from './routes/profile/settings'
+import { Route as CheckinTokenRouteImport } from './routes/checkin/$token'
+import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
+import { Route as AuthConfirmRouteImport } from './routes/auth/confirm'
+import { Route as AuthCompleteProfileRouteImport } from './routes/auth/complete-profile'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as DirectoryMinistriesIndexRouteImport } from './routes/directory/ministries/index'
 import { Route as DirectoryMembersIndexRouteImport } from './routes/directory/members/index'
 import { Route as DirectoryCellGroupsIndexRouteImport } from './routes/directory/cell-groups/index'
+import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
+import { Route as AdminRolesIndexRouteImport } from './routes/admin/roles/index'
 import { Route as AdminMembersIndexRouteImport } from './routes/admin/members/index'
+import { Route as AdminAttendanceIndexRouteImport } from './routes/admin/attendance/index'
 import { Route as DirectoryMinistriesMinistryIdRouteImport } from './routes/directory/ministries/$ministryId'
 import { Route as DirectoryMembersMemberIdRouteImport } from './routes/directory/members/$memberId'
 import { Route as DirectoryCellGroupsGroupIdRouteImport } from './routes/directory/cell-groups/$groupId'
 import { Route as AdminMinistriesMinistryIdRouteImport } from './routes/admin/ministries/$ministryId'
 import { Route as AdminMembersNewRouteImport } from './routes/admin/members/new'
+import { Route as AdminInventoryRequestsRouteImport } from './routes/admin/inventory/requests'
+import { Route as AdminInventoryItemIdRouteImport } from './routes/admin/inventory/$itemId'
 import { Route as AdminCellGroupsGroupIdRouteImport } from './routes/admin/cell-groups/$groupId'
+import { Route as AdminAttendanceAnalyticsRouteImport } from './routes/admin/attendance/analytics'
+import { Route as AdminAttendanceSessionIdRouteImport } from './routes/admin/attendance/$sessionId'
 import { Route as AdminMembersMemberIdEditRouteImport } from './routes/admin/members/$memberId/edit'
 
 const IndexRoute = IndexRouteImport.update({
@@ -61,6 +72,16 @@ const ProfileSettingsRoute = ProfileSettingsRouteImport.update({
   path: '/profile/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CheckinTokenRoute = CheckinTokenRouteImport.update({
+  id: '/checkin/$token',
+  path: '/checkin/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/auth/reset-password',
+  path: '/auth/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
   id: '/auth/register',
   path: '/auth/register',
@@ -74,6 +95,16 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   id: '/auth/forgot-password',
   path: '/auth/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthConfirmRoute = AuthConfirmRouteImport.update({
+  id: '/auth/confirm',
+  path: '/auth/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCompleteProfileRoute = AuthCompleteProfileRouteImport.update({
+  id: '/auth/complete-profile',
+  path: '/auth/complete-profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
@@ -98,9 +129,24 @@ const DirectoryCellGroupsIndexRoute =
     path: '/directory/cell-groups/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
+  id: '/admin/users/',
+  path: '/admin/users/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRolesIndexRoute = AdminRolesIndexRouteImport.update({
+  id: '/admin/roles/',
+  path: '/admin/roles/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminMembersIndexRoute = AdminMembersIndexRouteImport.update({
   id: '/admin/members/',
   path: '/admin/members/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAttendanceIndexRoute = AdminAttendanceIndexRouteImport.update({
+  id: '/admin/attendance/',
+  path: '/admin/attendance/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DirectoryMinistriesMinistryIdRoute =
@@ -132,11 +178,33 @@ const AdminMembersNewRoute = AdminMembersNewRouteImport.update({
   path: '/admin/members/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminInventoryRequestsRoute = AdminInventoryRequestsRouteImport.update({
+  id: '/admin/inventory/requests',
+  path: '/admin/inventory/requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminInventoryItemIdRoute = AdminInventoryItemIdRouteImport.update({
+  id: '/admin/inventory/$itemId',
+  path: '/admin/inventory/$itemId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminCellGroupsGroupIdRoute = AdminCellGroupsGroupIdRouteImport.update({
   id: '/admin/cell-groups/$groupId',
   path: '/admin/cell-groups/$groupId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAttendanceAnalyticsRoute =
+  AdminAttendanceAnalyticsRouteImport.update({
+    id: '/admin/attendance/analytics',
+    path: '/admin/attendance/analytics',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminAttendanceSessionIdRoute =
+  AdminAttendanceSessionIdRouteImport.update({
+    id: '/admin/attendance/$sessionId',
+    path: '/admin/attendance/$sessionId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminMembersMemberIdEditRoute =
   AdminMembersMemberIdEditRouteImport.update({
     id: '/admin/members/$memberId/edit',
@@ -147,21 +215,32 @@ const AdminMembersMemberIdEditRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/complete-profile': typeof AuthCompleteProfileRoute
+  '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/checkin/$token': typeof CheckinTokenRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
   '/finances': typeof FinancesIndexRoute
   '/profile': typeof ProfileIndexRoute
+  '/admin/attendance/$sessionId': typeof AdminAttendanceSessionIdRoute
+  '/admin/attendance/analytics': typeof AdminAttendanceAnalyticsRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
+  '/admin/inventory/$itemId': typeof AdminInventoryItemIdRoute
+  '/admin/inventory/requests': typeof AdminInventoryRequestsRoute
   '/admin/members/new': typeof AdminMembersNewRoute
   '/admin/ministries/$ministryId': typeof AdminMinistriesMinistryIdRoute
   '/directory/cell-groups/$groupId': typeof DirectoryCellGroupsGroupIdRoute
   '/directory/members/$memberId': typeof DirectoryMembersMemberIdRoute
   '/directory/ministries/$ministryId': typeof DirectoryMinistriesMinistryIdRoute
+  '/admin/attendance': typeof AdminAttendanceIndexRoute
   '/admin/members': typeof AdminMembersIndexRoute
+  '/admin/roles': typeof AdminRolesIndexRoute
+  '/admin/users': typeof AdminUsersIndexRoute
   '/directory/cell-groups': typeof DirectoryCellGroupsIndexRoute
   '/directory/members': typeof DirectoryMembersIndexRoute
   '/directory/ministries': typeof DirectoryMinistriesIndexRoute
@@ -170,21 +249,32 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/complete-profile': typeof AuthCompleteProfileRoute
+  '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/checkin/$token': typeof CheckinTokenRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
   '/finances': typeof FinancesIndexRoute
   '/profile': typeof ProfileIndexRoute
+  '/admin/attendance/$sessionId': typeof AdminAttendanceSessionIdRoute
+  '/admin/attendance/analytics': typeof AdminAttendanceAnalyticsRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
+  '/admin/inventory/$itemId': typeof AdminInventoryItemIdRoute
+  '/admin/inventory/requests': typeof AdminInventoryRequestsRoute
   '/admin/members/new': typeof AdminMembersNewRoute
   '/admin/ministries/$ministryId': typeof AdminMinistriesMinistryIdRoute
   '/directory/cell-groups/$groupId': typeof DirectoryCellGroupsGroupIdRoute
   '/directory/members/$memberId': typeof DirectoryMembersMemberIdRoute
   '/directory/ministries/$ministryId': typeof DirectoryMinistriesMinistryIdRoute
+  '/admin/attendance': typeof AdminAttendanceIndexRoute
   '/admin/members': typeof AdminMembersIndexRoute
+  '/admin/roles': typeof AdminRolesIndexRoute
+  '/admin/users': typeof AdminUsersIndexRoute
   '/directory/cell-groups': typeof DirectoryCellGroupsIndexRoute
   '/directory/members': typeof DirectoryMembersIndexRoute
   '/directory/ministries': typeof DirectoryMinistriesIndexRoute
@@ -194,21 +284,32 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/complete-profile': typeof AuthCompleteProfileRoute
+  '/auth/confirm': typeof AuthConfirmRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
+  '/checkin/$token': typeof CheckinTokenRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin/': typeof AdminIndexRoute
   '/directory/': typeof DirectoryIndexRoute
   '/finances/': typeof FinancesIndexRoute
   '/profile/': typeof ProfileIndexRoute
+  '/admin/attendance/$sessionId': typeof AdminAttendanceSessionIdRoute
+  '/admin/attendance/analytics': typeof AdminAttendanceAnalyticsRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
+  '/admin/inventory/$itemId': typeof AdminInventoryItemIdRoute
+  '/admin/inventory/requests': typeof AdminInventoryRequestsRoute
   '/admin/members/new': typeof AdminMembersNewRoute
   '/admin/ministries/$ministryId': typeof AdminMinistriesMinistryIdRoute
   '/directory/cell-groups/$groupId': typeof DirectoryCellGroupsGroupIdRoute
   '/directory/members/$memberId': typeof DirectoryMembersMemberIdRoute
   '/directory/ministries/$ministryId': typeof DirectoryMinistriesMinistryIdRoute
+  '/admin/attendance/': typeof AdminAttendanceIndexRoute
   '/admin/members/': typeof AdminMembersIndexRoute
+  '/admin/roles/': typeof AdminRolesIndexRoute
+  '/admin/users/': typeof AdminUsersIndexRoute
   '/directory/cell-groups/': typeof DirectoryCellGroupsIndexRoute
   '/directory/members/': typeof DirectoryMembersIndexRoute
   '/directory/ministries/': typeof DirectoryMinistriesIndexRoute
@@ -219,21 +320,32 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth/callback'
+    | '/auth/complete-profile'
+    | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
+    | '/auth/reset-password'
+    | '/checkin/$token'
     | '/profile/settings'
     | '/admin'
     | '/directory'
     | '/finances'
     | '/profile'
+    | '/admin/attendance/$sessionId'
+    | '/admin/attendance/analytics'
     | '/admin/cell-groups/$groupId'
+    | '/admin/inventory/$itemId'
+    | '/admin/inventory/requests'
     | '/admin/members/new'
     | '/admin/ministries/$ministryId'
     | '/directory/cell-groups/$groupId'
     | '/directory/members/$memberId'
     | '/directory/ministries/$ministryId'
+    | '/admin/attendance'
     | '/admin/members'
+    | '/admin/roles'
+    | '/admin/users'
     | '/directory/cell-groups'
     | '/directory/members'
     | '/directory/ministries'
@@ -242,21 +354,32 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth/callback'
+    | '/auth/complete-profile'
+    | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
+    | '/auth/reset-password'
+    | '/checkin/$token'
     | '/profile/settings'
     | '/admin'
     | '/directory'
     | '/finances'
     | '/profile'
+    | '/admin/attendance/$sessionId'
+    | '/admin/attendance/analytics'
     | '/admin/cell-groups/$groupId'
+    | '/admin/inventory/$itemId'
+    | '/admin/inventory/requests'
     | '/admin/members/new'
     | '/admin/ministries/$ministryId'
     | '/directory/cell-groups/$groupId'
     | '/directory/members/$memberId'
     | '/directory/ministries/$ministryId'
+    | '/admin/attendance'
     | '/admin/members'
+    | '/admin/roles'
+    | '/admin/users'
     | '/directory/cell-groups'
     | '/directory/members'
     | '/directory/ministries'
@@ -265,21 +388,32 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth/callback'
+    | '/auth/complete-profile'
+    | '/auth/confirm'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
+    | '/auth/reset-password'
+    | '/checkin/$token'
     | '/profile/settings'
     | '/admin/'
     | '/directory/'
     | '/finances/'
     | '/profile/'
+    | '/admin/attendance/$sessionId'
+    | '/admin/attendance/analytics'
     | '/admin/cell-groups/$groupId'
+    | '/admin/inventory/$itemId'
+    | '/admin/inventory/requests'
     | '/admin/members/new'
     | '/admin/ministries/$ministryId'
     | '/directory/cell-groups/$groupId'
     | '/directory/members/$memberId'
     | '/directory/ministries/$ministryId'
+    | '/admin/attendance/'
     | '/admin/members/'
+    | '/admin/roles/'
+    | '/admin/users/'
     | '/directory/cell-groups/'
     | '/directory/members/'
     | '/directory/ministries/'
@@ -289,21 +423,32 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthCompleteProfileRoute: typeof AuthCompleteProfileRoute
+  AuthConfirmRoute: typeof AuthConfirmRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
+  AuthResetPasswordRoute: typeof AuthResetPasswordRoute
+  CheckinTokenRoute: typeof CheckinTokenRoute
   ProfileSettingsRoute: typeof ProfileSettingsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   DirectoryIndexRoute: typeof DirectoryIndexRoute
   FinancesIndexRoute: typeof FinancesIndexRoute
   ProfileIndexRoute: typeof ProfileIndexRoute
+  AdminAttendanceSessionIdRoute: typeof AdminAttendanceSessionIdRoute
+  AdminAttendanceAnalyticsRoute: typeof AdminAttendanceAnalyticsRoute
   AdminCellGroupsGroupIdRoute: typeof AdminCellGroupsGroupIdRoute
+  AdminInventoryItemIdRoute: typeof AdminInventoryItemIdRoute
+  AdminInventoryRequestsRoute: typeof AdminInventoryRequestsRoute
   AdminMembersNewRoute: typeof AdminMembersNewRoute
   AdminMinistriesMinistryIdRoute: typeof AdminMinistriesMinistryIdRoute
   DirectoryCellGroupsGroupIdRoute: typeof DirectoryCellGroupsGroupIdRoute
   DirectoryMembersMemberIdRoute: typeof DirectoryMembersMemberIdRoute
   DirectoryMinistriesMinistryIdRoute: typeof DirectoryMinistriesMinistryIdRoute
+  AdminAttendanceIndexRoute: typeof AdminAttendanceIndexRoute
   AdminMembersIndexRoute: typeof AdminMembersIndexRoute
+  AdminRolesIndexRoute: typeof AdminRolesIndexRoute
+  AdminUsersIndexRoute: typeof AdminUsersIndexRoute
   DirectoryCellGroupsIndexRoute: typeof DirectoryCellGroupsIndexRoute
   DirectoryMembersIndexRoute: typeof DirectoryMembersIndexRoute
   DirectoryMinistriesIndexRoute: typeof DirectoryMinistriesIndexRoute
@@ -354,6 +499,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfileSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/checkin/$token': {
+      id: '/checkin/$token'
+      path: '/checkin/$token'
+      fullPath: '/checkin/$token'
+      preLoaderRoute: typeof CheckinTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/reset-password': {
+      id: '/auth/reset-password'
+      path: '/auth/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/register': {
       id: '/auth/register'
       path: '/auth/register'
@@ -373,6 +532,20 @@ declare module '@tanstack/react-router' {
       path: '/auth/forgot-password'
       fullPath: '/auth/forgot-password'
       preLoaderRoute: typeof AuthForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/confirm': {
+      id: '/auth/confirm'
+      path: '/auth/confirm'
+      fullPath: '/auth/confirm'
+      preLoaderRoute: typeof AuthConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/complete-profile': {
+      id: '/auth/complete-profile'
+      path: '/auth/complete-profile'
+      fullPath: '/auth/complete-profile'
+      preLoaderRoute: typeof AuthCompleteProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -403,11 +576,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DirectoryCellGroupsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/users/': {
+      id: '/admin/users/'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/roles/': {
+      id: '/admin/roles/'
+      path: '/admin/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof AdminRolesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/members/': {
       id: '/admin/members/'
       path: '/admin/members'
       fullPath: '/admin/members'
       preLoaderRoute: typeof AdminMembersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/attendance/': {
+      id: '/admin/attendance/'
+      path: '/admin/attendance'
+      fullPath: '/admin/attendance'
+      preLoaderRoute: typeof AdminAttendanceIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/directory/ministries/$ministryId': {
@@ -445,11 +639,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMembersNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/inventory/requests': {
+      id: '/admin/inventory/requests'
+      path: '/admin/inventory/requests'
+      fullPath: '/admin/inventory/requests'
+      preLoaderRoute: typeof AdminInventoryRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/inventory/$itemId': {
+      id: '/admin/inventory/$itemId'
+      path: '/admin/inventory/$itemId'
+      fullPath: '/admin/inventory/$itemId'
+      preLoaderRoute: typeof AdminInventoryItemIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/cell-groups/$groupId': {
       id: '/admin/cell-groups/$groupId'
       path: '/admin/cell-groups/$groupId'
       fullPath: '/admin/cell-groups/$groupId'
       preLoaderRoute: typeof AdminCellGroupsGroupIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/attendance/analytics': {
+      id: '/admin/attendance/analytics'
+      path: '/admin/attendance/analytics'
+      fullPath: '/admin/attendance/analytics'
+      preLoaderRoute: typeof AdminAttendanceAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/attendance/$sessionId': {
+      id: '/admin/attendance/$sessionId'
+      path: '/admin/attendance/$sessionId'
+      fullPath: '/admin/attendance/$sessionId'
+      preLoaderRoute: typeof AdminAttendanceSessionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/members/$memberId/edit': {
@@ -465,21 +687,32 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  AuthCompleteProfileRoute: AuthCompleteProfileRoute,
+  AuthConfirmRoute: AuthConfirmRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
+  AuthResetPasswordRoute: AuthResetPasswordRoute,
+  CheckinTokenRoute: CheckinTokenRoute,
   ProfileSettingsRoute: ProfileSettingsRoute,
   AdminIndexRoute: AdminIndexRoute,
   DirectoryIndexRoute: DirectoryIndexRoute,
   FinancesIndexRoute: FinancesIndexRoute,
   ProfileIndexRoute: ProfileIndexRoute,
+  AdminAttendanceSessionIdRoute: AdminAttendanceSessionIdRoute,
+  AdminAttendanceAnalyticsRoute: AdminAttendanceAnalyticsRoute,
   AdminCellGroupsGroupIdRoute: AdminCellGroupsGroupIdRoute,
+  AdminInventoryItemIdRoute: AdminInventoryItemIdRoute,
+  AdminInventoryRequestsRoute: AdminInventoryRequestsRoute,
   AdminMembersNewRoute: AdminMembersNewRoute,
   AdminMinistriesMinistryIdRoute: AdminMinistriesMinistryIdRoute,
   DirectoryCellGroupsGroupIdRoute: DirectoryCellGroupsGroupIdRoute,
   DirectoryMembersMemberIdRoute: DirectoryMembersMemberIdRoute,
   DirectoryMinistriesMinistryIdRoute: DirectoryMinistriesMinistryIdRoute,
+  AdminAttendanceIndexRoute: AdminAttendanceIndexRoute,
   AdminMembersIndexRoute: AdminMembersIndexRoute,
+  AdminRolesIndexRoute: AdminRolesIndexRoute,
+  AdminUsersIndexRoute: AdminUsersIndexRoute,
   DirectoryCellGroupsIndexRoute: DirectoryCellGroupsIndexRoute,
   DirectoryMembersIndexRoute: DirectoryMembersIndexRoute,
   DirectoryMinistriesIndexRoute: DirectoryMinistriesIndexRoute,

@@ -16,6 +16,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // causing "DOMException: The operation was aborted" on auth init.
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
+    // The /auth/callback route parses invite/magic/recovery tokens from the URL
+    // itself. Leaving detectSessionInUrl on races the client against that code —
+    // the client silently consumes and clears the hash first, so the callback
+    // then sees an empty hash and reports "Invalid authentication link".
+    detectSessionInUrl: false,
     lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => {
       return fn()
     },

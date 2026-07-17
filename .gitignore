@@ -64,3 +64,11 @@ coverage/
 public/data/
 danang.jpg
 
+
+# Local DB backups (contain production member PII — never commit)
+data/
+data/backups/
+
+# E2E artifacts
+test-results/
+playwright-report/

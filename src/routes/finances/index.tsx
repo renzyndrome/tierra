@@ -25,13 +25,14 @@ import type {
   TransactionType,
 } from '../../lib/types'
 import {
-  ADMIN_PIN,
   INCOME_CATEGORIES,
   EXPENSE_CATEGORIES,
   getCategoriesByType,
   getCategoryColor,
   formatCurrency,
 } from '../../lib/constants'
+import { hasPermission } from '../../lib/auth'
+import { FinancePinGate } from '../../components/FinancePinGate'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -131,14 +132,11 @@ function FinancesPage() {
   const [formNotes, setFormNotes] = useState('')
   const [formError, setFormError] = useState('')
 
-  // PIN gate state
+  // PIN gate state (server-verified per-user finance PIN — see FinancePinGate)
   const [isPinAuthenticated, setIsPinAuthenticated] = useState(false)
-  const [pinInput, setPinInput] = useState('')
-  const [pinInputError, setPinInputError] = useState('')
 
-  const isAdmin = profile?.role === 'super_admin' || profile?.role === 'satellite_leader'
-  const isSuperAdmin = profile?.role === 'super_admin'
-  const userSatelliteId = profile?.role === 'satellite_leader' ? profile.satellite_id : null
+  const canViewFinances = profile ? hasPermission(profile.role, 'finances.read') : false
+  const userSatelliteId = profile?.role === 'satellite' ? profile.satellite_id : null
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -147,16 +145,6 @@ function FinancesPage() {
       navigate({ to: '/auth/login' })
     }
   }, [authLoading, isAuthenticated, navigate])
-
-  const handlePinSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (pinInput === ADMIN_PIN) {
-      setIsPinAuthenticated(true)
-      setPinInputError('')
-    } else {
-      setPinInputError('Invalid PIN. Please try again.')
-    }
-  }
 
   // Fetch satellites and members for dropdowns
   useEffect(() => {
@@ -426,14 +414,14 @@ function FinancesPage() {
 
   if (!isAuthenticated) return null
 
-  // Not admin
-  if (!isAdmin) {
+  // No finance access
+  if (!canViewFinances) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardContent className="p-6 text-center">
             <p className="text-lg font-medium text-gray-900 mb-2">Access Restricted</p>
-            <p className="text-gray-600 mb-4">Only administrators can access the financial dashboard.</p>
+            <p className="text-gray-600 mb-4">You don't have access to the financial dashboard.</p>
             <Link to="/admin">
               <Button>Back to Dashboard</Button>
             </Link>
@@ -444,33 +432,7 @@ function FinancesPage() {
   }
 
   if (!isPinAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#1A0A0E] via-[#2D1218] to-[#1A0A0E] flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-red-900/30">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Financial Management</CardTitle>
-            <CardDescription>Enter your PIN to access financial data</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePinSubmit} className="space-y-4">
-              <Input
-                type="password"
-                placeholder="Enter PIN"
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                className="text-center text-2xl tracking-widest"
-                maxLength={10}
-                autoFocus
-              />
-              {pinInputError && <p className="text-red-500 text-sm text-center">{pinInputError}</p>}
-              <Button type="submit" className="w-full bg-[#8B1538] hover:bg-[#6B0F2B]">
-                Continue
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <FinancePinGate onUnlock={() => setIsPinAuthenticated(true)} />
   }
 
   const categories = getCategoriesByType(formType)

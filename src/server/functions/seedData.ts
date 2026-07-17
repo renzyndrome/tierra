@@ -13,7 +13,7 @@ function getAdminAccount() {
   if (!email || !password) {
     throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be set in .env')
   }
-  return { email, password, role: 'super_admin' as const, name: 'Quest Admin' }
+  return { email, password, role: 'admin' as const, name: 'Quest Admin' }
 }
 
 // Seed data for satellites (9 real locations from church spreadsheet)
@@ -281,7 +281,7 @@ export const seedTestAccounts = createServerFn({ method: 'POST' })
                 email: account.email,
                 satellite_id: satelliteId,
                 membership_status: 'active',
-                discipleship_stage: account.role === 'super_admin' ? 'Leader' : 'Growing',
+                discipleship_stage: account.role === 'admin' ? 'Leader' : 'Growing',
                 city: 'Santa Rosa',
               })
               .select()
@@ -340,7 +340,7 @@ export const seedTestAccounts = createServerFn({ method: 'POST' })
             email: account.email,
             satellite_id: satelliteId,
             membership_status: 'active',
-            discipleship_stage: account.role === 'super_admin' ? 'Leader' : 'Growing',
+            discipleship_stage: account.role === 'admin' ? 'Leader' : 'Growing',
             city: 'Santa Rosa', // Required field
           })
           .select()

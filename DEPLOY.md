@@ -8,6 +8,12 @@ Dokploy builds the image from the `Dockerfile` and routes traffic to it through 
 (which also terminates TLS via Let's Encrypt). You do **not** need the `nginx/` config —
 that is only for bare-metal hosting without Dokploy.
 
+> **Runtime: Node 22 (required).** Node 24's bundled undici has a regression that crashes
+> TanStack Start's SSR with `TypeError: Response body object should not be disturbed or
+> locked`. Build and run on **Node 22 LTS** (the `Dockerfile` base image must be `node:22`).
+> Locally this is pinned via `.npmrc` (`use-node-version=22.17.0`), `.nvmrc`, and
+> `package.json` `engines`, so `pnpm dev` always uses Node 22.
+
 ---
 
 ## 1. Create the application
@@ -35,6 +41,9 @@ below in the Dokploy **Environment** section only. (The client gets its public c
 | `SUPABASE_SERVICE_ROLE_KEY`  |     ✅      | **Secret.** Server only — never `VITE_`-prefixed            |
 | `ADMIN_EMAIL`                |     ✅      | Server only — used to seed the admin account                |
 | `ADMIN_PASSWORD`             |     ✅      | **Secret.** Server only                                     |
+| `APP_URL`                    |     ✅      | Base URL for invite/confirm links, e.g. `https://admin.questlaguna.org` (see §6) |
+| `RESEND_API_KEY`             |  optional   | **Secret.** If set, invites are sent via Resend (branded email); else Supabase's built-in email (see §6) |
+| `RESEND_FROM`                |  optional   | Verified sender, e.g. `Quest Laguna <noreply@questlaguna.org>` (Resend requires a verified domain) |
 | `NODE_ENV`                   |     ✅      | `production` (already set by the Dockerfile)                |
 | `HOST`                       |     ✅      | `0.0.0.0` (already set by the Dockerfile)                   |
 | `PORT`                       |     ✅      | `3002` (already set by the Dockerfile)                      |
@@ -98,3 +107,31 @@ docker compose up --build
 
 The compose file passes the three `VITE_*` values as **both** build args and runtime env,
 mirroring the Dokploy configuration above.
+
+---
+
+## 6. Account management (roles, invites, finance PIN)
+
+The admin **Accounts & Access** area (`/admin/users`, `/admin/roles`) lets admins invite
+users by email, assign one of six roles (`admin | finance | satellite | registration |
+discipleship | member`), and edit a per-role permission matrix. Access to the Finances area
+is additionally protected by a **per-user PIN** (scrypt-hashed server-side).
+
+**Schema:** applied to production 2026-07-16. Repo record + apply/rollback steps in
+`supabase/2026-07-16_account_management*.sql` and `..._APPLY.md`. Tables added:
+`role_permissions`, `user_invitations`, `user_finance_pins` (the last two are service-role
+only — RLS enabled, no client policies).
+
+**Required setup:**
+
+1. **`APP_URL`** must be set to the deployed origin (e.g. `https://admin.questlaguna.org`)
+   so invite/confirm links point back to the app.
+2. **Supabase → Auth → Redirect URLs** must include that origin (`…/**`). Invite emails use
+   an on-domain `/auth/confirm?token_hash=…` link (verified via `verifyOtp`), so the raw
+   `*.supabase.co` URL is never exposed.
+3. **Email delivery (optional):** set `RESEND_API_KEY` (+ `RESEND_FROM` on a Resend-verified
+   domain) to send branded invites via Resend. Without it, Supabase's built-in email is used,
+   and the UI always returns a shareable invite link as a fallback.
+
+Invited users land on `/auth/confirm` → set a password (`/auth/reset-password`) → complete
+their profile (`/auth/complete-profile`: name + satellite + ministry) → `/admin`.

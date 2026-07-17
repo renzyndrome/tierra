@@ -201,7 +201,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Sign out
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
+    // Fire the server sign-out but don't await it — supabase.auth.signOut() can
+    // hang under this app's custom auth lock. Clear the persisted session and
+    // local state directly so the user is signed out immediately and reliably.
+    supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('sb-'))
+        .forEach((k) => localStorage.removeItem(k))
+    } catch {
+      // ignore storage access issues
+    }
+    setState({ ...initialAuthState, isLoading: false })
   }, [])
 
   // Sign in with magic link

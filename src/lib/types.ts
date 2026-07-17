@@ -9,7 +9,9 @@ export type EventMemberStatus = 'First Timer' | 'Newbie' | 'Regular' | 'Leader'
 export type MembershipStatus = 'visitor' | 'regular' | 'active' | 'inactive'
 export type SpiritualSentiment = 'struggling' | 'stable' | 'thriving'
 export type Gender = 'male' | 'female'
-export type UserRole = 'super_admin' | 'satellite_leader' | 'cell_leader' | 'member'
+// Account roles. `member` is the default/basic role assigned on signup.
+// admin = full access; the others are domain-scoped (see ROLE_PERMISSIONS).
+export type UserRole = 'admin' | 'finance' | 'satellite' | 'registration' | 'discipleship' | 'member'
 export type CellGroupRole = 'leader' | 'co_leader' | 'member'
 export type MinistryRole = 'head' | 'coordinator' | 'volunteer'
 export type MeetingDay = 'Sunday' | 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday'
@@ -244,6 +246,47 @@ export interface UserProfileUpdate {
 export interface UserWithMember extends UserProfile {
   member?: Member | null
   satellite?: Satellite | null
+}
+
+// ============================================
+// ACCOUNT MANAGEMENT TYPES (invites, roles, permissions)
+// ============================================
+
+// One row of the editable role -> permission matrix (role_permissions table).
+export interface RolePermission {
+  role: UserRole
+  permission: string
+  created_at: string
+}
+
+export type InvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired'
+
+export interface UserInvitation {
+  id: string
+  email: string
+  role: UserRole
+  satellite_id: string | null
+  invited_by: string | null
+  invited_user_id: string | null
+  status: InvitationStatus
+  created_at: string
+  accepted_at: string | null
+  updated_at: string
+}
+
+// Flattened user row for the admin Users table (profile + auth email + member name).
+export interface AdminUserListItem {
+  id: string
+  email: string | null
+  role: UserRole
+  satellite_id: string | null
+  satellite_name: string | null
+  member_id: string | null
+  member_name: string | null
+  is_active: boolean
+  last_login_at: string | null
+  created_at: string
+  has_finance_pin: boolean
 }
 
 // ============================================
@@ -533,41 +576,63 @@ export interface AuthUser {
 // ============================================
 
 export type Permission =
+  | '*'
+  // members
   | 'members.read'
   | 'members.read.public'
   | 'members.write'
   | 'members.write.self'
   | 'members.write.own_group'
   | 'members.delete'
+  // quest circles (cell groups)
   | 'cell_groups.read'
   | 'cell_groups.write'
   | 'cell_groups.write.own'
   | 'cell_groups.delete'
+  // ministries
   | 'ministries.read'
   | 'ministries.write'
   | 'ministries.delete'
+  // satellites
+  | 'satellites.read'
+  | 'satellites.write'
+  // finances
+  | 'finances.read'
+  | 'finances.write'
+  // inventory
+  | 'inventory.read'
+  | 'inventory.write'
+  // sunday registration (future module)
+  | 'registration.read'
+  | 'registration.write'
+  // analytics / ai
   | 'analytics.read'
   | 'ai.generate'
+  // account administration
   | 'users.manage'
-  | '*'
+  | 'roles.manage'
 
+// Default role -> permissions. This is the code fallback; the editable
+// `role_permissions` table in Supabase is the runtime source of truth and
+// overrides these when present. Keep in sync with the seed in
+// supabase/2026-07-16_account_management.sql.
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  super_admin: ['*'],
-  satellite_leader: [
-    'members.read', 'members.write', 'members.delete',
-    'cell_groups.read', 'cell_groups.write', 'cell_groups.delete',
+  admin: ['*'],
+  finance: ['finances.read', 'finances.write', 'analytics.read'],
+  satellite: [
+    'satellites.read', 'satellites.write',
+    'members.read',
+    'inventory.read', 'inventory.write',
+    'analytics.read',
+  ],
+  registration: ['registration.read', 'registration.write', 'members.read'],
+  discipleship: [
+    'members.read', 'members.write',
+    'cell_groups.read', 'cell_groups.write',
     'ministries.read', 'ministries.write',
-    'analytics.read', 'ai.generate'
+    'analytics.read',
   ],
-  cell_leader: [
-    'members.read', 'members.write.own_group',
-    'cell_groups.read', 'cell_groups.write.own',
-    'ministries.read'
-  ],
-  member: [
-    'members.read.public', 'members.write.self',
-    'cell_groups.read', 'ministries.read'
-  ]
+  member: ['members.read.public'],
 }
 
 // ============================================
@@ -662,6 +727,7 @@ export interface InventoryItem {
   photo_url: string | null
   category: string | null
   condition: InventoryCondition
+  date_purchased: string | null
   created_at: string
   updated_at: string
 }
@@ -675,6 +741,7 @@ export interface InventoryItemInsert {
   photo_url?: string | null
   category?: string | null
   condition?: InventoryCondition
+  date_purchased?: string | null
 }
 
 export interface InventoryItemUpdate {
@@ -685,6 +752,280 @@ export interface InventoryItemUpdate {
   photo_url?: string | null
   category?: string | null
   condition?: InventoryCondition
+  date_purchased?: string | null
+  updated_at?: string
+}
+
+// ---- Maintenance logs -------------------------------------------------------
+
+export type MaintenanceType =
+  | 'Cleaning'
+  | 'Repair'
+  | 'Inspection'
+  | 'Servicing'
+  | 'Calibration'
+  | 'Other'
+
+export interface InventoryMaintenanceLog {
+  id: string
+  item_id: string
+  maintenance_date: string
+  maintenance_type: MaintenanceType
+  description: string | null
+  performed_by: string | null
+  cost: number | null
+  next_due_date: string | null
+  logged_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InventoryMaintenanceLogInsert {
+  item_id: string
+  maintenance_date: string
+  maintenance_type?: MaintenanceType
+  description?: string | null
+  performed_by?: string | null
+  cost?: number | null
+  next_due_date?: string | null
+}
+
+// ---- Borrow / deployment requests -------------------------------------------
+
+// Where a checked-out unit is deployed. 'internal' = stays on campus.
+export type BorrowDestinationType = 'internal' | 'satellite' | 'outreach' | 'personal'
+
+export type BorrowStatus =
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'checked_out'
+  | 'returned'
+  | 'cancelled'
+
+export interface InventoryBorrowRequest {
+  id: string
+  item_id: string
+  quantity: number
+  borrower_member_id: string | null
+  borrower_name: string | null
+  requested_by: string | null
+  ministry_id: string | null
+  destination_type: BorrowDestinationType
+  destination_satellite_id: string | null
+  destination_detail: string | null
+  purpose: string | null
+  status: BorrowStatus
+  condition_before: InventoryCondition | null
+  condition_after: InventoryCondition | null
+  borrow_date: string | null
+  expected_return_date: string | null
+  checked_out_at: string | null
+  returned_at: string | null
+  approved_by: string | null
+  approved_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Read shape with the item / borrower / ministry / satellite joined in.
+export interface InventoryBorrowRequestWithRelations extends InventoryBorrowRequest {
+  item?: Pick<InventoryItem, 'id' | 'name' | 'location' | 'photo_url'> | null
+  borrower?: { id: string; name: string; photo_url: string | null } | null
+  ministry?: { id: string; name: string } | null
+  destination_satellite?: { id: string; name: string } | null
+}
+
+export interface InventoryBorrowRequestInsert {
+  item_id: string
+  quantity?: number
+  borrower_member_id?: string | null
+  borrower_name?: string | null
+  ministry_id?: string | null
+  destination_type: BorrowDestinationType
+  destination_satellite_id?: string | null
+  destination_detail?: string | null
+  purpose?: string | null
+  borrow_date?: string | null
+  expected_return_date?: string | null
+  notes?: string | null
+}
+
+// ============================================
+// SERVICE ATTENDANCE TYPES
+// ============================================
+
+export type CheckinMethod = 'qr_self' | 'qr_guest' | 'manual'
+export type MatchStatus = 'auto_matched' | 'pending' | 'confirmed' | 'new_member' | 'ignored'
+
+export interface ServiceType {
+  id: string
+  name: string
+  slug: string
+  default_day: MeetingDay | null
+  default_time: string | null
+  sort_order: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ServiceTypeInsert {
+  id?: string
+  name: string
+  slug: string
+  default_day?: MeetingDay | null
+  default_time?: string | null
+  sort_order?: number
+  is_active?: boolean
+}
+
+export interface ServiceTypeUpdate {
+  name?: string
+  slug?: string
+  default_day?: MeetingDay | null
+  default_time?: string | null
+  sort_order?: number
+  is_active?: boolean
+}
+
+export interface ServiceSession {
+  id: string
+  service_type_id: string
+  session_date: string
+  satellite_id: string | null
+  title: string | null
+  qr_token: string
+  is_open: boolean
+  opened_at: string | null
+  closed_at: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ServiceSessionInsert {
+  id?: string
+  service_type_id: string
+  session_date: string
+  satellite_id?: string | null
+  title?: string | null
+  qr_token?: string
+  is_open?: boolean
+  created_by?: string | null
+}
+
+export interface ServiceSessionUpdate {
+  session_date?: string
+  satellite_id?: string | null
+  title?: string | null
+  is_open?: boolean
+  closed_at?: string | null
+}
+
+export interface ServiceSessionWithRelations extends ServiceSession {
+  service_type?: ServiceType | null
+  satellite?: { id: string; name: string } | null
+  checkin_count?: number
+  pending_count?: number
+}
+
+export interface AttendanceRecord {
+  id: string
+  session_id: string
+  member_id: string | null
+  raw_name: string | null
+  raw_phone: string | null
+  checkin_method: CheckinMethod
+  match_status: MatchStatus
+  matched_by: string | null
+  note: string | null
+  checked_in_at: string
+  created_at: string
+}
+
+export interface AttendanceRecordInsert {
+  id?: string
+  session_id: string
+  member_id?: string | null
+  raw_name?: string | null
+  raw_phone?: string | null
+  checkin_method?: CheckinMethod
+  match_status?: MatchStatus
+  matched_by?: string | null
+  note?: string | null
+}
+
+export interface AttendanceRecordUpdate {
+  member_id?: string | null
+  match_status?: MatchStatus
+  matched_by?: string | null
+  note?: string | null
+}
+
+export interface AttendanceRecordWithMember extends AttendanceRecord {
+  member?: { id: string; name: string; satellite_id: string | null } | null
+}
+
+// A candidate member suggestion from the fuzzy matcher (search_members_similar RPC).
+export interface MatchCandidate {
+  id: string
+  name: string
+  satellite_id: string | null
+  phone: string | null
+  sim: number
+}
+
+// A pending attendance record plus recomputed suggestions for the admin queue.
+export interface PendingMatch {
+  record: AttendanceRecordWithMember
+  candidates: MatchCandidate[]
+}
+
+// Member-facing attendance history entry.
+export interface MemberAttendanceEntry {
+  record_id: string
+  session_id: string
+  session_date: string
+  service_name: string
+  service_slug: string
+  satellite_name: string | null
+  checked_in_at: string
+  checkin_method: CheckinMethod
+}
+
+export interface MemberAttendanceSummary {
+  totalCheckins: number
+  byService: { service_slug: string; service_name: string; count: number }[]
+  recent: MemberAttendanceEntry[]
+}
+
+// Aggregated attendance analytics for the admin dashboard.
+export interface AttendanceStats {
+  totalCheckins: number
+  matchedCheckins: number
+  pendingCount: number
+  uniqueMembers: number
+  byService: { service_slug: string; service_name: string; count: number }[]
+  bySatellite: { satellite_id: string | null; satellite_name: string; count: number }[]
+  trend: {
+    session_id: string
+    session_date: string
+    service_slug: string
+    service_name: string
+    count: number
+    first_timers: number
+  }[]
+  topAttendees: { member_id: string; name: string; count: number }[]
+}
+
+// Result of the check-in matching engine (returned to the public check-in UI).
+export interface CheckinResult {
+  status: 'checked_in' | 'already_checked_in'
+  matched: boolean
+  displayName: string | null
+  recordId: string
 }
 
 // ============================================
@@ -748,6 +1089,62 @@ export type Database = {
         Row: InventoryCategory
         Insert: { name: string }
         Update: { name?: string }
+      }
+      role_permissions: {
+        Row: RolePermission
+        Insert: { role: UserRole; permission: string }
+        Update: { role?: UserRole; permission?: string }
+      }
+      user_invitations: {
+        Row: UserInvitation
+        Insert: {
+          email: string
+          role: UserRole
+          satellite_id?: string | null
+          invited_by?: string | null
+          invited_user_id?: string | null
+          status?: InvitationStatus
+        }
+        Update: {
+          role?: UserRole
+          satellite_id?: string | null
+          invited_user_id?: string | null
+          status?: InvitationStatus
+          accepted_at?: string | null
+        }
+      }
+      user_finance_pins: {
+        Row: { user_id: string; pin_hash: string; set_at: string; updated_at: string }
+        Insert: { user_id: string; pin_hash: string }
+        Update: { pin_hash?: string }
+      }
+      service_types: {
+        Row: ServiceType
+        Insert: ServiceTypeInsert
+        Update: ServiceTypeUpdate
+      }
+      service_sessions: {
+        Row: ServiceSession
+        Insert: ServiceSessionInsert
+        Update: ServiceSessionUpdate
+      }
+      attendance_records: {
+        Row: AttendanceRecord
+        Insert: AttendanceRecordInsert
+        Update: AttendanceRecordUpdate
+      }
+      inventory_maintenance_logs: {
+        Row: InventoryMaintenanceLog
+        Insert: InventoryMaintenanceLogInsert & { logged_by?: string | null }
+        Update: Partial<InventoryMaintenanceLog>
+      }
+      inventory_borrow_requests: {
+        Row: InventoryBorrowRequest
+        Insert: InventoryBorrowRequestInsert & {
+          requested_by?: string | null
+          status?: BorrowStatus
+        }
+        Update: Partial<InventoryBorrowRequest>
       }
     }
   }
