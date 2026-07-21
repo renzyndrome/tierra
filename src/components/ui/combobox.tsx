@@ -157,6 +157,7 @@ export function Combobox({
       {open && (
         <ul
           ref={listRef}
+          role="listbox"
           className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
         >
           {filtered.length === 0 ? (

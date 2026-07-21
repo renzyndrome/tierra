@@ -64,17 +64,17 @@ export const financialTransactionSchema = z.object({
 
 export type FinancialTransactionFormData = z.infer<typeof financialTransactionSchema>
 
-// Public service check-in form (guest flow). Phone is optional and only used to
-// improve backend name matching.
+// Public service check-in form (guest flow). "Who invited you?" is optional and
+// captured for follow-up / invitation tracking.
 export const checkinFormSchema = z.object({
   name: z
     .string({ message: 'Name is required' })
     .min(2, 'Name must be at least 2 characters')
     .max(100, 'Name must be less than 100 characters')
     .transform((val) => val.trim()),
-  phone: z
+  invitedBy: z
     .string()
-    .max(20, 'Contact number is too long')
+    .max(100, 'Name is too long')
     .transform((val) => val.trim())
     .optional()
     .or(z.literal('')),

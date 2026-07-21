@@ -3,12 +3,16 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
+import { getCaller, requirePermission } from './_authGuard'
 import type {
   FinancialTransaction,
   FinancialTransactionInsert,
   FinancialTransactionUpdate,
   FinancialTransactionWithRelations,
   FinancialOverview,
+  MemberGivingStatement,
+  MemberGivingEntry,
+  MemberGivingCategoryTotal,
   PaginatedResult,
 } from '../../lib/types'
 
@@ -35,6 +39,7 @@ const transactionInsertSchema = z.object({
 const transactionUpdateSchema = transactionInsertSchema.partial()
 
 const transactionFilterSchema = z.object({
+  accessToken: z.string(),
   search: z.string().optional(),
   satelliteId: z.string().uuid().optional(),
   transactionType: z.enum(['income', 'expense']).optional(),
@@ -60,6 +65,7 @@ export const getFinancialTransactions = createServerFn({ method: 'GET' })
     transactionFilterSchema.parse(data)
   )
   .handler(async ({ data }): Promise<PaginatedResult<FinancialTransactionWithRelations>> => {
+    await requirePermission(data.accessToken, 'finances.read')
     const supabase = createServerAdminClient()
 
     const from = (data.page - 1) * data.limit
@@ -161,17 +167,25 @@ export const getFinancialTransactions = createServerFn({ method: 'GET' })
 // CREATE FINANCIAL TRANSACTION
 // ============================================
 
+const transactionCreateSchema = transactionInsertSchema.extend({
+  accessToken: z.string(),
+})
+
 export const createFinancialTransaction = createServerFn({ method: 'POST' })
-  .inputValidator((data: z.infer<typeof transactionInsertSchema>) =>
-    transactionInsertSchema.parse(data)
+  .inputValidator((data: z.infer<typeof transactionCreateSchema>) =>
+    transactionCreateSchema.parse(data)
   )
   .handler(async ({ data }): Promise<FinancialTransaction> => {
+    await requirePermission(data.accessToken, 'finances.write')
     const supabase = createServerAdminClient()
+
+    // Strip the auth token before it reaches the DB row.
+    const { accessToken: _token, ...fields } = data
 
     // Enforce: member_id only for income
     const insertData: FinancialTransactionInsert = {
-      ...data,
-      member_id: data.transaction_type === 'income' ? data.member_id : null,
+      ...fields,
+      member_id: fields.transaction_type === 'income' ? fields.member_id : null,
     }
 
     const { data: transaction, error } = await supabase
@@ -194,15 +208,17 @@ export const createFinancialTransaction = createServerFn({ method: 'POST' })
 
 export const updateFinancialTransaction = createServerFn({ method: 'POST' })
   .inputValidator(
-    (data: { id: string; updates: z.infer<typeof transactionUpdateSchema> }) =>
+    (data: { accessToken: string; id: string; updates: z.infer<typeof transactionUpdateSchema> }) =>
       z
         .object({
+          accessToken: z.string(),
           id: z.string().uuid(),
           updates: transactionUpdateSchema,
         })
         .parse(data)
   )
   .handler(async ({ data }): Promise<FinancialTransaction> => {
+    await requirePermission(data.accessToken, 'finances.write')
     const supabase = createServerAdminClient()
 
     const updateData: FinancialTransactionUpdate = { ...data.updates }
@@ -232,10 +248,11 @@ export const updateFinancialTransaction = createServerFn({ method: 'POST' })
 // ============================================
 
 export const deleteFinancialTransaction = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string }) =>
-    z.object({ id: z.string().uuid() }).parse(data)
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
   )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'finances.write')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase
@@ -256,9 +273,10 @@ export const deleteFinancialTransaction = createServerFn({ method: 'POST' })
 // ============================================
 
 export const getFinancialOverview = createServerFn({ method: 'GET' })
-  .inputValidator((data: { satelliteId?: string; startDate?: string; endDate?: string }) =>
+  .inputValidator((data: { accessToken: string; satelliteId?: string; startDate?: string; endDate?: string }) =>
     z
       .object({
+        accessToken: z.string(),
         satelliteId: z.string().uuid().optional(),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
@@ -266,6 +284,7 @@ export const getFinancialOverview = createServerFn({ method: 'GET' })
       .parse(data)
   )
   .handler(async ({ data }): Promise<FinancialOverview> => {
+    await requirePermission(data.accessToken, 'finances.read')
     const supabase = createServerAdminClient()
 
     // Build base query for all transactions
@@ -356,9 +375,10 @@ export const getFinancialOverview = createServerFn({ method: 'GET' })
 
 export const getFinancialChartData = createServerFn({ method: 'GET' })
   .inputValidator(
-    (data: { satelliteId?: string; months?: number }) =>
+    (data: { accessToken: string; satelliteId?: string; months?: number }) =>
       z
         .object({
+          accessToken: z.string(),
           satelliteId: z.string().uuid().optional(),
           months: z.number().min(1).max(24).default(6),
         })
@@ -373,6 +393,7 @@ export const getFinancialChartData = createServerFn({ method: 'GET' })
       incomeByCategoryData: { category: string; amount: number; color: string }[]
       expenseByCategoryData: { category: string; amount: number; color: string }[]
     }> => {
+      await requirePermission(data.accessToken, 'finances.read')
       const supabase = createServerAdminClient()
 
       // Calculate start date (N months ago)
@@ -506,10 +527,11 @@ export interface TitheInsights {
 
 export const getTitheInsights = createServerFn({ method: 'GET' })
   .inputValidator(
-    (data: { satelliteId?: string }) =>
-      z.object({ satelliteId: z.string().uuid().optional() }).parse(data)
+    (data: { accessToken: string; satelliteId?: string }) =>
+      z.object({ accessToken: z.string(), satelliteId: z.string().uuid().optional() }).parse(data)
   )
   .handler(async ({ data }): Promise<TitheInsights> => {
+    await requirePermission(data.accessToken, 'finances.read')
     const supabase = createServerAdminClient()
 
     const now = new Date()
@@ -582,5 +604,129 @@ export const getTitheInsights = createServerFn({ method: 'GET' })
       missionsChange: pctChange(current.missions, prev.missions),
       incomeChange: pctChange(current.totalIncome, prev.totalIncome),
       expensesChange: pctChange(current.totalExpenses, prev.totalExpenses),
+    }
+  })
+
+// ============================================
+// MEMBER SELF-SERVICE: MY GIVING / STATEMENT OF ACCOUNT
+// ============================================
+//
+// A member views their OWN contribution history (tithes / offerings / missions
+// recorded against their member_id). The caller's member is resolved server-side
+// from their access token — never from client input — so a member can only ever
+// retrieve their own giving. member_id is only ever set on income rows (enforced
+// by the chk_member_income_only DB constraint), and we additionally scope to
+// transaction_type='income' as defense-in-depth. Unlike the admin finance area,
+// this does not require the finances.* permission or the finance PIN, exactly
+// like the "My Attendance" self-view.
+
+const givingStatementSchema = z.object({
+  accessToken: z.string(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date').optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date').optional(),
+})
+
+export const getMyGivingStatement = createServerFn({ method: 'GET' })
+  .inputValidator((data: z.infer<typeof givingStatementSchema>) =>
+    givingStatementSchema.parse(data)
+  )
+  .handler(async ({ data }): Promise<MemberGivingStatement | null> => {
+    const caller = await getCaller(data.accessToken)
+    const supabase = createServerAdminClient()
+
+    // Resolve the caller's own linked member (source of truth = their profile).
+    const { data: profileRow } = await supabase
+      .from('user_profiles')
+      .select('member_id')
+      .eq('id', caller.userId)
+      .single()
+
+    const profile = profileRow as unknown as { member_id: string | null } | null
+    if (!profile?.member_id) return null
+
+    const { data: memberRow } = await supabase
+      .from('members')
+      .select('id, name')
+      .eq('id', profile.member_id)
+      .single()
+
+    const member = memberRow as unknown as { id: string; name: string } | null
+    if (!member) return null
+
+    let query = supabase
+      .from('financial_transactions')
+      .select(
+        'id, transaction_date, category, amount, reference_number, description, satellite:satellites!financial_transactions_satellite_id_fkey(name)'
+      )
+      .eq('member_id', profile.member_id)
+      .eq('transaction_type', 'income')
+
+    if (data.startDate) query = query.gte('transaction_date', data.startDate)
+    if (data.endDate) query = query.lte('transaction_date', data.endDate)
+
+    query = query.order('transaction_date', { ascending: false })
+
+    const { data: rows, error } = await query
+
+    if (error) {
+      console.error('Error loading giving statement:', error)
+      throw new Error('Failed to load giving statement')
+    }
+
+    type Row = {
+      id: string
+      transaction_date: string
+      category: string
+      amount: number | string
+      reference_number: string | null
+      description: string | null
+      satellite: { name: string } | null
+    }
+
+    const txs = (rows ?? []) as unknown as Row[]
+
+    const entries: MemberGivingEntry[] = []
+    const categoryMap = new Map<string, { amount: number; count: number }>()
+    let totalGiven = 0
+    let firstGiftDate: string | null = null
+    let lastGiftDate: string | null = null
+
+    for (const tx of txs) {
+      const amt = Number(tx.amount)
+      totalGiven += amt
+
+      const cat = categoryMap.get(tx.category) ?? { amount: 0, count: 0 }
+      cat.amount += amt
+      cat.count += 1
+      categoryMap.set(tx.category, cat)
+
+      // rows are ordered newest-first; track the true min/max defensively.
+      if (!lastGiftDate || tx.transaction_date > lastGiftDate) lastGiftDate = tx.transaction_date
+      if (!firstGiftDate || tx.transaction_date < firstGiftDate) firstGiftDate = tx.transaction_date
+
+      entries.push({
+        id: tx.id,
+        transaction_date: tx.transaction_date,
+        category: tx.category as MemberGivingEntry['category'],
+        amount: amt,
+        reference_number: tx.reference_number,
+        description: tx.description,
+        satellite_name: tx.satellite?.name ?? null,
+      })
+    }
+
+    const byCategory: MemberGivingCategoryTotal[] = [...categoryMap.entries()]
+      .map(([category, v]) => ({ category, amount: v.amount, count: v.count }))
+      .sort((a, b) => b.amount - a.amount)
+
+    return {
+      member: { id: member.id, name: member.name },
+      totalGiven,
+      giftCount: txs.length,
+      byCategory,
+      firstGiftDate,
+      lastGiftDate,
+      range: { startDate: data.startDate ?? null, endDate: data.endDate ?? null },
+      entries,
     }
   })

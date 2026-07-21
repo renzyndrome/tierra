@@ -12,6 +12,9 @@ import { test, expect, type Page } from '@playwright/test'
 
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || ''
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || ''
+// A session id that already has a pending (unmatched) guest check-in in its
+// review queue — seed one, then pass its id here.
+const QUEUE_SESSION_ID = process.env.E2E_QUEUE_SESSION_ID || ''
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/auth/login')
@@ -58,20 +61,22 @@ test.describe('Admin — Service Attendance', () => {
     await expect(page.getByText(label)).toBeVisible({ timeout: 15_000 })
   })
 
-  test('admin can open the live QR display', async ({ page }) => {
+  test('admin can open the projectable QR display in a new window', async ({ page, context }) => {
     await loginAsAdmin(page)
     await page.goto('/admin/attendance')
 
     const showQr = page.getByRole('button', { name: /show qr/i }).first()
     await expect(showQr).toBeVisible({ timeout: 15_000 })
-    await showQr.click()
 
-    // The projectable overlay shows the scan prompt and a QR (svg).
-    await expect(page.getByText(/scan to check in/i)).toBeVisible()
-    await expect(page.locator('svg').first()).toBeVisible()
+    // "Show QR" opens the PUBLIC projectable page (/display/<token>) in a new
+    // window, so it can be screened while check-ins are managed on this window.
+    const [qrPage] = await Promise.all([context.waitForEvent('page'), showQr.click()])
+    await qrPage.waitForLoadState()
 
-    await page.getByRole('button', { name: /close qr display/i }).click()
-    await expect(page.getByText(/scan to check in/i)).toBeHidden()
+    await expect(qrPage).toHaveURL(/\/display\//)
+    await expect(qrPage.getByText(/scan to check in/i)).toBeVisible({ timeout: 15_000 })
+    await expect(qrPage.locator('svg').first()).toBeVisible()
+    await qrPage.close()
   })
 
   test('analytics page renders', async ({ page }) => {
@@ -80,6 +85,71 @@ test.describe('Admin — Service Attendance', () => {
     await expect(page.getByRole('heading', { name: /attendance analytics/i })).toBeVisible({
       timeout: 15_000,
     })
+  })
+
+  test('admin can confirm a suggested match ("This is them") from the review queue', async ({ page }) => {
+    test.skip(!QUEUE_SESSION_ID, 'Set E2E_QUEUE_SESSION_ID (a session with a pending guest check-in)')
+
+    await loginAsAdmin(page)
+    await page.goto(`/admin/attendance/${QUEUE_SESSION_ID}`)
+    await page.getByRole('tab', { name: /review queue/i }).click()
+
+    // The seeded near-name check-in gets a high-confidence best-match suggestion
+    // (blended scoring: token-based confidence tops up trigram similarity).
+    await expect(page.getByText(/best match/i).first()).toBeVisible({ timeout: 15_000 })
+    const beforeButtons = await page.getByRole('button', { name: /this is them/i }).count()
+    expect(beforeButtons).toBeGreaterThan(0)
+
+    // Confirm the best match on the first pending card.
+    await page.getByRole('button', { name: /this is them/i }).first().click()
+
+    // The resolved record leaves the queue.
+    await expect(page.getByRole('button', { name: /this is them/i })).toHaveCount(0, {
+      timeout: 15_000,
+    })
+  })
+
+  test('admin can create a NEW member from a pending review-queue check-in', async ({ page }) => {
+    test.skip(!QUEUE_SESSION_ID, 'Set E2E_QUEUE_SESSION_ID (a session with a pending guest check-in)')
+
+    await loginAsAdmin(page)
+    await page.goto(`/admin/attendance/${QUEUE_SESSION_ID}`)
+
+    // Open the review queue and confirm there is something to resolve.
+    await page.getByRole('tab', { name: /review queue/i }).click()
+    const createBtn = page.getByRole('button', { name: /create new member/i }).first()
+    await expect(createBtn).toBeVisible({ timeout: 15_000 })
+    await createBtn.click()
+
+    // The prefilled create-member dialog.
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('heading', { name: /create member from check-in/i })).toBeVisible()
+
+    // Submit — creates a visitor member and links this check-in to it.
+    await dialog.getByRole('button', { name: /create & link/i }).click()
+
+    // Dialog closes and the record leaves the pending queue.
+    await expect(dialog).toBeHidden({ timeout: 15_000 })
+  })
+
+  test('admin can delete a session (with its check-ins)', async ({ page }) => {
+    await loginAsAdmin(page)
+    await page.goto('/admin/attendance')
+
+    // Create a throwaway session to delete.
+    const label = `E2E DEL ${Date.now()}`
+    await page.getByRole('button', { name: /start a session|start your first session/i }).first().click()
+    await page.getByLabel(/^label/i).fill(label)
+    await page.getByRole('button', { name: /create & open/i }).click()
+    await page.waitForURL(/\/admin\/attendance\/[0-9a-f-]{36}/, { timeout: 15_000 })
+
+    // Delete it from the Manage page (confirm dialog).
+    await page.getByRole('button', { name: /delete session/i }).click()
+    await page.getByRole('button', { name: /yes, delete/i }).click()
+
+    // Back on the list; the session is gone.
+    await page.waitForURL(/\/admin\/attendance\/?$/, { timeout: 15_000 })
+    await expect(page.getByText(label)).toBeHidden()
   })
 
   test('attendance tab is available in the admin dashboard', async ({ page }) => {

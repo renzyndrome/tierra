@@ -15,8 +15,11 @@ import { useEffect } from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useAuth } from './AuthProvider'
 
-// Path prefixes that must stay reachable without a session.
-const PUBLIC_PREFIXES = ['/checkin', '/auth'] as const
+// Path prefixes that must stay reachable without a session:
+//   /checkin  — attendee QR check-in
+//   /display  — projectable QR screen (shareable to a tech booth, no login)
+//   /auth     — login / callback / password flows
+const PUBLIC_PREFIXES = ['/checkin', '/display', '/auth'] as const
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'))

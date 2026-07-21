@@ -708,6 +708,76 @@ export interface FinancialOverview {
   recentTransactions: FinancialTransactionWithRelations[]
 }
 
+// ---- Member self-service: personal giving / Statement of Account ----
+// A member's own contribution history (tithes / offerings / missions recorded
+// against their member_id). Read-only; resolved server-side from the caller's
+// linked member so a member can only ever see their own giving.
+
+export interface MemberGivingEntry {
+  id: string
+  transaction_date: string
+  category: FinancialCategory
+  amount: number
+  reference_number: string | null
+  description: string | null
+  satellite_name: string | null
+}
+
+export interface MemberGivingCategoryTotal {
+  category: string
+  amount: number
+  count: number
+}
+
+export interface MemberGivingStatement {
+  member: { id: string; name: string }
+  totalGiven: number
+  giftCount: number
+  byCategory: MemberGivingCategoryTotal[]
+  firstGiftDate: string | null
+  lastGiftDate: string | null
+  // The date range this statement was generated for (nulls = unbounded / all time).
+  range: { startDate: string | null; endDate: string | null }
+  entries: MemberGivingEntry[]
+}
+
+// ---- Church expense report requests (member request -> finance release) ----
+// Members can request a church expense report for a period; finance reviews and
+// releases (or rejects) it. A released report exposes an AGGREGATE expense
+// summary (by category), never per-transaction line items.
+
+export type ExpenseReportStatus = 'pending' | 'released' | 'rejected'
+
+export interface ExpenseReportRequest {
+  id: string
+  requested_by: string
+  member_id: string | null
+  period_start: string
+  period_end: string
+  status: ExpenseReportStatus
+  note: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Enriched row for the finance review queue.
+export interface ExpenseReportRequestWithRequester extends ExpenseReportRequest {
+  requester_email: string | null
+  requester_name: string | null
+}
+
+// The aggregate expense summary a released report exposes.
+export interface ExpenseReportSummary {
+  request_id: string
+  period_start: string
+  period_end: string
+  totalExpenses: number
+  byCategory: { category: string; amount: number; count: number }[]
+  bySatellite: { satellite_name: string; amount: number }[]
+}
+
 // ============================================
 // INVENTORY TYPES
 // ============================================
@@ -937,6 +1007,7 @@ export interface AttendanceRecord {
   member_id: string | null
   raw_name: string | null
   raw_phone: string | null
+  invited_by: string | null
   checkin_method: CheckinMethod
   match_status: MatchStatus
   matched_by: string | null
@@ -951,6 +1022,7 @@ export interface AttendanceRecordInsert {
   member_id?: string | null
   raw_name?: string | null
   raw_phone?: string | null
+  invited_by?: string | null
   checkin_method?: CheckinMethod
   match_status?: MatchStatus
   matched_by?: string | null

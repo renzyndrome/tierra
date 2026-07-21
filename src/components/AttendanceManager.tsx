@@ -4,7 +4,6 @@
 
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
 import { useAuth } from './AuthProvider'
 import {
   getSessions,
@@ -14,7 +13,6 @@ import {
 } from '../server/functions/attendance'
 import { getSatellites } from '../server/functions/satellites'
 import { hasPermission } from '../lib/auth'
-import { buildCheckinUrl } from '../lib/constants'
 import type { ServiceSessionWithRelations, ServiceType, SatelliteRow } from '../lib/types'
 import { Card, CardContent } from './ui/card'
 import { Button } from './ui/button'
@@ -73,8 +71,6 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
   const [createBusy, setCreateBusy] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  // QR display overlay
-  const [qrSession, setQrSession] = useState<ServiceSessionWithRelations | null>(null)
   const [rowBusyId, setRowBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -101,22 +97,6 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
   useEffect(() => {
     load()
   }, [load])
-
-  // Poll while the QR overlay is open so the live counter updates.
-  useEffect(() => {
-    if (!qrSession || !accessToken) return
-    const interval = setInterval(async () => {
-      try {
-        const s = await getSessions({ data: { accessToken } })
-        setSessions(s)
-        const updated = s.find((x) => x.id === qrSession.id)
-        if (updated) setQrSession(updated)
-      } catch {
-        /* ignore transient poll errors */
-      }
-    }, 10000)
-    return () => clearInterval(interval)
-  }, [qrSession, accessToken])
 
   const handleCreate = async () => {
     if (!accessToken || !newTypeId) return
@@ -229,7 +209,17 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
                     <p className="text-xs text-gray-400">checked in</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setQrSession(s)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        window.open(
+                          `/display/${s.qr_token}`,
+                          '_blank',
+                          'popup,noopener,noreferrer,width=1024,height=1200',
+                        )
+                      }
+                    >
                       Show QR
                     </Button>
                     <Link to="/admin/attendance/$sessionId" params={{ sessionId: s.id }}>
@@ -305,9 +295,6 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* QR display overlay (projectable) */}
-      {qrSession && <QrOverlay session={qrSession} onClose={() => setQrSession(null)} />}
     </>
   )
 
@@ -322,41 +309,3 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
   )
 }
 
-function QrOverlay({
-  session,
-  onClose,
-}: {
-  session: ServiceSessionWithRelations
-  onClose: () => void
-}) {
-  const url = buildCheckinUrl(session.qr_token)
-  return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-br from-[#1A0A0E] via-[#2D1218] to-[#6B0F2B] flex flex-col items-center justify-center p-6">
-      <button
-        onClick={onClose}
-        aria-label="Close QR display"
-        className="absolute top-5 right-5 text-white/70 hover:text-white text-sm border border-white/30 rounded-lg px-4 py-2"
-      >
-        Close
-      </button>
-      <h2 className="text-white text-3xl md:text-5xl font-bold text-center mb-2">
-        {session.service_type?.name ?? 'Service'}
-      </h2>
-      <p className="text-[#F8B4B4] text-lg md:text-xl mb-8">
-        {formatDate(session.session_date)}
-        {session.satellite?.name ? ` · ${session.satellite.name}` : ''}
-      </p>
-      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-2xl">
-        <QRCodeSVG value={url} size={320} level="M" includeMargin={false} />
-      </div>
-      <p className="text-white/80 mt-8 text-lg">Scan to check in</p>
-      <div className="mt-6 text-center">
-        <p className="text-6xl md:text-7xl font-bold text-white leading-none">{session.checkin_count ?? 0}</p>
-        <p className="text-[#F8B4B4] mt-1">checked in</p>
-      </div>
-      {!session.is_open && (
-        <p className="mt-6 px-4 py-2 bg-white/10 text-white rounded-lg">This session is closed — check-ins are not being accepted.</p>
-      )}
-    </div>
-  )
-}

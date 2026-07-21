@@ -378,10 +378,19 @@ function AdminDashboard() {
         hasFetchedRef.current = true
       }
 
-      // Fetch financial overview and inventory in the background
+      // Fetch financial overview and inventory in the background. The finance
+      // overview is server-guarded on finances.read, so only fetch it when the
+      // caller holds that permission; degrade to null (empty finance card) for
+      // everyone else so the inventory fetch is never affected.
       try {
+        const canReadFinances = profile ? hasPermission(profile.role, 'finances.read', permMatrix) : false
+        const overviewToken = session?.access_token
+        const finOverviewPromise =
+          canReadFinances && overviewToken
+            ? getFinancialOverview({ data: { accessToken: overviewToken } }).catch(() => null)
+            : Promise.resolve(null)
         const [finOverview, inventoryData, categoriesData] = await Promise.all([
-          getFinancialOverview({ data: {} }),
+          finOverviewPromise,
           getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } }),
           getInventoryCategories({ data: {} }),
         ])
@@ -590,8 +599,14 @@ function AdminDashboard() {
       }
 
       try {
+        const canReadFinances = profile ? hasPermission(profile.role, 'finances.read', permMatrix) : false
+        const overviewToken = session?.access_token
+        const finOverviewPromise =
+          canReadFinances && overviewToken
+            ? getFinancialOverview({ data: { accessToken: overviewToken } }).catch(() => null)
+            : Promise.resolve(null)
         const [finOverview, inventoryData, categoriesData] = await Promise.all([
-          getFinancialOverview({ data: {} }),
+          finOverviewPromise,
           getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } }),
           getInventoryCategories({ data: {} }),
         ])

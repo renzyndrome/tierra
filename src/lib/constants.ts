@@ -122,6 +122,11 @@ export function getSimpleStageFromJourney(journey: DiscipleshipJourney | null | 
 // Early bird cutoff time (9:00 AM)
 export const EARLY_BIRD_HOUR = 9
 
+// Church name — used for neutral (non-event) branding, e.g. the service
+// check-in page. The anniversary EVENT_* constants below are only for the
+// one-time NEXTLEVEL anniversary event, not regular service attendance.
+export const CHURCH_NAME = 'Quest Laguna'
+
 // Event details
 export const EVENT_NAME = 'NEXTLEVEL Stronger 2026'
 export const EVENT_TITLE = "Celebrating Quest Laguna's 10th Anniversary"
@@ -415,4 +420,20 @@ export const COUNTED_MATCH_STATUSES = ['auto_matched', 'pending', 'confirmed', '
 export function buildCheckinUrl(qrToken: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   return `${origin}/checkin/${qrToken}`
+}
+
+// ============================================
+// EXPENSE REPORT REQUESTS
+// ============================================
+
+export const EXPENSE_REPORT_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending review',
+  released: 'Released',
+  rejected: 'Rejected',
+}
+
+export const EXPENSE_REPORT_STATUS_BADGE: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-800',
+  released: 'bg-emerald-100 text-emerald-800',
+  rejected: 'bg-red-100 text-red-700',
 }

@@ -12,7 +12,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
 import { getCaller, requirePermission } from './_authGuard'
-import { resolveMemberMatch } from '../../lib/nameMatch'
+import { resolveMemberMatch, nameMatchConfidence } from '../../lib/nameMatch'
 import { MATCH_SIMILARITY_THRESHOLD } from '../../lib/constants'
 import type {
   ServiceType,
@@ -210,7 +210,17 @@ export const getSessionDetail = createServerFn({ method: 'GET' })
       console.error('Error fetching session detail:', error)
       throw new Error('Failed to fetch session')
     }
-    return session as ServiceSessionWithRelations
+
+    // Attach live check-in / pending counts (used by the QR display + header).
+    const { data: counts } = await admin.rpc('attendance_session_counts', {
+      p_session_ids: [data.sessionId],
+    })
+    const c = ((counts ?? []) as { checkin_count: number; pending_count: number }[])[0]
+    return {
+      ...(session as ServiceSessionWithRelations),
+      checkin_count: Number(c?.checkin_count ?? 0),
+      pending_count: Number(c?.pending_count ?? 0),
+    }
   })
 
 export const setSessionOpen = createServerFn({ method: 'POST' })
@@ -236,6 +246,22 @@ export const setSessionOpen = createServerFn({ method: 'POST' })
       throw new Error('Failed to update session')
     }
     return session as ServiceSession
+  })
+
+export const deleteSession = createServerFn({ method: 'POST' })
+  .inputValidator((input: { accessToken: string; sessionId: string }) =>
+    z.object({ accessToken: z.string(), sessionId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'registration.write')
+    const admin = createServerAdminClient()
+    // ON DELETE CASCADE removes the session's attendance records too.
+    const { error } = await admin.from('service_sessions').delete().eq('id', data.sessionId)
+    if (error) {
+      console.error('Error deleting session:', error)
+      throw new Error('Failed to delete session')
+    }
+    return { success: true }
   })
 
 // ============================================
@@ -281,10 +307,58 @@ export const getCheckinSession = createServerFn({ method: 'GET' })
     },
   )
 
+// Public: display data for the projectable QR screen (/display/<token>). Keyed
+// by the unguessable qr_token so a tech-booth screen can show it WITHOUT an
+// admin login. Returns only non-sensitive display fields + the live counter.
+export const getPublicSessionDisplay = createServerFn({ method: 'GET' })
+  .inputValidator((input: { qrToken: string }) =>
+    z.object({ qrToken: z.string().min(1) }).parse(input),
+  )
+  .handler(
+    async ({
+      data,
+    }): Promise<{
+      qrToken: string
+      serviceName: string
+      sessionDate: string
+      satelliteName: string | null
+      title: string | null
+      isOpen: boolean
+      checkinCount: number
+    } | null> => {
+      const admin = createServerAdminClient()
+      const { data: session, error } = await admin
+        .from('service_sessions')
+        .select(
+          'id, session_date, title, is_open, service_type:service_types!service_sessions_service_type_id_fkey(name), satellite:satellites!service_sessions_satellite_id_fkey(name)',
+        )
+        .eq('qr_token', data.qrToken)
+        .single()
+      if (error || !session) return null
+
+      const { data: counts } = await admin.rpc('attendance_session_counts', {
+        p_session_ids: [session.id as string],
+      })
+      const c = ((counts ?? []) as { checkin_count: number }[])[0]
+      const svc = session.service_type as { name: string } | null
+      const sat = session.satellite as { name: string } | null
+      return {
+        qrToken: data.qrToken,
+        serviceName: svc?.name ?? 'Service',
+        sessionDate: session.session_date as string,
+        satelliteName: sat?.name ?? null,
+        title: (session.title as string | null) ?? null,
+        isOpen: session.is_open as boolean,
+        checkinCount: Number(c?.checkin_count ?? 0),
+      }
+    },
+  )
+
 const publicCheckInSchema = z.object({
   qrToken: z.string().min(1),
   name: z.string().max(100).optional().nullable(),
   phone: z.string().max(20).optional().nullable(),
+  invitedBy: z.string().max(100).optional().nullable(),
   accessToken: z.string().optional().nullable(),
 })
 
@@ -336,6 +410,7 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
     const rawName = (data.name ?? '').trim()
     if (rawName.length < 2) throw new Error('Please enter your name.')
     const rawPhone = data.phone?.trim() || null
+    const invitedBy = data.invitedBy?.trim() || null
 
     const directory = await loadDirectory(admin)
     const matched = resolveMemberMatch(rawName, rawPhone, directory)
@@ -348,6 +423,7 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
         matchStatus: 'auto_matched',
         rawName,
         rawPhone,
+        invitedBy,
         displayName: matched.name,
       })
     }
@@ -360,6 +436,7 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
         member_id: null,
         raw_name: rawName,
         raw_phone: rawPhone,
+        invited_by: invitedBy,
         checkin_method: 'qr_guest',
         match_status: 'pending',
       })
@@ -388,6 +465,7 @@ async function linkCheckIn(
     matchStatus: 'auto_matched' | 'confirmed' | 'new_member'
     rawName: string | null
     rawPhone: string | null
+    invitedBy?: string | null
     matchedBy?: string | null
     displayName?: string | null
   },
@@ -399,6 +477,7 @@ async function linkCheckIn(
       member_id: args.memberId,
       raw_name: args.rawName,
       raw_phone: args.rawPhone,
+      invited_by: args.invitedBy ?? null,
       checkin_method: args.method,
       match_status: args.matchStatus,
       matched_by: args.matchedBy ?? null,
@@ -534,7 +613,15 @@ export const getPendingMatches = createServerFn({ method: 'GET' })
     const result: PendingMatch[] = []
     for (const rec of rows) {
       const candidates = await fuzzyCandidates(admin, rec.raw_name)
-      result.push({ record: rec as AttendanceRecordWithMember, candidates })
+      // Character-trigram similarity under-scores middle-name cases (e.g.
+      // "Laurence Rebadulla" vs "Gabriel Laurence Rebadulla" is ~0.70 by
+      // trigrams because the extra token dilutes it). Blend in the token-based
+      // confidence and keep the higher score so suggestions rank the way a
+      // human would expect, then sort best-first.
+      const rescored = candidates
+        .map((c) => ({ ...c, sim: Math.max(c.sim, nameMatchConfidence(rec.raw_name, c.name)) }))
+        .sort((a, b) => b.sim - a.sim)
+      result.push({ record: rec as AttendanceRecordWithMember, candidates: rescored })
     }
     return result
   })
@@ -632,6 +719,9 @@ export const createMemberFromCheckin = createServerFn({ method: 'POST' })
         name: data.name,
         phone: data.phone ?? null,
         satellite_id: satelliteId,
+        // city is NOT NULL in the schema; not collected at check-in, so start
+        // empty for an admin to fill in later on the member profile.
+        city: '',
         discipleship_stage: 'Newbie',
         membership_status: 'visitor',
       })
