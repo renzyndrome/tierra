@@ -157,9 +157,9 @@ function CheckinPage() {
                   <p className="text-center text-xs text-gray-400">Not you? Use the form below instead.</p>
                   <GuestForm
                     name={name}
-                    phone={phone}
+                    invitedBy={invitedBy}
                     setName={setName}
-                    setPhone={setPhone}
+                    setInvitedBy={setInvitedBy}
                     onSubmit={submitGuest}
                     submitting={submitting}
                   />
