@@ -71,7 +71,31 @@ export const Route = createFileRoute('/admin/')({
 
 function AdminDashboard() {
   const navigate = useNavigate()
-  const { isAuthenticated, isLoading: authLoading, profile, signOut, session } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, profile, signOut, session, user } = useAuth()
+
+  // The auth context carries only the user_profiles row (role, member_id), not
+  // the member record — so fetch the signed-in user's own name for the header.
+  // Readable by any authenticated role under the members_read_auth policy.
+  const [myName, setMyName] = useState<string | null>(null)
+  useEffect(() => {
+    const memberId = profile?.member_id
+    if (!memberId) {
+      setMyName(null)
+      return
+    }
+    let active = true
+    supabase
+      .from('members')
+      .select('name')
+      .eq('id', memberId)
+      .single()
+      .then(({ data }) => {
+        if (active && data?.name) setMyName(data.name)
+      })
+    return () => {
+      active = false
+    }
+  }, [profile?.member_id])
   // Live role -> permission matrix (reflects Manage-Roles edits); falls back to
   // code defaults until loaded.
   const [permMatrix, setPermMatrix] = useState<PermissionMatrix | undefined>(undefined)
@@ -1105,9 +1129,24 @@ function AdminDashboard() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-xs sm:text-sm text-white/70">
-                {profile?.role?.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-              </span>
+              {/* Who am I: name (falls back to email) above the role. */}
+              <div className="text-right leading-tight min-w-0">
+                <p className="text-xs sm:text-sm font-medium truncate max-w-[10rem] sm:max-w-[14rem]">
+                  {myName || user?.email}
+                </p>
+                <p className="text-[10px] sm:text-xs text-white/70">
+                  {profile?.role?.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+                </p>
+              </div>
+              <Link to="/profile">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-white/10 border-white/20 text-white hover:bg-white/20 text-xs sm:text-sm"
+                >
+                  My Profile
+                </Button>
+              </Link>
               <Button
                 variant="outline"
                 size="sm"
