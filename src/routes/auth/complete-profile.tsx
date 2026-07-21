@@ -5,6 +5,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../components/AuthProvider'
+import { supabase } from '../../lib/supabase'
 import { completeOwnProfile } from '../../server/functions/users'
 import { getSatellites } from '../../server/functions/satellites'
 import { getAllMinistries } from '../../server/functions/ministries'
@@ -62,14 +63,19 @@ function CompleteProfilePage() {
       setError('Please select your ministry.')
       return
     }
-    const token = session?.access_token
-    if (!token) {
-      setError('Your session has expired. Please sign in again.')
-      return
-    }
     setSubmitting(true)
     setError('')
     try {
+      // Read the session fresh rather than trusting context state, which can be
+      // stale right after the set-password step (the user arrives here moments
+      // after their session was rotated).
+      const { data: fresh } = await supabase.auth.getSession()
+      const token = fresh.session?.access_token ?? session?.access_token
+      if (!token) {
+        setError('Your session has expired. Please sign in again.')
+        setSubmitting(false)
+        return
+      }
       await completeOwnProfile({
         data: {
           accessToken: token,
