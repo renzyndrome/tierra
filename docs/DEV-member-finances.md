@@ -87,3 +87,12 @@ Local SQL sources (gitignored) for reference / rollback:
   `satellites!financial_transactions_satellite_id_fkey`.
 - Only linked members may request an expense report (server throws; the member route
   hides the form when unlinked).
+- **Never take a member/user id from client input** in the member self-service reads —
+  always resolve it from the caller's token (`getCaller` → `user_profiles.member_id`).
+  Conversely, every admin/finance function must call `requirePermission`: server
+  functions are directly-invokable RPC endpoints with no middleware, so route guards
+  and the finance PIN are client-side only and protect nothing on their own.
+- The unit suite is **green (205/205 as of 2026-07-21)**. Two long-standing MemberForm
+  failures were test drift (city is not a required field; the stage `<select>` renders
+  display labels New Friends/Schooling/Leader rather than the DB values) and are fixed —
+  treat a red suite as a real regression, not pre-existing noise.

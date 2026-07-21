@@ -168,7 +168,7 @@ describe('MemberForm Component', () => {
       expect(mockOnSubmit).not.toHaveBeenCalled()
     })
 
-    it('should show error when city is not provided', async () => {
+    it('should allow submit without a city (city is optional)', async () => {
       const user = userEvent.setup()
 
       render(
@@ -185,8 +185,9 @@ describe('MemberForm Component', () => {
       const submitButton = screen.getByText('Create Member')
       await user.click(submitButton)
 
-      expect(screen.getByText('City is required')).toBeInTheDocument()
-      expect(mockOnSubmit).not.toHaveBeenCalled()
+      // City is intentionally not a required field (see validate() in MemberForm).
+      expect(screen.queryByText(/city is required/i)).not.toBeInTheDocument()
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
     })
 
     it('should validate email format on form submit', async () => {
@@ -593,7 +594,7 @@ describe('MemberForm Component', () => {
   // ============================================
   describe('Discipleship Stage', () => {
     it('should render all discipleship stage options', () => {
-      render(
+      const { container } = render(
         <MemberForm
           satellites={mockSatellites}
           onSubmit={mockOnSubmit}
@@ -601,9 +602,20 @@ describe('MemberForm Component', () => {
         />
       )
 
-      expect(screen.getByRole('option', { name: 'Newbie' })).toBeInTheDocument()
-      expect(screen.getByRole('option', { name: 'Growing' })).toBeInTheDocument()
-      expect(screen.getByRole('option', { name: 'Leader' })).toBeInTheDocument()
+      // Scoped to the stage select: 'Leader' also appears in other dropdowns.
+      const stageSelect = container.querySelector<HTMLSelectElement>(
+        'select[name="discipleship_stage"]',
+      )
+      expect(stageSelect).not.toBeNull()
+
+      const options = Array.from(stageSelect!.options)
+      // DB values stay Newbie/Growing/Leader; labels are the display names.
+      expect(options.map((o) => o.value)).toEqual(['Newbie', 'Growing', 'Leader'])
+      expect(options.map((o) => o.textContent)).toEqual([
+        'New Friends',
+        'Schooling',
+        'Leader',
+      ])
     })
   })
 })
