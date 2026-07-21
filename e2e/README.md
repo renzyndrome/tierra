@@ -7,6 +7,11 @@ Covers:
   check-in page (invalid token, guest check-in, closed session). Needs no login.
 - **Service attendance — admin** (`attendance-admin.spec.ts`): create a session,
   the live QR display, session detail tabs, and analytics. Needs an admin login.
+- **Inventory** (`inventory.spec.ts`): auth guard on the broken-out routes (no
+  login), then the full borrow/deployment lifecycle (submit → approve → check out
+  → record return) and logging maintenance on the item detail page. The
+  authenticated test needs an admin login. Requires the
+  `2026-07-17_inventory_module.sql` migration applied.
 
 ## One-time setup
 

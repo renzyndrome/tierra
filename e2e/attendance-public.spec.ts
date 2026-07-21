@@ -29,9 +29,14 @@ test.describe('Public service check-in', () => {
     // The service header renders once the session resolves.
     await expect(page.getByRole('button', { name: /^check in$/i })).toBeVisible({ timeout: 15_000 })
 
+    // Neutral church branding — NOT the one-time anniversary event.
+    await expect(page.getByText(/quest laguna/i).first()).toBeVisible()
+    await expect(page.getByText(/nextlevel stronger/i)).toHaveCount(0)
+
     // A unique name so this run is traceable and never collides with a real member.
     const guestName = `E2E Guest ${Date.now()}`
     await page.getByLabel(/your name/i).fill(guestName)
+    await page.getByLabel(/who invited you/i).fill('E2E Inviter')
     await page.getByRole('button', { name: /^check in$/i }).click()
 
     // Success screen (matching is invisible to the attendee; pending still succeeds).
@@ -48,5 +53,15 @@ test.describe('Public service check-in', () => {
     await expect(page.getByRole('heading', { name: /check-in is closed/i })).toBeVisible({
       timeout: 15_000,
     })
+  })
+
+  test('projectable QR display renders WITHOUT login (shareable to a tech booth)', async ({ page }) => {
+    test.skip(!OPEN_TOKEN, 'Set E2E_CHECKIN_TOKEN (an open session qr_token) to run this test')
+
+    // No auth — the display link is public (keyed by the QR token).
+    await page.goto(`/display/${OPEN_TOKEN}`)
+    await expect(page).toHaveURL(/\/display\//) // not redirected to login
+    await expect(page.getByText(/scan to check in/i)).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('svg').first()).toBeVisible()
   })
 })

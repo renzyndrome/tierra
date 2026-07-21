@@ -55,22 +55,65 @@ export function findExactNameMatches<T extends NamedRecord>(
   return members.filter((m) => normalizeName(m.name) === target)
 }
 
+// Confidence at/above which a fuzzy name match is trusted enough to auto-link
+// without human review. Below this, the check-in goes to the review queue.
+export const AUTO_MATCH_CONFIDENCE = 0.9
+
+/**
+ * Confidence (0..1) that a typed name refers to a given member's name, using a
+ * token-set comparison (order- and duplicate-insensitive). Designed so that
+ * middle-name usage scores high — a Filipino naming pattern:
+ *   "Laurence Rebadulla" vs "Gabriel Laurence Rebadulla" -> 0.9
+ * Scoring:
+ *   1.00  identical normalized strings
+ *   0.97  same set of tokens (order/dupes aside)
+ *   0.90  one name's tokens are a subset of the other, with >= 2 shared tokens
+ *         (a confident partial — e.g. dropped/added first or middle name)
+ *   else  Dice coefficient over the token sets (2*shared / (a + b))
+ * A single shared token (e.g. just a first name) never reaches 0.90, so it
+ * won't auto-link.
+ */
+export function nameMatchConfidence(typed: string | null | undefined, candidate: string | null | undefined): number {
+  const a = normalizeName(typed)
+  const b = normalizeName(candidate)
+  if (!a || !b) return 0
+  if (a === b) return 1
+
+  const setA = new Set(a.split(' '))
+  const setB = new Set(b.split(' '))
+  let shared = 0
+  for (const t of setA) if (setB.has(t)) shared++
+
+  if (shared === setA.size && shared === setB.size) return 0.97
+  if (shared >= 2 && (shared === setA.size || shared === setB.size)) return 0.9
+  return (2 * shared) / (setA.size + setB.size)
+}
+
 /**
  * Resolve a typed name/phone to a single directory member for auto-linking.
  * Resolution order:
- *   1. Exact normalized name — auto-link only when exactly one member matches.
- *   2. Phone — auto-link only when exactly one member has that normalized number.
- * Ambiguous (more than one match) or unknown returns null: the caller records
- * the check-in as pending for admin review rather than guessing.
+ *   1. Confident name match (exact or high-confidence subset) — auto-link only
+ *      when exactly ONE member clears AUTO_MATCH_CONFIDENCE. Ties (e.g. two
+ *      family members sharing a name) stay ambiguous and go to review.
+ *   2. Phone — auto-link (and disambiguate ties) when exactly one member has
+ *      that normalized number.
+ * Anything else returns null: the caller records the check-in as pending for
+ * admin review rather than guessing.
  */
 export function resolveMemberMatch<T extends DirectoryMember>(
   rawName: string,
   rawPhone: string | null | undefined,
   directory: readonly T[],
+  autoThreshold: number = AUTO_MATCH_CONFIDENCE,
 ): T | null {
-  const exact = findExactNameMatches(rawName, directory)
-  if (exact.length === 1) return exact[0]
+  // Members confident enough to auto-link (deduped by id).
+  const byId = new Map<string, T>()
+  for (const m of directory) {
+    if (nameMatchConfidence(rawName, m.name) >= autoThreshold) byId.set(m.id, m)
+  }
+  if (byId.size === 1) return [...byId.values()][0]
 
+  // Phone can both stand alone and break a name tie.
   const phone = normalizePhone(rawPhone)
   if (phone) {
     const byPhone = directory.filter((m) => normalizePhone(m.phone) === phone)

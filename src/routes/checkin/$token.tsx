@@ -1,14 +1,14 @@
 // Public service check-in page — the QR target: /checkin/<qr_token>
-// Mobile-first, branded (no admin chrome). Two flows:
+// Mobile-first, neutral church branding (no admin chrome). Two flows:
 //   * Signed-in user with a linked member profile -> one-tap self check-in.
-//   * Guest -> types name (+ optional phone); backend matching is invisible here.
+//   * Guest -> types name (+ optional "who invited you?"); matching is invisible.
 
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../components/AuthProvider'
 import { getCheckinSession, publicCheckIn } from '../../server/functions/attendance'
 import { checkinFormSchema } from '../../lib/validations'
-import { EVENT_NAME, LOGO_PATH } from '../../lib/constants'
+import { CHURCH_NAME, LOGO_PATH } from '../../lib/constants'
 import type { CheckinResult } from '../../lib/types'
 
 export const Route = createFileRoute('/checkin/$token')({
@@ -46,7 +46,7 @@ function CheckinPage() {
   const [loading, setLoading] = useState(true)
   const [info, setInfo] = useState<SessionInfo | null>(null)
   const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
+  const [invitedBy, setInvitedBy] = useState('')
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<CheckinResult | null>(null)
@@ -69,7 +69,7 @@ function CheckinPage() {
 
   const submitGuest = async () => {
     setFormError('')
-    const parsed = checkinFormSchema.safeParse({ name, phone })
+    const parsed = checkinFormSchema.safeParse({ name, invitedBy })
     if (!parsed.success) {
       setFormError(parsed.error.issues[0]?.message ?? 'Please check your details')
       return
@@ -77,7 +77,7 @@ function CheckinPage() {
     setSubmitting(true)
     try {
       const res = await publicCheckIn({
-        data: { qrToken: token, name: parsed.data.name, phone: parsed.data.phone || null },
+        data: { qrToken: token, name: parsed.data.name, invitedBy: parsed.data.invitedBy || null },
       })
       setResult(res)
     } catch (err) {
@@ -104,8 +104,8 @@ function CheckinPage() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#1A0A0E] via-[#2D1218] to-[#6B0F2B] px-4 py-10">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-6">
-          <img src={LOGO_PATH} alt="Quest Laguna" className="w-16 h-16 rounded-full object-cover mb-3 ring-2 ring-white/20" />
-          <p className="text-[#F8B4B4] text-sm tracking-wide uppercase">{EVENT_NAME}</p>
+          <img src={LOGO_PATH} alt={CHURCH_NAME} className="w-16 h-16 rounded-full object-cover mb-3 ring-2 ring-white/20" />
+          <p className="text-[#F8B4B4] text-sm tracking-wide uppercase">{CHURCH_NAME}</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
@@ -167,9 +167,9 @@ function CheckinPage() {
               ) : (
                 <GuestForm
                   name={name}
-                  phone={phone}
+                  invitedBy={invitedBy}
                   setName={setName}
-                  setPhone={setPhone}
+                  setInvitedBy={setInvitedBy}
                   onSubmit={submitGuest}
                   submitting={submitting}
                 />
@@ -188,14 +188,14 @@ function CheckinPage() {
 
 interface GuestFormProps {
   name: string
-  phone: string
+  invitedBy: string
   setName: (v: string) => void
-  setPhone: (v: string) => void
+  setInvitedBy: (v: string) => void
   onSubmit: () => void
   submitting: boolean
 }
 
-function GuestForm({ name, phone, setName, setPhone, onSubmit, submitting }: GuestFormProps) {
+function GuestForm({ name, invitedBy, setName, setInvitedBy, onSubmit, submitting }: GuestFormProps) {
   return (
     <form
       onSubmit={(e) => {
@@ -219,16 +219,15 @@ function GuestForm({ name, phone, setName, setPhone, onSubmit, submitting }: Gue
         />
       </div>
       <div>
-        <label htmlFor="checkin-phone" className="block text-sm font-medium text-gray-700 mb-1">
-          Mobile number <span className="text-gray-400 font-normal">(optional)</span>
+        <label htmlFor="checkin-invited-by" className="block text-sm font-medium text-gray-700 mb-1">
+          Who invited you? <span className="text-gray-400 font-normal">(optional)</span>
         </label>
         <input
-          id="checkin-phone"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="09xx xxx xxxx"
-          autoComplete="tel"
+          id="checkin-invited-by"
+          type="text"
+          value={invitedBy}
+          onChange={(e) => setInvitedBy(e.target.value)}
+          placeholder="Name of the person who invited you"
           className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none"
         />
       </div>

@@ -15,6 +15,10 @@ import { Route as FinancesIndexRouteImport } from './routes/finances/index'
 import { Route as DirectoryIndexRouteImport } from './routes/directory/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ProfileSettingsRouteImport } from './routes/profile/settings'
+import { Route as ProfileGivingRouteImport } from './routes/profile/giving'
+import { Route as ProfileExpenseReportRouteImport } from './routes/profile/expense-report'
+import { Route as FinancesReportRequestsRouteImport } from './routes/finances/report-requests'
+import { Route as DisplayTokenRouteImport } from './routes/display/$token'
 import { Route as CheckinTokenRouteImport } from './routes/checkin/$token'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
@@ -70,6 +74,26 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const ProfileSettingsRoute = ProfileSettingsRouteImport.update({
   id: '/profile/settings',
   path: '/profile/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileGivingRoute = ProfileGivingRouteImport.update({
+  id: '/profile/giving',
+  path: '/profile/giving',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileExpenseReportRoute = ProfileExpenseReportRouteImport.update({
+  id: '/profile/expense-report',
+  path: '/profile/expense-report',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinancesReportRequestsRoute = FinancesReportRequestsRouteImport.update({
+  id: '/finances/report-requests',
+  path: '/finances/report-requests',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DisplayTokenRoute = DisplayTokenRouteImport.update({
+  id: '/display/$token',
+  path: '/display/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CheckinTokenRoute = CheckinTokenRouteImport.update({
@@ -222,6 +246,10 @@ export interface FileRoutesByFullPath {
   '/auth/register': typeof AuthRegisterRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/checkin/$token': typeof CheckinTokenRoute
+  '/display/$token': typeof DisplayTokenRoute
+  '/finances/report-requests': typeof FinancesReportRequestsRoute
+  '/profile/expense-report': typeof ProfileExpenseReportRoute
+  '/profile/giving': typeof ProfileGivingRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
@@ -256,6 +284,10 @@ export interface FileRoutesByTo {
   '/auth/register': typeof AuthRegisterRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/checkin/$token': typeof CheckinTokenRoute
+  '/display/$token': typeof DisplayTokenRoute
+  '/finances/report-requests': typeof FinancesReportRequestsRoute
+  '/profile/expense-report': typeof ProfileExpenseReportRoute
+  '/profile/giving': typeof ProfileGivingRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/directory': typeof DirectoryIndexRoute
@@ -291,6 +323,10 @@ export interface FileRoutesById {
   '/auth/register': typeof AuthRegisterRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
   '/checkin/$token': typeof CheckinTokenRoute
+  '/display/$token': typeof DisplayTokenRoute
+  '/finances/report-requests': typeof FinancesReportRequestsRoute
+  '/profile/expense-report': typeof ProfileExpenseReportRoute
+  '/profile/giving': typeof ProfileGivingRoute
   '/profile/settings': typeof ProfileSettingsRoute
   '/admin/': typeof AdminIndexRoute
   '/directory/': typeof DirectoryIndexRoute
@@ -327,6 +363,10 @@ export interface FileRouteTypes {
     | '/auth/register'
     | '/auth/reset-password'
     | '/checkin/$token'
+    | '/display/$token'
+    | '/finances/report-requests'
+    | '/profile/expense-report'
+    | '/profile/giving'
     | '/profile/settings'
     | '/admin'
     | '/directory'
@@ -361,6 +401,10 @@ export interface FileRouteTypes {
     | '/auth/register'
     | '/auth/reset-password'
     | '/checkin/$token'
+    | '/display/$token'
+    | '/finances/report-requests'
+    | '/profile/expense-report'
+    | '/profile/giving'
     | '/profile/settings'
     | '/admin'
     | '/directory'
@@ -395,6 +439,10 @@ export interface FileRouteTypes {
     | '/auth/register'
     | '/auth/reset-password'
     | '/checkin/$token'
+    | '/display/$token'
+    | '/finances/report-requests'
+    | '/profile/expense-report'
+    | '/profile/giving'
     | '/profile/settings'
     | '/admin/'
     | '/directory/'
@@ -430,6 +478,10 @@ export interface RootRouteChildren {
   AuthRegisterRoute: typeof AuthRegisterRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   CheckinTokenRoute: typeof CheckinTokenRoute
+  DisplayTokenRoute: typeof DisplayTokenRoute
+  FinancesReportRequestsRoute: typeof FinancesReportRequestsRoute
+  ProfileExpenseReportRoute: typeof ProfileExpenseReportRoute
+  ProfileGivingRoute: typeof ProfileGivingRoute
   ProfileSettingsRoute: typeof ProfileSettingsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   DirectoryIndexRoute: typeof DirectoryIndexRoute
@@ -497,6 +549,34 @@ declare module '@tanstack/react-router' {
       path: '/profile/settings'
       fullPath: '/profile/settings'
       preLoaderRoute: typeof ProfileSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile/giving': {
+      id: '/profile/giving'
+      path: '/profile/giving'
+      fullPath: '/profile/giving'
+      preLoaderRoute: typeof ProfileGivingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile/expense-report': {
+      id: '/profile/expense-report'
+      path: '/profile/expense-report'
+      fullPath: '/profile/expense-report'
+      preLoaderRoute: typeof ProfileExpenseReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finances/report-requests': {
+      id: '/finances/report-requests'
+      path: '/finances/report-requests'
+      fullPath: '/finances/report-requests'
+      preLoaderRoute: typeof FinancesReportRequestsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/display/$token': {
+      id: '/display/$token'
+      path: '/display/$token'
+      fullPath: '/display/$token'
+      preLoaderRoute: typeof DisplayTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checkin/$token': {
@@ -694,6 +774,10 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRegisterRoute: AuthRegisterRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   CheckinTokenRoute: CheckinTokenRoute,
+  DisplayTokenRoute: DisplayTokenRoute,
+  FinancesReportRequestsRoute: FinancesReportRequestsRoute,
+  ProfileExpenseReportRoute: ProfileExpenseReportRoute,
+  ProfileGivingRoute: ProfileGivingRoute,
   ProfileSettingsRoute: ProfileSettingsRoute,
   AdminIndexRoute: AdminIndexRoute,
   DirectoryIndexRoute: DirectoryIndexRoute,

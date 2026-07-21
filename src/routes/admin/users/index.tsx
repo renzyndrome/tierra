@@ -13,7 +13,11 @@ import {
   listInvitations,
   revokeInvitation,
   resendInvitation,
+  searchLinkableMembers,
+  linkAccountToMember,
+  type LinkableMember,
 } from '../../../server/functions/users'
+import { formatCurrency } from '../../../lib/constants'
 import { clearFinancePin } from '../../../server/functions/financePin'
 import { getSatellites } from '../../../server/functions/satellites'
 import { getAllMinistries } from '../../../server/functions/ministries'
@@ -78,6 +82,15 @@ function UsersPage() {
   const [editSatelliteId, setEditSatelliteId] = useState('')
   const [editBusy, setEditBusy] = useState(false)
   const [editError, setEditError] = useState('')
+
+  // Link-to-member dialog state
+  const [linkingUser, setLinkingUser] = useState<AdminUserListItem | null>(null)
+  const [linkQuery, setLinkQuery] = useState('')
+  const [linkResults, setLinkResults] = useState<LinkableMember[]>([])
+  const [linkSearching, setLinkSearching] = useState(false)
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [linkError, setLinkError] = useState('')
+  const [linkSearched, setLinkSearched] = useState(false)
 
   const [rowBusyId, setRowBusyId] = useState<string | null>(null)
 
@@ -182,6 +195,46 @@ function UsersPage() {
       setEditError(err instanceof Error ? err.message : 'Failed to update role')
     } finally {
       setEditBusy(false)
+    }
+  }
+
+  const openLink = (u: AdminUserListItem) => {
+    setLinkingUser(u)
+    setLinkQuery('')
+    setLinkResults([])
+    setLinkSearched(false)
+    setLinkError('')
+  }
+
+  const handleSearchMembers = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!accessToken || !linkQuery.trim()) return
+    setLinkSearching(true)
+    setLinkError('')
+    try {
+      const res = await searchLinkableMembers({ data: { accessToken, query: linkQuery.trim() } })
+      setLinkResults(res)
+      setLinkSearched(true)
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : 'Search failed')
+    } finally {
+      setLinkSearching(false)
+    }
+  }
+
+  // memberId=null unlinks.
+  const handleLink = async (memberId: string | null) => {
+    if (!accessToken || !linkingUser) return
+    setLinkBusy(true)
+    setLinkError('')
+    try {
+      await linkAccountToMember({ data: { accessToken, userId: linkingUser.id, memberId } })
+      setLinkingUser(null)
+      await loadData()
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : 'Failed to update the link')
+    } finally {
+      setLinkBusy(false)
     }
   }
 
@@ -337,7 +390,18 @@ function UsersPage() {
                     <TableRow key={u.id}>
                       <TableCell className="font-medium">
                         {u.email ?? '—'}
-                        {u.member_name && <span className="block text-xs text-gray-500">{u.member_name}</span>}
+                        <span className="block text-xs mt-0.5">
+                          {u.member_name ? (
+                            <>
+                              <span className="text-gray-500">Linked: {u.member_name}</span>
+                              <button onClick={() => openLink(u)} className="ml-2 text-[#8B1538] hover:underline">Change</button>
+                            </>
+                          ) : (
+                            <button onClick={() => openLink(u)} className="text-amber-600 hover:underline">
+                              Link member record
+                            </button>
+                          )}
+                        </span>
                       </TableCell>
                       <TableCell><RoleBadge role={u.role} /></TableCell>
                       <TableCell className="text-sm text-gray-600">{u.satellite_name ?? '—'}</TableCell>
@@ -541,6 +605,84 @@ function UsersPage() {
             <Button type="button" variant="destructive" disabled={deleteBusy} onClick={handleDelete}>
               {deleteBusy ? 'Removing…' : 'Remove user'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link account to member record */}
+      <Dialog open={!!linkingUser} onOpenChange={(open) => !open && setLinkingUser(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Link member record</DialogTitle>
+            <DialogDescription>
+              Connect <strong>{linkingUser?.email}</strong> to their existing member record so their
+              giving statement and history resolve correctly.
+              {linkingUser?.member_name && (
+                <span className="block mt-1">Currently linked to: <strong>{linkingUser.member_name}</strong></span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSearchMembers} className="flex gap-2">
+            <Input
+              autoFocus
+              placeholder="Search by name or email…"
+              value={linkQuery}
+              onChange={(e) => setLinkQuery(e.target.value)}
+            />
+            <Button type="submit" disabled={linkSearching || !linkQuery.trim()}>
+              {linkSearching ? 'Searching…' : 'Search'}
+            </Button>
+          </form>
+
+          {linkError && <p className="text-sm text-red-600">{linkError}</p>}
+
+          <div className="max-h-72 overflow-y-auto -mx-1 px-1">
+            {linkSearched && linkResults.length === 0 && !linkSearching && (
+              <p className="text-sm text-gray-500 py-4 text-center">No matching member records found.</p>
+            )}
+            <div className="space-y-1.5">
+              {linkResults.map((m) => {
+                const isCurrent = m.id === linkingUser?.member_id
+                const disabled = linkBusy || (m.already_linked && !isCurrent)
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{m.name}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {m.email || 'No email'}
+                        {m.satellite_name ? ` · ${m.satellite_name}` : ''}
+                        {m.giving_total > 0 ? ` · ${formatCurrency(m.giving_total)} given` : ''}
+                      </p>
+                      {m.already_linked && !isCurrent && (
+                        <p className="text-[11px] text-red-500 mt-0.5">Already linked to another account</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={isCurrent ? 'outline' : 'default'}
+                      disabled={disabled}
+                      onClick={() => handleLink(m.id)}
+                    >
+                      {isCurrent ? 'Linked' : 'Link'}
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="sm:justify-between">
+            {linkingUser?.member_id ? (
+              <Button type="button" variant="outline" disabled={linkBusy} onClick={() => handleLink(null)}>
+                Unlink
+              </Button>
+            ) : <span />}
+            <Button type="button" variant="outline" onClick={() => setLinkingUser(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

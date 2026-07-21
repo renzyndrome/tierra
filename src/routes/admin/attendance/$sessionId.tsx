@@ -2,7 +2,7 @@
 // Tabs: live check-ins, manual check-in (member search), and the match queue
 // (resolve pending guest check-ins: confirm / create member / ignore).
 
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../components/AuthProvider'
 import { AdminRoute } from '../../../components/ProtectedRoute'
@@ -16,6 +16,7 @@ import {
   ignoreCheckin,
   deleteCheckin,
   setSessionOpen,
+  deleteSession,
 } from '../../../server/functions/attendance'
 import { searchMembers } from '../../../server/functions/members'
 import { getSatellites } from '../../../server/functions/satellites'
@@ -90,6 +91,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function SessionDetail() {
   const { sessionId } = Route.useParams()
+  const navigate = useNavigate()
   const { profile, session } = useAuth()
   const accessToken = session?.access_token
   const canWrite = profile ? hasPermission(profile.role, 'registration.write') : false
@@ -100,6 +102,9 @@ function SessionDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tab, setTab] = useState('checkins')
+  const [copied, setCopied] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
 
   const loadAll = useCallback(async () => {
     if (!accessToken) return
@@ -183,8 +188,41 @@ function SessionDetail() {
 
         {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
 
-        {canWrite && (
-          <div className="mb-4">
+        <div className="mb-4 flex gap-2 flex-wrap items-center">
+          {/* Opens the projectable QR in a separate window so you can show it on a
+              screen while you keep managing check-ins here. The URL is public
+              (keyed by the QR token) — share it with a tech booth that isn't
+              logged in via "Copy shareable link". */}
+          <Button
+            size="sm"
+            className="bg-[#8B1538] hover:bg-[#6B0F2B]"
+            onClick={() =>
+              window.open(
+                `/display/${info.qr_token}`,
+                '_blank',
+                'popup,noopener,noreferrer,width=1024,height=1200',
+              )
+            }
+          >
+            Show QR (new window)
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const url = `${window.location.origin}/display/${info.qr_token}`
+              try {
+                await navigator.clipboard.writeText(url)
+                setCopied(true)
+                setTimeout(() => setCopied(false), 2000)
+              } catch {
+                window.prompt('Copy this shareable QR display link:', url)
+              }
+            }}
+          >
+            {copied ? 'Link copied ✓' : 'Copy shareable link'}
+          </Button>
+          {canWrite && (
             <Button
               variant="outline"
               size="sm"
@@ -196,8 +234,53 @@ function SessionDetail() {
             >
               {info.is_open ? 'Close session' : 'Reopen session'}
             </Button>
-          </div>
-        )}
+          )}
+          {canWrite && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+              onClick={() => setShowDelete(true)}
+            >
+              Delete session
+            </Button>
+          )}
+        </div>
+
+        {/* Delete confirmation */}
+        <Dialog open={showDelete} onOpenChange={setShowDelete}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete this session?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-gray-600">
+              This permanently removes the session and all {countable.length} of its
+              check-ins. This cannot be undone.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDelete(false)}>Cancel</Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={deleteBusy}
+                onClick={async () => {
+                  if (!accessToken) return
+                  setDeleteBusy(true)
+                  try {
+                    await deleteSession({ data: { accessToken, sessionId } })
+                    navigate({ to: '/admin/attendance' })
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : 'Failed to delete session')
+                    setShowDelete(false)
+                  } finally {
+                    setDeleteBusy(false)
+                  }
+                }}
+              >
+                {deleteBusy ? 'Deleting…' : 'Yes, delete'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
@@ -276,6 +359,7 @@ function CheckinsTab({
               <p className="text-xs text-gray-400">
                 {formatTime(c.checked_in_at)} · {CHECKIN_METHOD_LABELS[c.checkin_method] ?? c.checkin_method}
               </p>
+              {c.invited_by && <p className="text-xs text-gray-400">Invited by {c.invited_by}</p>}
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge status={c.match_status} />
@@ -448,6 +532,7 @@ function QueueTab({
               <div>
                 <p className="font-semibold text-gray-900">{record.raw_name ?? 'Unnamed'}</p>
                 {record.raw_phone && <p className="text-xs text-gray-400">{record.raw_phone}</p>}
+                {record.invited_by && <p className="text-xs text-gray-400">Invited by {record.invited_by}</p>}
                 <p className="text-xs text-gray-400 mt-0.5">{formatTime(record.checked_in_at)}</p>
               </div>
               <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">Needs review</span>
@@ -456,17 +541,30 @@ function QueueTab({
             {candidates.length > 0 ? (
               <div className="space-y-2 mb-3">
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Suggested matches</p>
-                {candidates.map((cand) => (
-                  <div key={cand.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                {candidates.map((cand, idx) => (
+                  <div
+                    key={cand.id}
+                    className={`flex items-center justify-between rounded-lg px-3 py-2 ${
+                      idx === 0
+                        ? 'bg-[#8B1538]/5 ring-1 ring-[#8B1538]/25'
+                        : 'bg-gray-50'
+                    }`}
+                  >
                     <div>
                       <span className="font-medium text-gray-800">{cand.name}</span>
                       <span className="ml-2 text-xs text-gray-400">{Math.round(cand.sim * 100)}% match</span>
+                      {idx === 0 && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded bg-[#8B1538]/10 text-[#8B1538] text-[10px] font-semibold uppercase tracking-wide">
+                          Best match
+                        </span>
+                      )}
                     </div>
                     <Button
                       size="sm"
+                      variant={idx === 0 ? 'default' : 'outline'}
                       disabled={busyId === record.id}
                       onClick={() => confirm(record.id, cand.id)}
-                      className="bg-[#8B1538] hover:bg-[#6B0F2B]"
+                      className={idx === 0 ? 'bg-[#8B1538] hover:bg-[#6B0F2B]' : ''}
                     >
                       This is them
                     </Button>
@@ -479,10 +577,10 @@ function QueueTab({
 
             <div className="flex gap-2 flex-wrap">
               <Button
-                variant="outline"
                 size="sm"
                 disabled={busyId === record.id}
                 onClick={() => setCreateFor({ record, candidates })}
+                className="bg-[#8B1538] hover:bg-[#6B0F2B]"
               >
                 Create new member
               </Button>

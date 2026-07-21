@@ -69,7 +69,8 @@ export const Route = createFileRoute('/finances/')({
 
 function FinancesPage() {
   const navigate = useNavigate()
-  const { isAuthenticated, isLoading: authLoading, profile } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, profile, session } = useAuth()
+  const accessToken = session?.access_token
 
   // Data state
   const [overview, setOverview] = useState<FinancialOverview | null>(null)
@@ -173,10 +174,12 @@ function FinancesPage() {
 
   // Fetch overview + chart data + insights
   const fetchOverviewData = useCallback(async () => {
+    if (!accessToken) return
     try {
       const [overviewRes, chartRes, insightsRes] = await Promise.all([
         getFinancialOverview({
           data: {
+            accessToken,
             satelliteId: filterSatelliteId || undefined,
             startDate: filterStartDate || undefined,
             endDate: filterEndDate || undefined,
@@ -184,12 +187,14 @@ function FinancesPage() {
         }),
         getFinancialChartData({
           data: {
+            accessToken,
             satelliteId: filterSatelliteId || undefined,
             months: 6,
           },
         }),
         getTitheInsights({
           data: {
+            accessToken,
             satelliteId: filterSatelliteId || undefined,
           },
         }),
@@ -200,15 +205,17 @@ function FinancesPage() {
     } catch (error) {
       console.error('Error fetching overview:', error)
     }
-  }, [filterSatelliteId, filterStartDate, filterEndDate])
+  }, [accessToken, filterSatelliteId, filterStartDate, filterEndDate])
 
   // Fetch transactions list
   const fetchTransactions = useCallback(async () => {
+    if (!accessToken) return
     try {
       const minAmt = filterMinAmount ? parseFloat(filterMinAmount) : undefined
       const maxAmt = filterMaxAmount ? parseFloat(filterMaxAmount) : undefined
       const res = await getFinancialTransactions({
         data: {
+          accessToken,
           search: filterSearch || undefined,
           satelliteId: filterSatelliteId || undefined,
           transactionType: (filterType as TransactionType) || undefined,
@@ -229,7 +236,7 @@ function FinancesPage() {
     } catch (error) {
       console.error('Error fetching transactions:', error)
     }
-  }, [filterSatelliteId, filterType, filterCategory, filterSearch, filterStartDate, filterEndDate, filterMemberId, filterMinAmount, filterMaxAmount, filterHasReceipt, txSortBy, txSortOrder, currentPage])
+  }, [accessToken, filterSatelliteId, filterType, filterCategory, filterSearch, filterStartDate, filterEndDate, filterMemberId, filterMinAmount, filterMaxAmount, filterHasReceipt, txSortBy, txSortOrder, currentPage])
 
   // Fetch overview when overview-relevant filters change (satellite, date range)
   useEffect(() => {
@@ -339,12 +346,14 @@ function FinancesPage() {
         notes: formNotes.trim() || undefined,
       }
 
+      if (!accessToken) throw new Error('Your session has expired. Please sign in again.')
+
       if (editingTransaction) {
         await updateFinancialTransaction({
-          data: { id: editingTransaction.id, updates: payload },
+          data: { accessToken, id: editingTransaction.id, updates: payload },
         })
       } else {
-        await createFinancialTransaction({ data: payload as any })
+        await createFinancialTransaction({ data: { ...payload, accessToken } as any })
       }
 
       setShowFormDialog(false)
@@ -362,9 +371,10 @@ function FinancesPage() {
   // Delete transaction
   const handleDeleteTransaction = async () => {
     if (!transactionToDelete) return
+    if (!accessToken) return
     setIsDeleting(true)
     try {
-      await deleteFinancialTransaction({ data: { id: transactionToDelete.id } })
+      await deleteFinancialTransaction({ data: { accessToken, id: transactionToDelete.id } })
       setShowDeleteDialog(false)
       setTransactionToDelete(null)
       await Promise.all([fetchOverviewData(), fetchTransactions()])
@@ -464,6 +474,9 @@ function FinancesPage() {
               <Button variant="outline" onClick={handleExportCSV} disabled={!transactions?.data.length}>
                 Export CSV
               </Button>
+              <Link to="/finances/report-requests">
+                <Button variant="outline">Report Requests</Button>
+              </Link>
             </div>
           </div>
 

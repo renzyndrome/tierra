@@ -599,3 +599,141 @@ export const acceptInvitation = createServerFn({ method: 'POST' })
 
     return { success: true }
   })
+
+// ============================================
+// ACCOUNT <-> MEMBER LINKING (admin)
+// ============================================
+//
+// Rollout context: member records were imported first (with giving/income tagged
+// to them via financial_transactions.member_id). Members now sign up, and each new
+// account must be matched to its pre-existing member record so the member's own
+// data (giving statement, attendance, etc.) resolves correctly. Signup only
+// auto-links by exact email; when the emails differ an admin links here.
+
+export interface LinkableMember {
+  id: string
+  name: string
+  email: string | null
+  satellite_name: string | null
+  giving_total: number
+  already_linked: boolean
+}
+
+const searchLinkableMembersSchema = z.object({
+  accessToken: z.string(),
+  query: z.string().min(1, 'Enter a name or email to search').max(100),
+  limit: z.number().int().min(1).max(25).optional(),
+})
+
+/**
+ * Search existing member records to link an account to. Returns each candidate
+ * with their recorded giving total and whether an account already links to them,
+ * so the admin can confidently pick the right pre-existing record.
+ */
+export const searchLinkableMembers = createServerFn({ method: 'POST' })
+  .inputValidator((input: z.infer<typeof searchLinkableMembersSchema>) =>
+    searchLinkableMembersSchema.parse(input),
+  )
+  .handler(async ({ data }): Promise<LinkableMember[]> => {
+    await requirePermission(data.accessToken, 'users.manage')
+    const admin = createServerAdminClient()
+    const term = data.query.trim()
+
+    const { data: rows, error } = await admin
+      .from('members')
+      .select('id, name, email, satellite:satellites!members_satellite_id_fkey(name)')
+      .eq('is_archived', false)
+      .or(`name.ilike.%${term}%,email.ilike.%${term}%`)
+      .order('name')
+      .limit(data.limit ?? 10)
+    if (error) {
+      console.error('Error searching linkable members:', error)
+      throw new Error('Failed to search members')
+    }
+
+    const members = (rows ?? []) as unknown as {
+      id: string
+      name: string
+      email: string | null
+      satellite: { name: string } | null
+    }[]
+    const ids = members.map((m) => m.id)
+    if (ids.length === 0) return []
+
+    // Giving totals (income only) + existing account links, in parallel.
+    const [txRes, linkRes] = await Promise.all([
+      admin
+        .from('financial_transactions')
+        .select('member_id, amount')
+        .eq('transaction_type', 'income')
+        .in('member_id', ids),
+      admin.from('user_profiles').select('member_id').in('member_id', ids),
+    ])
+
+    const givingByMember = new Map<string, number>()
+    for (const t of (txRes.data ?? []) as unknown as { member_id: string; amount: number | string }[]) {
+      givingByMember.set(t.member_id, (givingByMember.get(t.member_id) ?? 0) + Number(t.amount))
+    }
+    const linkedSet = new Set(
+      ((linkRes.data ?? []) as unknown as { member_id: string | null }[])
+        .map((l) => l.member_id)
+        .filter((v): v is string => Boolean(v)),
+    )
+
+    return members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      satellite_name: m.satellite?.name ?? null,
+      giving_total: givingByMember.get(m.id) ?? 0,
+      already_linked: linkedSet.has(m.id),
+    }))
+  })
+
+const linkAccountSchema = z.object({
+  accessToken: z.string(),
+  userId: z.string().uuid(),
+  // null unlinks the account from any member.
+  memberId: z.string().uuid().nullable(),
+})
+
+/**
+ * Link (or, with memberId=null, unlink) an account to an existing member record.
+ * Enforces a 1:1 relationship — a member record may back at most one account.
+ */
+export const linkAccountToMember = createServerFn({ method: 'POST' })
+  .inputValidator((input: z.infer<typeof linkAccountSchema>) => linkAccountSchema.parse(input))
+  .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'users.manage')
+    const admin = createServerAdminClient()
+
+    if (data.memberId) {
+      const { data: member } = await admin
+        .from('members')
+        .select('id')
+        .eq('id', data.memberId)
+        .maybeSingle()
+      if (!member) throw new Error('That member record no longer exists')
+
+      // Enforce 1:1 — reject if a different account already links to this member.
+      const { data: others } = await admin
+        .from('user_profiles')
+        .select('id')
+        .eq('member_id', data.memberId)
+        .neq('id', data.userId)
+      if (others && others.length > 0) {
+        throw new Error('Another account is already linked to that member record')
+      }
+    }
+
+    const { error } = await admin
+      .from('user_profiles')
+      .update({ member_id: data.memberId })
+      .eq('id', data.userId)
+    if (error) {
+      console.error('Error linking account to member:', error)
+      throw new Error('Failed to update the account link')
+    }
+
+    return { success: true }
+  })
