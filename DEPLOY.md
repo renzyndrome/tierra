@@ -110,6 +110,39 @@ mirroring the Dokploy configuration above.
 
 ---
 
+## 5a. Troubleshooting the Docker build
+
+### `ERR_PNPM_MUSL` — "Node.js currently has prebuilt artifacts only for glibc"
+
+```
+> [build 2/2] RUN pnpm build:
+Fetching Node.js 22.17.0 ...
+ ERR_PNPM_MUSL  The current system uses the "MUSL" C standard library...
+ERROR: process "/bin/sh -c pnpm build" did not complete successfully: exit code: 1
+```
+
+**Cause.** `.npmrc` pins `use-node-version=22.17.0`, which makes pnpm *download* its own
+Node.js. Node ships **glibc-only** prebuilts, and our base image is `node:22-alpine`
+(**musl**), so the download fails. Note the failure lands on `pnpm build`, not
+`pnpm install`: the `deps` stage copies only `package.json` + `pnpm-lock.yaml`, so pnpm
+never sees `.npmrc` there — the later `COPY . .` in the `build` stage pulls it in.
+
+**Fix (already applied).** `.npmrc` is listed in `.dockerignore`, so it stays out of the
+build context. The base image already provides Node 22, so pnpm must not fetch its own.
+`.npmrc` still applies for local development.
+
+**If you hit this again:** don't remove the Node pin — check that `.npmrc` is still in
+`.dockerignore`. Alternatively switch the base image to a glibc variant (`node:22-slim`),
+though that makes the image download a second Node needlessly.
+
+Verify locally with the real Dockerfile before redeploying:
+
+```bash
+docker build -t tierra-app:verify .
+```
+
+---
+
 ## 6. Account management (roles, invites, finance PIN)
 
 The admin **Accounts & Access** area (`/admin/users`, `/admin/roles`) lets admins invite

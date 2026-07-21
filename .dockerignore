@@ -3,6 +3,11 @@ node_modules
 .git
 .gitignore
 .env
+# .npmrc pins `use-node-version=22.17.0`, which makes pnpm DOWNLOAD Node at build
+# time. Node ships glibc-only prebuilts, so on the musl-based node:*-alpine image
+# that fails with ERR_PNPM_MUSL. The base image already provides Node 22, so keep
+# .npmrc out of the build context (it stays in effect for local dev).
+.npmrc
 *.md
 .claude
 .tanstack
