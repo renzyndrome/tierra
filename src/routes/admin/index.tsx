@@ -1134,7 +1134,9 @@ function AdminDashboard() {
           // it survives reloads, deep-links and back/forward (replace + no scroll jump).
           setActiveTab(tab)
           navigate({ to: '/admin', search: { tab }, replace: true, resetScroll: false })
-          if (tab !== 'finances') { setFinancesUnlocked(false); setFinancesPinInput(''); setFinancesPinError('') }
+          // Re-lock the finance gate when leaving the tab (PIN entry itself lives
+          // inside FinancePinGate; there is no local input state to reset here).
+          if (tab !== 'finances') setFinancesUnlocked(false)
         }}>
           <div className="relative">
             <div className="w-full overflow-x-auto pb-1 mb-6">
