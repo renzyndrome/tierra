@@ -5,6 +5,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../components/AuthProvider'
+import { supabase } from '../../lib/supabase'
 import { setOwnPassword } from '../../server/functions/users'
 
 export const Route = createFileRoute('/auth/reset-password')({
@@ -45,10 +46,28 @@ function ResetPasswordPage() {
       setError('Your session has expired. Please open the invite link again.')
       return
     }
+    // Captured before the change: setting the password revokes this session.
+    const email = session?.user?.email
     setSubmitting(true)
     setError('')
     try {
       await setOwnPassword({ data: { accessToken: token, password } })
+
+      // The password is set server-side via the admin API (the browser client's
+      // updateUser() can hang under this app's custom auth lock). That revokes
+      // the current session, so the next server call (completeOwnProfile) would
+      // fail with "Invalid or expired session". Re-authenticate with the
+      // password the user just chose to obtain a fresh, valid session.
+      if (email) {
+        const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
+        if (signInErr) {
+          // Password was saved; only the re-login failed. Send them to sign in.
+          setError('Password saved. Please sign in with your new password.')
+          setSubmitting(false)
+          setTimeout(() => navigate({ to: '/auth/login' }), 1500)
+          return
+        }
+      }
       setDone(true)
       // Newly-invited users have no linked member yet — send them to onboarding.
       const next = profile?.member_id ? '/admin' : '/auth/complete-profile'
