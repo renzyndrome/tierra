@@ -524,6 +524,22 @@ export const completeOwnProfile = createServerFn({ method: 'POST' })
     const caller = await getCaller(data.accessToken)
     const admin = createServerAdminClient()
 
+    // Guard the claim flow: someone who signed up through a Quest Circle QR is
+    // waiting for their EXISTING member record to be matched. Creating a fresh
+    // one here would orphan their imported giving/attendance history — the very
+    // duplicate this endpoint used to produce.
+    const { data: pendingClaim } = await admin
+      .from('member_claim_requests')
+      .select('id')
+      .eq('user_id', caller.userId)
+      .eq('status', 'pending')
+      .maybeSingle()
+    if (pendingClaim) {
+      throw new Error(
+        'Your member record is still being reviewed by your Quest Circle leader.',
+      )
+    }
+
     const { data: profile } = await admin
       .from('user_profiles')
       .select('member_id, satellite_id')

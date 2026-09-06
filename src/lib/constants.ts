@@ -409,6 +409,31 @@ export function buildCheckinUrl(qrToken: string): string {
 }
 
 // ============================================
+// MEMBER CLAIMS (claim-your-record sign-up)
+// ============================================
+
+// Build the public sign-up URL for a Quest Circle's signup token. Same origin
+// rules as buildCheckinUrl.
+export function buildJoinUrl(signupToken: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  return `${origin}/join/${signupToken}`
+}
+
+// Human labels for claim statuses.
+export const CLAIM_STATUS_LABELS: Record<string, string> = {
+  auto_linked: 'Auto-linked',
+  pending: 'Needs review',
+  confirmed: 'Confirmed',
+  new_member: 'New member',
+  rejected: 'Rejected',
+}
+
+// Rate guard for a public sign-up link: max claims accepted per circle within
+// the window. The token is secret, so this only blunts a leaked-link flood.
+export const CLAIM_RATE_LIMIT = 20
+export const CLAIM_RATE_WINDOW_MINUTES = 10
+
+// ============================================
 // EXPENSE REPORT REQUESTS
 // ============================================
 

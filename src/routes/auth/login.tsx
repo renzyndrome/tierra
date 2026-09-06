@@ -209,16 +209,12 @@ function LoginPage() {
             </div>
           )}
 
-          {/* Sign Up Link */}
+          {/* No self-signup: accounts come from an admin invite or a Quest
+              Circle sign-up QR, which links the person to their existing
+              member record. */}
           <div className="mt-6 pt-6 border-t border-gray-200 text-center">
-            <p className="text-gray-600">
-              Don't have an account?{' '}
-              <button
-                onClick={() => navigate({ to: '/auth/register' })}
-                className="text-[#8B1538] font-semibold hover:underline"
-              >
-                Sign up
-              </button>
+            <p className="text-sm text-gray-500">
+              New here? Ask your Quest Circle leader for their sign-up QR code.
             </p>
           </div>
         </div>

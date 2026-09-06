@@ -83,6 +83,24 @@ export async function requirePermission(
 }
 
 /**
+ * Resolve the caller's own linked member record id, or null when the account
+ * has not been linked yet. Never accept a member id from client input for
+ * self-service reads — resolve it from the token with this.
+ */
+export async function getCallerMemberId(
+  admin: AdminClient,
+  userId: string,
+): Promise<string | null> {
+  const { data, error } = await admin
+    .from('user_profiles')
+    .select('member_id')
+    .eq('id', userId)
+    .single()
+  if (error || !data) return null
+  return data.member_id ?? null
+}
+
+/**
  * Require the caller to be an admin.
  */
 export async function requireAdmin(accessToken: string | undefined | null): Promise<CallerContext> {

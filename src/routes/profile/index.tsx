@@ -8,6 +8,8 @@ import type { Member, Satellite, CellGroupWithRelations, MinistryWithRelations, 
 import { STAGE_LABELS } from '../../lib/constants'
 import { AttendanceHistory } from '../../components/AttendanceHistory'
 import { getMyAttendance } from '../../server/functions/attendance'
+import { getMyClaimStatus, getMyLedGroups } from '../../server/functions/memberClaims'
+import type { MyClaimStatus } from '../../lib/types'
 
 export const Route = createFileRoute('/profile/')({
   component: ProfilePage,
@@ -23,6 +25,10 @@ function ProfilePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [attendance, setAttendance] = useState<MemberAttendanceSummary | null>(null)
   const [attendanceLoading, setAttendanceLoading] = useState(true)
+  // Claim state drives the "being reviewed" banner for members who signed up
+  // through a circle QR but haven't been matched to a record yet.
+  const [claimStatus, setClaimStatus] = useState<MyClaimStatus | null>(null)
+  const [leadsCircle, setLeadsCircle] = useState(false)
 
   useEffect(() => {
     const checkAuthAndFetchProfile = async () => {
@@ -44,8 +50,16 @@ function ProfilePage() {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.access_token) {
-          const summary = await getMyAttendance({ data: { accessToken: session.access_token } })
+          const token = session.access_token
+          const summary = await getMyAttendance({ data: { accessToken: token } })
           setAttendance(summary)
+          // Both are best-effort: a failure must never block the profile.
+          getMyClaimStatus({ data: { accessToken: token } })
+            .then(setClaimStatus)
+            .catch(() => {})
+          getMyLedGroups({ data: { accessToken: token } })
+            .then((rows) => setLeadsCircle(rows.length > 0))
+            .catch(() => {})
         }
       } catch {
         /* ignore attendance load errors */
@@ -159,6 +173,17 @@ function ProfilePage() {
               <span className="sm:hidden">Back</span>
             </Link>
             <div className="flex gap-1.5 sm:gap-2">
+              {leadsCircle && (
+                <Link
+                  to="/profile/circle"
+                  className="p-2 sm:px-4 sm:py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <span className="hidden sm:inline">My Circle</span>
+                </Link>
+              )}
               <Link
                 to="/profile/settings"
                 className="p-2 sm:px-4 sm:py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-2"
@@ -410,10 +435,31 @@ function ProfilePage() {
             <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Complete Your Profile</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              {claimStatus?.status === 'pending'
+                ? "We're finding your record"
+                : claimStatus?.status === 'rejected'
+                  ? 'Your sign-up needs help'
+                  : 'Complete Your Profile'}
+            </h2>
             <p className="text-gray-500 mb-6">
-              Your account is set up, but you haven't linked a member profile yet.
-              Contact an admin to link your account to your member record.
+              {claimStatus?.status === 'pending' ? (
+                <>
+                  Your leader is checking which member record is yours
+                  {claimStatus.cell_group_name ? ` in ${claimStatus.cell_group_name}` : ''}. Once
+                  they confirm it, your giving and attendance history will appear here.
+                </>
+              ) : claimStatus?.status === 'rejected' ? (
+                <>
+                  Your sign-up could not be matched to a member record. Please talk to your Quest
+                  Circle leader so they can sort it out.
+                </>
+              ) : (
+                <>
+                  Your account is set up, but you haven't linked a member profile yet. Contact an
+                  admin to link your account to your member record.
+                </>
+              )}
             </p>
             <Link
               to="/directory"

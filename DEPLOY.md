@@ -70,7 +70,12 @@ While you are in the dashboard, also finish the production security hardening
 (see the security work applied 2026-07-10):
 
 - **Authentication → Providers → Email**: turn **off** "Allow new users to sign up"
-  (members-only app).
+  (members-only app). **Keep it off.** Every account is created server-side via
+  the admin API — either an admin invite (Admin → Users) or a Quest Circle
+  sign-up QR (`/join/<token>`, see docs/DEV-member-claims.md). Both bypass this
+  setting by design, and `/auth/register` now redirects to the login page.
+  `RESEND_API_KEY` / `RESEND_FROM` and `APP_URL` are what make those confirmation
+  emails land on our own domain; without them Supabase's default template is used.
 - **Authentication → Policies**: enable **Leaked Password Protection**.
 
 ---

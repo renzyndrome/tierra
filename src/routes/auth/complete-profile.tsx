@@ -40,6 +40,13 @@ function CompleteProfilePage() {
       .catch(() => {})
   }, [])
 
+  // A claim sign-up must never land here: this page CREATES a member record,
+  // which would orphan the imported record they are waiting to be matched to.
+  useEffect(() => {
+    const meta = user?.user_metadata as { claim?: boolean } | undefined
+    if (meta?.claim === true) navigate({ to: '/profile' })
+  }, [user, navigate])
+
   // Prefill satellite/ministry from any pre-assignment the admin set at invite time.
   useEffect(() => {
     const meta = user?.user_metadata as

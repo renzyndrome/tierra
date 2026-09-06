@@ -2942,9 +2942,15 @@ function AdminDashboard() {
                         <Link to="/admin/roles">
                           <Button variant="outline">Roles &amp; Permissions</Button>
                         </Link>
+                        <Link to="/admin/claims">
+                          <Button variant="outline">Member Sign-ups</Button>
+                        </Link>
                       </div>
                       <p className="mt-3 text-xs text-gray-500">
                         Finance access is protected by a private per-user PIN, set the first time each finance user opens the Finances page.
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Member sign-ups are people claiming an existing member record through a Quest Circle QR code.
                       </p>
                     </CardContent>
                   </Card>
