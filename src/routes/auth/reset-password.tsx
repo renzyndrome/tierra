@@ -14,7 +14,7 @@ export const Route = createFileRoute('/auth/reset-password')({
 
 function ResetPasswordPage() {
   const navigate = useNavigate()
-  const { isAuthenticated, isLoading, session, profile } = useAuth()
+  const { isAuthenticated, isLoading, session, profile, user } = useAuth()
 
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -69,8 +69,20 @@ function ResetPasswordPage() {
         }
       }
       setDone(true)
-      // Newly-invited users have no linked member yet — send them to onboarding.
-      const next = profile?.member_id ? '/admin' : '/auth/complete-profile'
+      // Where to next:
+      //  * Claim sign-ups already gave us their details and may be awaiting
+      //    review — /auth/complete-profile would create a DUPLICATE member, so
+      //    they go straight to their profile (which shows the review banner).
+      //  * Invited staff with no member yet still need onboarding.
+      //  * Plain members have no admin dashboard to land on.
+      const isClaim = (user?.user_metadata as { claim?: boolean } | undefined)?.claim === true
+      const next = isClaim
+        ? '/profile'
+        : !profile?.member_id
+          ? '/auth/complete-profile'
+          : profile.role === 'member'
+            ? '/profile'
+            : '/admin'
       setTimeout(() => navigate({ to: next }), 1200)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to set password')

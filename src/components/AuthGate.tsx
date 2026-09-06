@@ -19,7 +19,7 @@ import { useAuth } from './AuthProvider'
 //   /checkin  — attendee QR check-in
 //   /display  — projectable QR screen (shareable to a tech booth, no login)
 //   /auth     — login / callback / password flows
-const PUBLIC_PREFIXES = ['/checkin', '/display', '/auth'] as const
+const PUBLIC_PREFIXES = ['/checkin', '/display', '/auth', '/join'] as const
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'))

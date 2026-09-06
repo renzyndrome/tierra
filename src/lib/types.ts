@@ -290,6 +290,81 @@ export interface AdminUserListItem {
 }
 
 // ============================================
+// MEMBER CLAIM TYPES (claim-your-record sign-up)
+// ============================================
+
+// Secret per-circle sign-up link. Service-role only — never expose the token to
+// a client except to the leader/admin who owns the circle.
+export interface CellGroupSignupLink {
+  cell_group_id: string
+  token: string
+  enabled: boolean
+  rotated_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ClaimStatus = 'auto_linked' | 'pending' | 'confirmed' | 'new_member' | 'rejected'
+
+// A sign-up asking to claim an existing member record.
+export interface MemberClaimRequest {
+  id: string
+  user_id: string
+  cell_group_id: string | null
+  submitted_name: string
+  submitted_email: string
+  submitted_phone: string | null
+  submitted_birthday: string | null
+  status: ClaimStatus
+  matched_member_id: string | null
+  top_score: number | null
+  resolved_by: string | null
+  resolved_at: string | null
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+// One candidate member shown to an approver, with the evidence behind its score.
+export interface ClaimCandidateView {
+  id: string
+  name: string
+  email: string | null
+  phone: string | null
+  satellite_name: string | null
+  score: number
+  reasons: string[]
+  giving_total: number
+  already_linked: boolean
+}
+
+// A queue entry: the claim plus freshly recomputed candidates.
+export interface ClaimQueueItem {
+  claim: MemberClaimRequest
+  cell_group_name: string | null
+  matched_member_name: string | null
+  candidates: ClaimCandidateView[]
+}
+
+// A circle the caller leads, with its sign-up link state.
+export interface LedCircle {
+  id: string
+  name: string
+  satellite_name: string | null
+  member_count: number
+  signup_token: string
+  signup_enabled: boolean
+  pending_count: number
+}
+
+// The caller's own claim state, for the "being reviewed" banner on /profile.
+export interface MyClaimStatus {
+  status: ClaimStatus
+  cell_group_name: string | null
+  submitted_at: string
+}
+
+// ============================================
 // CELL GROUP TYPES
 // ============================================
 
@@ -1189,6 +1264,33 @@ export type Database = {
         Row: { user_id: string; pin_hash: string; set_at: string; updated_at: string }
         Insert: { user_id: string; pin_hash: string }
         Update: { pin_hash?: string }
+      }
+      cell_group_signup_links: {
+        Row: CellGroupSignupLink
+        // token/enabled fall back to DB defaults on insert
+        Insert: { cell_group_id: string; token?: string; enabled?: boolean }
+        Update: { token?: string; enabled?: boolean; rotated_at?: string | null }
+      }
+      member_claim_requests: {
+        Row: MemberClaimRequest
+        Insert: {
+          user_id: string
+          cell_group_id?: string | null
+          submitted_name: string
+          submitted_email: string
+          submitted_phone?: string | null
+          submitted_birthday?: string | null
+          status?: ClaimStatus
+          matched_member_id?: string | null
+          top_score?: number | null
+        }
+        Update: {
+          status?: ClaimStatus
+          matched_member_id?: string | null
+          resolved_by?: string | null
+          resolved_at?: string | null
+          note?: string | null
+        }
       }
       service_types: {
         Row: ServiceType

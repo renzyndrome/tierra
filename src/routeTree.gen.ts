@@ -17,6 +17,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ProfileSettingsRouteImport } from './routes/profile/settings'
 import { Route as ProfileGivingRouteImport } from './routes/profile/giving'
 import { Route as ProfileExpenseReportRouteImport } from './routes/profile/expense-report'
+import { Route as JoinTokenRouteImport } from './routes/join/$token'
 import { Route as FinancesReportRequestsRouteImport } from './routes/finances/report-requests'
 import { Route as DisplayTokenRouteImport } from './routes/display/$token'
 import { Route as CheckinTokenRouteImport } from './routes/checkin/$token'
@@ -27,12 +28,14 @@ import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-pas
 import { Route as AuthConfirmRouteImport } from './routes/auth/confirm'
 import { Route as AuthCompleteProfileRouteImport } from './routes/auth/complete-profile'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as ProfileCircleIndexRouteImport } from './routes/profile/circle/index'
 import { Route as DirectoryMinistriesIndexRouteImport } from './routes/directory/ministries/index'
 import { Route as DirectoryMembersIndexRouteImport } from './routes/directory/members/index'
 import { Route as DirectoryCellGroupsIndexRouteImport } from './routes/directory/cell-groups/index'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
 import { Route as AdminRolesIndexRouteImport } from './routes/admin/roles/index'
 import { Route as AdminMembersIndexRouteImport } from './routes/admin/members/index'
+import { Route as AdminClaimsIndexRouteImport } from './routes/admin/claims/index'
 import { Route as AdminAttendanceIndexRouteImport } from './routes/admin/attendance/index'
 import { Route as DirectoryMinistriesMinistryIdRouteImport } from './routes/directory/ministries/$ministryId'
 import { Route as DirectoryMembersMemberIdRouteImport } from './routes/directory/members/$memberId'
@@ -86,6 +89,11 @@ const ProfileExpenseReportRoute = ProfileExpenseReportRouteImport.update({
   path: '/profile/expense-report',
   getParentRoute: () => rootRouteImport,
 } as any)
+const JoinTokenRoute = JoinTokenRouteImport.update({
+  id: '/join/$token',
+  path: '/join/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FinancesReportRequestsRoute = FinancesReportRequestsRouteImport.update({
   id: '/finances/report-requests',
   path: '/finances/report-requests',
@@ -136,6 +144,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfileCircleIndexRoute = ProfileCircleIndexRouteImport.update({
+  id: '/profile/circle/',
+  path: '/profile/circle/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DirectoryMinistriesIndexRoute =
   DirectoryMinistriesIndexRouteImport.update({
     id: '/directory/ministries/',
@@ -166,6 +179,11 @@ const AdminRolesIndexRoute = AdminRolesIndexRouteImport.update({
 const AdminMembersIndexRoute = AdminMembersIndexRouteImport.update({
   id: '/admin/members/',
   path: '/admin/members/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminClaimsIndexRoute = AdminClaimsIndexRouteImport.update({
+  id: '/admin/claims/',
+  path: '/admin/claims/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminAttendanceIndexRoute = AdminAttendanceIndexRouteImport.update({
@@ -248,6 +266,7 @@ export interface FileRoutesByFullPath {
   '/checkin/$token': typeof CheckinTokenRoute
   '/display/$token': typeof DisplayTokenRoute
   '/finances/report-requests': typeof FinancesReportRequestsRoute
+  '/join/$token': typeof JoinTokenRoute
   '/profile/expense-report': typeof ProfileExpenseReportRoute
   '/profile/giving': typeof ProfileGivingRoute
   '/profile/settings': typeof ProfileSettingsRoute
@@ -266,12 +285,14 @@ export interface FileRoutesByFullPath {
   '/directory/members/$memberId': typeof DirectoryMembersMemberIdRoute
   '/directory/ministries/$ministryId': typeof DirectoryMinistriesMinistryIdRoute
   '/admin/attendance': typeof AdminAttendanceIndexRoute
+  '/admin/claims': typeof AdminClaimsIndexRoute
   '/admin/members': typeof AdminMembersIndexRoute
   '/admin/roles': typeof AdminRolesIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/directory/cell-groups': typeof DirectoryCellGroupsIndexRoute
   '/directory/members': typeof DirectoryMembersIndexRoute
   '/directory/ministries': typeof DirectoryMinistriesIndexRoute
+  '/profile/circle': typeof ProfileCircleIndexRoute
   '/admin/members/$memberId/edit': typeof AdminMembersMemberIdEditRoute
 }
 export interface FileRoutesByTo {
@@ -286,6 +307,7 @@ export interface FileRoutesByTo {
   '/checkin/$token': typeof CheckinTokenRoute
   '/display/$token': typeof DisplayTokenRoute
   '/finances/report-requests': typeof FinancesReportRequestsRoute
+  '/join/$token': typeof JoinTokenRoute
   '/profile/expense-report': typeof ProfileExpenseReportRoute
   '/profile/giving': typeof ProfileGivingRoute
   '/profile/settings': typeof ProfileSettingsRoute
@@ -304,12 +326,14 @@ export interface FileRoutesByTo {
   '/directory/members/$memberId': typeof DirectoryMembersMemberIdRoute
   '/directory/ministries/$ministryId': typeof DirectoryMinistriesMinistryIdRoute
   '/admin/attendance': typeof AdminAttendanceIndexRoute
+  '/admin/claims': typeof AdminClaimsIndexRoute
   '/admin/members': typeof AdminMembersIndexRoute
   '/admin/roles': typeof AdminRolesIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/directory/cell-groups': typeof DirectoryCellGroupsIndexRoute
   '/directory/members': typeof DirectoryMembersIndexRoute
   '/directory/ministries': typeof DirectoryMinistriesIndexRoute
+  '/profile/circle': typeof ProfileCircleIndexRoute
   '/admin/members/$memberId/edit': typeof AdminMembersMemberIdEditRoute
 }
 export interface FileRoutesById {
@@ -325,6 +349,7 @@ export interface FileRoutesById {
   '/checkin/$token': typeof CheckinTokenRoute
   '/display/$token': typeof DisplayTokenRoute
   '/finances/report-requests': typeof FinancesReportRequestsRoute
+  '/join/$token': typeof JoinTokenRoute
   '/profile/expense-report': typeof ProfileExpenseReportRoute
   '/profile/giving': typeof ProfileGivingRoute
   '/profile/settings': typeof ProfileSettingsRoute
@@ -343,12 +368,14 @@ export interface FileRoutesById {
   '/directory/members/$memberId': typeof DirectoryMembersMemberIdRoute
   '/directory/ministries/$ministryId': typeof DirectoryMinistriesMinistryIdRoute
   '/admin/attendance/': typeof AdminAttendanceIndexRoute
+  '/admin/claims/': typeof AdminClaimsIndexRoute
   '/admin/members/': typeof AdminMembersIndexRoute
   '/admin/roles/': typeof AdminRolesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/directory/cell-groups/': typeof DirectoryCellGroupsIndexRoute
   '/directory/members/': typeof DirectoryMembersIndexRoute
   '/directory/ministries/': typeof DirectoryMinistriesIndexRoute
+  '/profile/circle/': typeof ProfileCircleIndexRoute
   '/admin/members/$memberId/edit': typeof AdminMembersMemberIdEditRoute
 }
 export interface FileRouteTypes {
@@ -365,6 +392,7 @@ export interface FileRouteTypes {
     | '/checkin/$token'
     | '/display/$token'
     | '/finances/report-requests'
+    | '/join/$token'
     | '/profile/expense-report'
     | '/profile/giving'
     | '/profile/settings'
@@ -383,12 +411,14 @@ export interface FileRouteTypes {
     | '/directory/members/$memberId'
     | '/directory/ministries/$ministryId'
     | '/admin/attendance'
+    | '/admin/claims'
     | '/admin/members'
     | '/admin/roles'
     | '/admin/users'
     | '/directory/cell-groups'
     | '/directory/members'
     | '/directory/ministries'
+    | '/profile/circle'
     | '/admin/members/$memberId/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -403,6 +433,7 @@ export interface FileRouteTypes {
     | '/checkin/$token'
     | '/display/$token'
     | '/finances/report-requests'
+    | '/join/$token'
     | '/profile/expense-report'
     | '/profile/giving'
     | '/profile/settings'
@@ -421,12 +452,14 @@ export interface FileRouteTypes {
     | '/directory/members/$memberId'
     | '/directory/ministries/$ministryId'
     | '/admin/attendance'
+    | '/admin/claims'
     | '/admin/members'
     | '/admin/roles'
     | '/admin/users'
     | '/directory/cell-groups'
     | '/directory/members'
     | '/directory/ministries'
+    | '/profile/circle'
     | '/admin/members/$memberId/edit'
   id:
     | '__root__'
@@ -441,6 +474,7 @@ export interface FileRouteTypes {
     | '/checkin/$token'
     | '/display/$token'
     | '/finances/report-requests'
+    | '/join/$token'
     | '/profile/expense-report'
     | '/profile/giving'
     | '/profile/settings'
@@ -459,12 +493,14 @@ export interface FileRouteTypes {
     | '/directory/members/$memberId'
     | '/directory/ministries/$ministryId'
     | '/admin/attendance/'
+    | '/admin/claims/'
     | '/admin/members/'
     | '/admin/roles/'
     | '/admin/users/'
     | '/directory/cell-groups/'
     | '/directory/members/'
     | '/directory/ministries/'
+    | '/profile/circle/'
     | '/admin/members/$memberId/edit'
   fileRoutesById: FileRoutesById
 }
@@ -480,6 +516,7 @@ export interface RootRouteChildren {
   CheckinTokenRoute: typeof CheckinTokenRoute
   DisplayTokenRoute: typeof DisplayTokenRoute
   FinancesReportRequestsRoute: typeof FinancesReportRequestsRoute
+  JoinTokenRoute: typeof JoinTokenRoute
   ProfileExpenseReportRoute: typeof ProfileExpenseReportRoute
   ProfileGivingRoute: typeof ProfileGivingRoute
   ProfileSettingsRoute: typeof ProfileSettingsRoute
@@ -498,12 +535,14 @@ export interface RootRouteChildren {
   DirectoryMembersMemberIdRoute: typeof DirectoryMembersMemberIdRoute
   DirectoryMinistriesMinistryIdRoute: typeof DirectoryMinistriesMinistryIdRoute
   AdminAttendanceIndexRoute: typeof AdminAttendanceIndexRoute
+  AdminClaimsIndexRoute: typeof AdminClaimsIndexRoute
   AdminMembersIndexRoute: typeof AdminMembersIndexRoute
   AdminRolesIndexRoute: typeof AdminRolesIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
   DirectoryCellGroupsIndexRoute: typeof DirectoryCellGroupsIndexRoute
   DirectoryMembersIndexRoute: typeof DirectoryMembersIndexRoute
   DirectoryMinistriesIndexRoute: typeof DirectoryMinistriesIndexRoute
+  ProfileCircleIndexRoute: typeof ProfileCircleIndexRoute
   AdminMembersMemberIdEditRoute: typeof AdminMembersMemberIdEditRoute
 }
 
@@ -563,6 +602,13 @@ declare module '@tanstack/react-router' {
       path: '/profile/expense-report'
       fullPath: '/profile/expense-report'
       preLoaderRoute: typeof ProfileExpenseReportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/join/$token': {
+      id: '/join/$token'
+      path: '/join/$token'
+      fullPath: '/join/$token'
+      preLoaderRoute: typeof JoinTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/finances/report-requests': {
@@ -635,6 +681,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profile/circle/': {
+      id: '/profile/circle/'
+      path: '/profile/circle'
+      fullPath: '/profile/circle'
+      preLoaderRoute: typeof ProfileCircleIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/directory/ministries/': {
       id: '/directory/ministries/'
       path: '/directory/ministries'
@@ -675,6 +728,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/members'
       fullPath: '/admin/members'
       preLoaderRoute: typeof AdminMembersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/claims/': {
+      id: '/admin/claims/'
+      path: '/admin/claims'
+      fullPath: '/admin/claims'
+      preLoaderRoute: typeof AdminClaimsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/attendance/': {
@@ -776,6 +836,7 @@ const rootRouteChildren: RootRouteChildren = {
   CheckinTokenRoute: CheckinTokenRoute,
   DisplayTokenRoute: DisplayTokenRoute,
   FinancesReportRequestsRoute: FinancesReportRequestsRoute,
+  JoinTokenRoute: JoinTokenRoute,
   ProfileExpenseReportRoute: ProfileExpenseReportRoute,
   ProfileGivingRoute: ProfileGivingRoute,
   ProfileSettingsRoute: ProfileSettingsRoute,
@@ -794,12 +855,14 @@ const rootRouteChildren: RootRouteChildren = {
   DirectoryMembersMemberIdRoute: DirectoryMembersMemberIdRoute,
   DirectoryMinistriesMinistryIdRoute: DirectoryMinistriesMinistryIdRoute,
   AdminAttendanceIndexRoute: AdminAttendanceIndexRoute,
+  AdminClaimsIndexRoute: AdminClaimsIndexRoute,
   AdminMembersIndexRoute: AdminMembersIndexRoute,
   AdminRolesIndexRoute: AdminRolesIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
   DirectoryCellGroupsIndexRoute: DirectoryCellGroupsIndexRoute,
   DirectoryMembersIndexRoute: DirectoryMembersIndexRoute,
   DirectoryMinistriesIndexRoute: DirectoryMinistriesIndexRoute,
+  ProfileCircleIndexRoute: ProfileCircleIndexRoute,
   AdminMembersMemberIdEditRoute: AdminMembersMemberIdEditRoute,
 }
 export const routeTree = rootRouteImport
