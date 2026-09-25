@@ -13,7 +13,6 @@ import { Input } from '../../components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { Label } from '../../components/ui/label'
 import { Textarea } from '../../components/ui/textarea'
-import { purgeAllData, seedTestAccounts } from '../../server/functions/seedData'
 import { importSpreadsheetData, relinkMemberRelationships, generateCellGroupsFromDisciplers } from '../../server/functions/importMembers'
 import { createCellGroup, updateCellGroup, deleteCellGroup } from '../../server/functions/cellGroups'
 import { createMinistry, updateMinistry, deleteMinistry } from '../../server/functions/ministries'
@@ -147,10 +146,6 @@ function AdminDashboard() {
   // Satellite detail view
   const [selectedSatelliteId, setSelectedSatelliteId] = useState<string | null>(null)
 
-  // Admin setup
-  const [isSettingUpAdmin, setIsSettingUpAdmin] = useState(false)
-  const [adminSetupResult, setAdminSetupResult] = useState<string | null>(null)
-
   // Finances PIN gate (server-verified per-user PIN — see FinancePinGate)
   const [financesUnlocked, setFinancesUnlocked] = useState(false)
 
@@ -255,10 +250,6 @@ function AdminDashboard() {
   }
 
   // Dialogs
-  const [showPurgeDialog, setShowPurgeDialog] = useState(false)
-  const [isPurgingDirectory, setIsPurgingDirectory] = useState(false)
-  const [purgeConfirmText, setPurgeConfirmText] = useState('')
-  const [purgeResult, setPurgeResult] = useState<{ member_ministries: number; member_cell_groups: number; ministries: number; cell_groups: number; members: number } | null>(null)
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number; disciplerLinks: number; ministryLinks: number; errors: string[] } | null>(null)
@@ -459,37 +450,6 @@ function AdminDashboard() {
     const perm = TAB_PERMISSIONS[tab]
     if (perm === null || perm === undefined) return true
     return profile ? hasPermission(profile.role, perm, permMatrix) : false
-  }
-
-  // Handle setup admin account
-  const handleSetupAdmin = async () => {
-    setIsSettingUpAdmin(true)
-    setAdminSetupResult(null)
-    try {
-      const result = await seedTestAccounts({ data: { adminPin: ADMIN_PIN } })
-      const admin = result.accounts[0]
-      setAdminSetupResult(admin ? `${admin.email}: ${admin.status}` : 'No result')
-    } catch (error) {
-      setAdminSetupResult(error instanceof Error ? error.message : 'Failed')
-    } finally {
-      setIsSettingUpAdmin(false)
-    }
-  }
-
-  // Handle purge directory
-  const handlePurgeDirectory = async () => {
-    if (purgeConfirmText !== 'DELETE ALL DATA') return
-    setIsPurgingDirectory(true)
-    setPurgeResult(null)
-    try {
-      const result = await purgeAllData({ data: { adminPin: ADMIN_PIN, confirmText: 'DELETE ALL DATA' } })
-      setPurgeResult(result.results)
-    } catch (error) {
-      console.error('Purge failed:', error)
-      alert(error instanceof Error ? error.message : 'Failed to purge data')
-    } finally {
-      setIsPurgingDirectory(false)
-    }
   }
 
   // Handle import spreadsheet data
