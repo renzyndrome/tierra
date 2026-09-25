@@ -1,5 +1,4 @@
 import type { DiscipleshipStage, EventMemberStatus, CivilStatus, MemberCategory, FollowThrough, DiscipleshipJourney, LeadershipLevel, IncomeCategory, ExpenseCategory, TransactionType, Permission, UserRole } from './types'
-import { PUBLIC_ENV } from './runtimeEnv'
 
 // Discipleship stage options
 export const DISCIPLESHIP_STAGES: {
@@ -129,7 +128,6 @@ export const MAIN_SATELLITE_NAME = 'Quest Laguna Main'
 export const LOGO_PATH = '/questlogo.jpg'
 
 // Admin PIN (resolved at runtime; build-time value preferred when present)
-export const ADMIN_PIN = PUBLIC_ENV.VITE_ADMIN_PIN || 'quest2026'
 
 // Theme colors (NEXTLEVEL Stronger 2026 branding - Red/Maroon theme)
 export const THEME_COLORS = {

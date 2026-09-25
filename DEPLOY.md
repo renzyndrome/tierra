@@ -37,7 +37,6 @@ below in the Dokploy **Environment** section only. (The client gets its public c
 | ---------------------------- | :---------: | ----------------------------------------------------------- |
 | `VITE_SUPABASE_URL`          |     ✅      | Supabase project URL                                        |
 | `VITE_SUPABASE_ANON_KEY`     |     ✅      | Supabase anon key                                           |
-| `VITE_ADMIN_PIN`             |     ✅      | ⚠️ Exposed to the client, **not secret**; UI-only (see §4) |
 | `SUPABASE_SERVICE_ROLE_KEY`  |     ✅      | **Secret.** Server only — never `VITE_`-prefixed            |
 | `ADMIN_EMAIL`                |     ✅      | Not read by the app; e2e login only (seed code removed)     |
 | `ADMIN_PASSWORD`             |     ✅      | **Secret.** Server only                                     |
@@ -88,11 +87,10 @@ to `/`.
 
 ---
 
-## 4. Security note: `VITE_ADMIN_PIN` is public
+## 4. Security note: authorization
 
-Anything prefixed `VITE_` is compiled into the **public** client bundle, so the admin PIN
-is visible to anyone who opens the browser dev tools. It is a UI convenience only: the
-"New member" page shows a PIN screen. **No server function accepts or checks the PIN.**
+`VITE_ADMIN_PIN` is no longer used and can be deleted from the Dokploy environment.
+The app no longer has a PIN screen, and nothing publishes the value to browsers.
 
 Real protection is the caller's Supabase session. Every server function receives the
 access token in its payload and authorizes it with `src/server/functions/_authGuard.ts`
