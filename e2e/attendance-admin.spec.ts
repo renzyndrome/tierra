@@ -22,6 +22,10 @@ const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || ''
 const QUEUE_SESSION_ID = process.env.E2E_QUEUE_SESSION_ID || ''
 // A name fragment that matches at least one directory member (manual check-in).
 const MEMBER_QUERY = process.env.E2E_MEMBER_QUERY || 'an'
+// Registering a walk-in creates a real member record that the session delete
+// does not remove. Only run that step when the target database may receive it
+// (delete the 'E2E Walkin%' members afterwards).
+const ALLOW_MEMBER_WRITES = process.env.E2E_ALLOW_MEMBER_WRITES === '1'
 
 // YYYY-MM-DD in the church's time zone, offset by whole days.
 function manilaDate(offsetDays = 0): string {
@@ -313,6 +317,57 @@ test.describe('Admin — Service Attendance', () => {
       await page.goto('/admin/attendance')
       await expect(page.getByText(label)).toBeVisible({ timeout: 15_000 })
       await expect(page.getByRole('button', { name: /close overdue sessions/i })).toBeVisible()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
+  })
+
+  test('walk-in at the booth: similar-name warning, then registration', async ({ page }) => {
+    test.setTimeout(120_000)
+    await loginAsAdmin(page)
+    const sessionUrl = await createSession(page, `E2E WALKIN ${Date.now()}`)
+
+    try {
+      await page.getByRole('tab', { name: /manual check-in/i }).click()
+      const search = page.getByPlaceholder(/search members/i)
+
+      // 1. Registering an existing member's exact name shows the similar-name
+      //    warning instead of creating a duplicate. Nothing is written.
+      await search.fill(MEMBER_QUERY)
+      const firstName = (await page.locator('[data-slot="card"] p.font-medium').first().innerText()).trim()
+      await page.getByRole('button', { name: /register new person/i }).click()
+      const dialog = page.getByRole('dialog')
+      await dialog.getByLabel(/^name/i).fill(firstName)
+      await dialog.getByRole('button', { name: /register & check in/i }).click()
+      await expect(dialog.getByText(/similar names in the directory/i)).toBeVisible({ timeout: 15_000 })
+      await expect(dialog.getByText(firstName, { exact: true }).first()).toBeVisible()
+      await dialog.getByRole('button', { name: /^cancel$/i }).click()
+      await expect(dialog).toBeHidden()
+
+      // A typo of that name (second letter dropped) is flagged too.
+      const typo = firstName.slice(0, 1) + firstName.slice(2)
+      await page.getByRole('button', { name: /register new person/i }).click()
+      await dialog.getByLabel(/^name/i).fill(typo)
+      await dialog.getByRole('button', { name: /register & check in/i }).click()
+      await expect(dialog.getByText(/similar names in the directory/i)).toBeVisible({ timeout: 15_000 })
+      await expect(dialog.getByText(firstName, { exact: true }).first()).toBeVisible()
+      await dialog.getByRole('button', { name: /^cancel$/i }).click()
+      await expect(dialog).toBeHidden()
+
+      // 2. A person not in the directory is registered and checked in.
+      test.skip(!ALLOW_MEMBER_WRITES, 'Set E2E_ALLOW_MEMBER_WRITES=1 to create (and later delete) a test member')
+      const walkIn = `E2E Walkin ${Date.now()}`
+      await search.fill(walkIn)
+      await expect(page.getByText(/no members found/i)).toBeVisible({ timeout: 15_000 })
+      await page.getByRole('button', { name: /register new person/i }).click()
+      await expect(dialog.getByLabel(/^name/i)).toHaveValue(walkIn)
+      // An explicit "Unassigned" must be kept (not replaced by the session's satellite).
+      await dialog.locator('#wi-sat').selectOption('')
+      await dialog.getByRole('button', { name: /register & check in/i }).click()
+      await expect(page.getByText(`${walkIn} registered and checked in ✓`)).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByRole('tab', { name: /check-ins \(1\)/i })).toBeVisible()
+      await page.getByRole('tab', { name: /check-ins/i }).click()
+      await expect(page.getByText(walkIn)).toBeVisible()
     } finally {
       await deleteSessionAt(page, sessionUrl)
     }

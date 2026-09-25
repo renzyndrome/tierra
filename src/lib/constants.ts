@@ -386,6 +386,12 @@ export type ServiceSlug = (typeof SERVICE_SLUGS)[number]
 // Names scoring above this appear in the admin match queue as candidates.
 export const MATCH_SIMILARITY_THRESHOLD = 0.3
 
+// Booth walk-in registration warns about directory members at or above this
+// blended name similarity (trigram or token confidence). Catches typos such as
+// "Jon Smith" vs "John Smith" (0.62) but not a shared first name alone
+// ("Maria Santos" vs "Maria Cruz" is 0.33).
+export const WALK_IN_SIMILAR_THRESHOLD = 0.5
+
 // Human labels for attendance enums.
 export const CHECKIN_METHOD_LABELS: Record<string, string> = {
   qr_self: 'QR (self)',

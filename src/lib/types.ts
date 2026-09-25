@@ -1135,6 +1135,12 @@ export interface CheckinMemberOption {
   satellite_name: string | null
 }
 
+// Result of registering a walk-in at the booth: either registered and checked
+// in, or held back because similar names already exist in the directory.
+export type WalkInResult =
+  | { status: 'registered'; memberId: string; displayName: string }
+  | { status: 'possible_duplicate'; matches: CheckinMemberOption[] }
+
 // A pending attendance record plus recomputed suggestions for the admin queue.
 export interface PendingMatch {
   record: AttendanceRecordWithMember

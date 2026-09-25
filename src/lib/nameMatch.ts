@@ -113,6 +113,26 @@ export function searchDirectoryByName<T extends NamedRecord>(
 }
 
 /**
+ * Directory members whose name confidently matches `name` (the same bar as
+ * auto-linking: exact, same tokens, or a middle-name subset). Used to warn
+ * before registering a walk-in who may already be in the directory. Best
+ * match first, then alphabetical.
+ */
+export function findSimilarMembers<T extends NamedRecord>(
+  name: string,
+  members: readonly T[],
+  limit: number = 5,
+  threshold: number = AUTO_MATCH_CONFIDENCE,
+): T[] {
+  return members
+    .map((m) => ({ m, score: nameMatchConfidence(name, m.name) }))
+    .filter(({ score }) => score >= threshold)
+    .sort((a, b) => b.score - a.score || a.m.name.localeCompare(b.m.name))
+    .slice(0, limit)
+    .map(({ m }) => m)
+}
+
+/**
  * Resolve a typed name/phone to a single directory member for auto-linking.
  * Resolution order:
  *   1. Confident name match (exact or high-confidence subset) — auto-link only
