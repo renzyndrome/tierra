@@ -194,7 +194,7 @@ export function claimReasonLabel(reason: ClaimReason): string {
     case 'name_strong':
       return 'Name matches'
     case 'name_partial':
-      return 'Name is similar'
+      return 'Similar name'
     case 'phone_match':
       return 'Same phone'
     case 'birthday_match':

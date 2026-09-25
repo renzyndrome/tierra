@@ -23,12 +23,14 @@ export interface InviteEmailParams {
   variant?: 'invite' | 'claim'
   /** Circle name, shown in the claim variant. */
   groupName?: string | null
+  /** Name for the greeting line, used by the claim variant. */
+  recipientName?: string | null
 }
 
 /** Subject line for an email variant. */
 export function inviteEmailSubject(variant: InviteEmailParams['variant']): string {
   return variant === 'claim'
-    ? 'Confirm your Quest Laguna account'
+    ? 'Quest Laguna account confirmation'
     : "You've been invited to Quest Laguna"
 }
 
@@ -38,19 +40,9 @@ const BRAND = '#8B1538'
  * Build the branded invite email HTML. Pure function — unit-testable.
  */
 export function buildInviteEmailHtml(params: InviteEmailParams): string {
-  const { inviteLink, roleLabel, inviterEmail, variant, groupName } = params
+  if (params.variant === 'claim') return buildClaimEmailHtml(params)
+  const { inviteLink, roleLabel, inviterEmail } = params
   const invitedBy = inviterEmail ? `by ${escapeHtml(inviterEmail)}` : ''
-  const isClaim = variant === 'claim'
-  const heading = isClaim ? 'Confirm your email' : "You've been invited"
-  const joining = groupName ? ` to join <strong>${escapeHtml(groupName)}</strong>` : ''
-  const body = isClaim
-    ? `You signed up${joining} at Quest Laguna. Confirm your email and set a password to finish setting up your account.`
-    : `You've been invited ${invitedBy} to join the Quest Laguna directory as
-            <strong>${escapeHtml(roleLabel)}</strong>. Click below to set your password and sign in.`
-  const cta = isClaim ? 'Confirm email' : 'Accept invitation'
-  const footer = isClaim
-    ? "If you didn't sign up for a Quest Laguna account, you can ignore this email."
-    : "If you weren't expecting this invitation, you can ignore this email."
   return `<!doctype html>
 <html>
   <body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
@@ -60,14 +52,15 @@ export function buildInviteEmailHtml(params: InviteEmailParams): string {
           <h1 style="margin:0;color:#ffffff;font-size:20px;">Quest Laguna</h1>
         </div>
         <div style="padding:28px;">
-          <h2 style="margin:0 0 12px;font-size:22px;">${heading}</h2>
+          <h2 style="margin:0 0 12px;font-size:22px;">You've been invited</h2>
           <p style="margin:0 0 16px;line-height:1.5;color:#444;">
-            ${body}
+            You've been invited ${invitedBy} to join the Quest Laguna directory as
+            <strong>${escapeHtml(roleLabel)}</strong>. Click below to set your password and sign in.
           </p>
           <p style="margin:24px 0;text-align:center;">
             <a href="${escapeAttr(inviteLink)}"
                style="display:inline-block;background:${BRAND};color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:bold;">
-              ${cta}
+              Accept invitation
             </a>
           </p>
           <p style="margin:0;font-size:12px;color:#888;line-height:1.5;">
@@ -77,8 +70,49 @@ export function buildInviteEmailHtml(params: InviteEmailParams): string {
         </div>
       </div>
       <p style="text-align:center;color:#aaa;font-size:11px;margin-top:16px;">
-        ${footer}
+        If you weren't expecting this invitation, you can ignore this email.
       </p>
+    </div>
+  </body>
+</html>`
+}
+
+/**
+ * Claim-variant email (Quest Circle QR sign-up). Follows the house email
+ * format: greeting, one fragment on what happened, the link on its own line
+ * under a label, one fragment on limits, sign-off name.
+ */
+export function buildClaimEmailHtml({ inviteLink, groupName, recipientName }: InviteEmailParams): string {
+  const greeting = recipientName ? `Hello ${escapeHtml(recipientName)},` : 'Hello,'
+  const what = groupName
+    ? `Sign-up received for <strong>${escapeHtml(groupName)}</strong>.`
+    : 'Sign-up received.'
+  const p = 'margin:0 0 16px;line-height:1.5;color:#444;'
+  return `<!doctype html>
+<html>
+  <body style="margin:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;">
+    <div style="max-width:520px;margin:0 auto;padding:32px 16px;">
+      <div style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);">
+        <div style="background:${BRAND};padding:24px 28px;">
+          <h1 style="margin:0;color:#ffffff;font-size:20px;">Quest Laguna</h1>
+        </div>
+        <div style="padding:28px;">
+          <p style="${p}">${greeting}</p>
+          <p style="${p}">${what}</p>
+          <p style="margin:24px 0 8px;text-align:center;">
+            <a href="${escapeAttr(inviteLink)}"
+               style="display:inline-block;background:${BRAND};color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:bold;">
+              Confirm email
+            </a>
+          </p>
+          <p style="margin:0 0 16px;font-size:12px;color:#888;line-height:1.5;">
+            Confirmation link:<br />
+            <span style="word-break:break-all;color:${BRAND};">${escapeHtml(inviteLink)}</span>
+          </p>
+          <p style="${p}">Single use. Time-limited.</p>
+          <p style="margin:0;line-height:1.5;color:#444;">Quest Laguna</p>
+        </div>
+      </div>
     </div>
   </body>
 </html>`
@@ -91,14 +125,17 @@ export function buildInviteEmailHtml(params: InviteEmailParams): string {
 export function buildInviteEmailText(params: InviteEmailParams): string {
   const { inviteLink, roleLabel, inviterEmail, variant, groupName } = params
   if (variant === 'claim') {
-    const joining = groupName ? ` to join ${groupName}` : ''
     return [
-      `You signed up${joining} at Quest Laguna.`,
+      params.recipientName ? `Hello ${params.recipientName},` : 'Hello,',
       '',
-      'Confirm your email and set your password:',
+      groupName ? `Sign-up received for ${groupName}.` : 'Sign-up received.',
+      '',
+      'Confirm email:',
       inviteLink,
       '',
-      "If you didn't sign up for a Quest Laguna account, you can ignore this email.",
+      'Single use. Time-limited.',
+      '',
+      'Quest Laguna',
     ].join('\n')
   }
   const by = inviterEmail ? ` by ${inviterEmail}` : ''

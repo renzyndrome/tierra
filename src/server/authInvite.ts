@@ -85,7 +85,7 @@ export async function createInvitedAuthUser(
       options: { data: metadata, redirectTo },
     })
     if (linkErr || !link?.user) {
-      throw new Error(linkErr?.message || 'Failed to create the account')
+      throw new Error(linkErr?.message || 'Account creation failed.')
     }
     const tokenHash = link.properties?.hashed_token
     let actionLink =
@@ -117,7 +117,7 @@ export async function createInvitedAuthUser(
     options: { data: metadata, redirectTo },
   })
   if (linkErr || !link?.user) {
-    throw new Error(invErr?.message || linkErr?.message || 'Failed to send the confirmation email')
+    throw new Error(invErr?.message || linkErr?.message || 'Confirmation email failed.')
   }
   return { userId: link.user.id, emailed: false, actionLink: link.properties?.action_link ?? null }
 }
@@ -139,7 +139,7 @@ export async function resendConfirmLink(
       email,
       options: { redirectTo },
     })
-    if (linkErr || !link) throw new Error(linkErr?.message || 'Failed to generate a new link')
+    if (linkErr || !link) throw new Error(linkErr?.message || 'Link generation failed.')
     const tokenHash = link.properties?.hashed_token
     const actionLink =
       (tokenHash && appConfirmUrl(tokenHash, 'magiclink')) || link.properties?.action_link || null

@@ -536,7 +536,7 @@ export const completeOwnProfile = createServerFn({ method: 'POST' })
       .maybeSingle()
     if (pendingClaim) {
       throw new Error(
-        'Your member record is still being reviewed by your Quest Circle leader.',
+        'Member record under review by the circle leader.',
       )
     }
 

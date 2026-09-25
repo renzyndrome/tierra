@@ -32,6 +32,29 @@ After confirming their email the person sets a password at `/auth/reset-password
 and lands on `/profile`, which shows a "we're finding your record" banner while
 the claim is pending.
 
+## Rollout steps
+
+The 28 circle leaders cannot use the QR until each has an account linked to
+their own member record. Do this once, before the first meeting.
+
+**Step 1. Bootstrap the leaders.** For each leader:
+
+1. Admin → Users → **Invite**. Enter the leader's email.
+2. Once the row appears, tap **Link member record** and pick the leader's own
+   record.
+3. Keep the role as **Member**.
+
+Do **not** give a leader the **Discipleship** role. That role allows editing
+any member record directly and skips Agapay's audit log. Circle leaders get
+what they need from the Member role plus the link.
+
+**Step 2. Leaders turn on their link at the meeting.** On at the start of the
+meeting. Off when it ends.
+
+Why the role matters: tierra's `is_leader_or_admin()` includes `discipleship`,
+which grants direct UPDATE on `public.members` via RLS. Agapay decides who is a
+discipler from `members.discipler_id`, not from the role, so `member` is enough.
+
 ## Files
 
 | Area | Path |
@@ -71,6 +94,62 @@ threshold and that member does not already back another account. Ties stay
 pending on purpose — two family members with the same name must never be guessed.
 
 Trigram candidates come from the existing `search_members_similar` RPC.
+
+## Agapay (discipleship app) on the same database
+
+Agapay (`discipleship.questlaguna.org`) shares this Supabase project and reads
+`public.members`. It decides who is a discipler by `members.discipler_id`,
+while tierra's circle membership lives in `member_cell_groups`. The two drift.
+
+The claim flow bridges them in two places:
+
+- `groupMemberIds` counts a member whose `discipler_id` is the circle's leader
+  as "in this circle", so the scoring bonus applies even when the
+  `member_cell_groups` row is missing.
+- `confirmClaim` (with the "Add to this circle as a disciple" box ticked) and
+  `createMemberFromClaim` call `setDisciplerIfEmpty`: sets `discipler_id` to the
+  circle's `leader_id` ONLY when it is null. Never overwrites, never points a
+  leader at themselves. An existing discipler is changed only in Agapay via its
+  audited `reassign_disciples` RPC.
+
+**Agapay enrollment (`src/server/agapayEnroll.ts`).** `discipler_id` alone
+does not put anyone in the Agapay queue: the view
+`discipleship.disciple_engagement` selects FROM `discipleship.disciple_profiles`.
+`enrollInAgapayIfEligible` closes that gap. It mirrors
+`agapay/scripts/import-disciples.ts` exactly:
+
+- eligibility: non-archived, has a `discipler_id`, no profile row yet
+- writes: `disciple_profiles` (member_id, cohort from `joined_date`), a
+  "Joined Agapay (circle sign-up)" `stage_transitions` row with `created_by` =
+  the approver, then `discipleship.snapshot_checklist`
+
+Same rule as the script, so re-running the script afterwards is a no-op for
+these members. Best-effort: logs and returns `'failed'`, never throws, so it
+cannot undo an account link. `member_id` is UNIQUE, so a race returns
+`'already_enrolled'`.
+
+Called from: the auto-link in `submitClaimSignup`, `confirmClaim`, and
+`createMemberFromClaim`. `createMemberFromClaim` also sets `joined_date` to
+today so the new member gets a cohort.
+
+The tierra Supabase client is typed for `public` only, so the helper casts to
+an untyped `SupabaseClient` to call `.schema('discipleship')`. Requires
+`discipleship` in the project's exposed API schemas (already true: Agapay uses
+it).
+
+Backlog from before this change: on 2026-09-23, 16 members had a discipler but
+no profile row. The claim flow only enrolls people it touches. Run the Agapay
+script once to catch them up:
+
+```
+cd /home/renzycode/projects/quest/agapay
+pnpm tsx scripts/import-disciples.ts          # dry run, read only
+pnpm tsx scripts/import-disciples.ts --apply
+```
+
+Do not give circle leaders the `discipleship` role. Tierra's
+`is_leader_or_admin()` includes it, which grants direct UPDATE on
+`public.members` and bypasses Agapay's audit trail. Leaders stay `member`.
 
 ## Authorization
 

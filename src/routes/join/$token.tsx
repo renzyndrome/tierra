@@ -52,11 +52,11 @@ function JoinPage() {
   const submit = async () => {
     setFormError('')
     if (name.trim().length < 2) {
-      setFormError('Please enter your full name.')
+      setFormError('Full name required.')
       return
     }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
-      setFormError('Please enter a valid email address.')
+      setFormError('Email address invalid.')
       return
     }
     setSubmitting(true)
@@ -72,7 +72,7 @@ function JoinPage() {
       })
       setDone(res)
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not sign you up. Please try again.')
+      setFormError(err instanceof Error ? err.message : 'Sign-up failed. Retry.')
     } finally {
       setSubmitting(false)
     }
@@ -98,30 +98,28 @@ function JoinPage() {
             </div>
           ) : !info ? (
             <StateMessage
-              title="This sign-up link is not active"
-              message="Ask your Quest Circle leader to turn on their sign-up link and show you a new QR code."
+              title="Sign-up link inactive"
+              message="Request an active QR code from the circle leader."
             />
           ) : done ? (
             <SuccessState email={email} resent={done.resent} emailed={done.emailed} />
           ) : isAuthenticated ? (
             <div className="p-8 text-center">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">You're already signed in</h2>
-              <p className="text-gray-600 mb-6">
-                This link is for creating a new account. Go to your profile instead.
-              </p>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Already signed in</h2>
+              <p className="text-gray-600 mb-6">Link for new accounts only.</p>
               <Link
                 to="/profile"
                 className="inline-block px-6 py-3 bg-[#8B1538] hover:bg-[#6B0F2B] text-white rounded-xl font-semibold"
               >
-                Go to my profile
+                Open profile
               </Link>
             </div>
           ) : (
             <div className="p-6">
               <div className="text-center mb-6">
-                <h1 className="text-2xl font-bold text-[#8B1538]">Set up your account</h1>
+                <h1 className="text-2xl font-bold text-[#8B1538]">Account setup</h1>
                 <p className="text-gray-600 mt-2 text-sm">
-                  Joining <span className="font-semibold">{info.groupName}</span>
+                  Circle: <span className="font-semibold">{info.groupName}</span>
                 </p>
                 {info.satelliteName && (
                   <span className="inline-block mt-2 px-3 py-1 bg-[#F8B4B4]/30 text-[#8B1538] rounded-full text-xs font-medium">
@@ -131,8 +129,7 @@ function JoinPage() {
               </div>
 
               <p className="text-sm text-gray-500 mb-5 text-center">
-                We'll match these details to your existing church record, so your giving and
-                attendance history stays with you.
+                Details matched against the church directory.
               </p>
 
               <form
@@ -144,12 +141,12 @@ function JoinPage() {
               >
                 <Field
                   id="join-name"
-                  label="Your full name"
+                  label="Full name"
                   value={name}
                   onChange={setName}
-                  placeholder="e.g. Maria Angela Santos"
+                  placeholder="Juan Dela Cruz"
                   autoComplete="name"
-                  hint="Use the name the church has on record, if you can."
+                  hint="Name as on church records."
                 />
                 <Field
                   id="join-email"
@@ -157,9 +154,9 @@ function JoinPage() {
                   type="email"
                   value={email}
                   onChange={setEmail}
-                  placeholder="you@example.com"
+                  placeholder="name@example.com"
                   autoComplete="email"
-                  hint="We send your confirmation link here."
+                  hint="Confirmation link sent here."
                 />
                 <Field
                   id="join-phone"
@@ -178,7 +175,7 @@ function JoinPage() {
                   type="date"
                   value={birthday}
                   onChange={setBirthday}
-                  hint="Helps us find the right record when names are similar."
+                  hint="Separates similar names."
                 />
 
                 <button
@@ -186,14 +183,14 @@ function JoinPage() {
                   disabled={submitting}
                   className="w-full py-4 bg-[#8B1538] hover:bg-[#6B0F2B] disabled:opacity-60 text-white rounded-xl font-semibold text-lg transition-colors"
                 >
-                  {submitting ? 'Signing you up…' : 'Sign up'}
+                  {submitting ? 'Signing up…' : 'Sign up'}
                 </button>
               </form>
 
               {formError && <p className="mt-4 text-center text-sm text-red-600">{formError}</p>}
 
               <p className="mt-5 text-center text-sm text-gray-500">
-                Already have an account?{' '}
+                Existing account:{' '}
                 <Link to="/auth/login" className="text-[#8B1538] font-semibold hover:underline">
                   Sign in
                 </Link>
@@ -253,24 +250,25 @@ function SuccessState({ email, resent, emailed }: { email: string; resent: boole
           />
         </svg>
       </div>
-      <h2 className="text-2xl font-bold text-gray-900">Check your email</h2>
+      <h2 className="text-2xl font-bold text-gray-900">
+        {emailed ? 'Confirmation email sent' : 'Sign-up recorded'}
+      </h2>
       <p className="text-gray-600 mt-3">
         {emailed ? (
           <>
-            We sent a confirmation link to <span className="font-semibold">{email}</span>.
-            {resent ? ' You had already signed up, so we sent a fresh link.' : ''} Open it to set
-            your password and finish.
+            {resent ? 'Confirmation link resent to ' : 'Confirmation link sent to '}
+            <span className="font-semibold break-all">{email}</span>. Next step: open the link and
+            set a password.
           </>
         ) : (
-          <>
-            Your sign-up is recorded, but we could not send the email right now. Please tell your
-            Quest Circle leader so they can help you finish.
-          </>
+          <>Email not sent. Contact the circle leader.</>
         )}
       </p>
-      <p className="text-gray-400 text-sm mt-4">
-        Can't find it? Check your spam folder. The link expires, so use it soon.
-      </p>
+      {emailed && (
+        <p className="text-gray-400 text-sm mt-4">
+          Not in the inbox: check spam. Single use, time-limited.
+        </p>
+      )}
     </div>
   )
 }

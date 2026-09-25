@@ -28,6 +28,8 @@ import { createServerAdminClient } from '../../lib/supabase'
 import { getCaller, getCallerMemberId, getPermissionMatrix } from './_authGuard'
 import { permissionMatches, permissionsForRole } from '../../lib/auth'
 import { createInvitedAuthUser, findAuthUserByEmail, resendConfirmLink } from '../authInvite'
+import { enrollInAgapayIfEligible } from '../agapayEnroll'
+import { todayIsoDate } from '../../lib/agapay'
 import {
   resolveClaim,
   topScore,
@@ -99,7 +101,15 @@ async function resolveSignupToken(admin: AdminClient, token: string): Promise<Si
   }
 }
 
-/** Member ids belonging to a circle: active memberships plus its leaders. */
+/**
+ * Member ids belonging to a circle: active memberships, its leaders, and anyone
+ * whose discipler is the circle's leader.
+ *
+ * Two fields describe "who is in a circle" and they drift: tierra's
+ * member_cell_groups (used by the directory) and members.discipler_id (used by
+ * Agapay, the discipleship app on the same database). A disciple often has one
+ * but not the other, so both count as evidence for the "in this circle" bonus.
+ */
 async function groupMemberIds(admin: AdminClient, cellGroupId: string): Promise<Set<string>> {
   const [membershipRes, groupRes] = await Promise.all([
     admin
@@ -117,7 +127,43 @@ async function groupMemberIds(admin: AdminClient, cellGroupId: string): Promise<
   const g = groupRes.data as unknown as { leader_id: string | null; co_leader_id: string | null } | null
   if (g?.leader_id) ids.add(g.leader_id)
   if (g?.co_leader_id) ids.add(g.co_leader_id)
+
+  if (g?.leader_id) {
+    const { data: disciples } = await admin
+      .from('members')
+      .select('id')
+      .eq('discipler_id', g.leader_id)
+      .eq('is_archived', false)
+    for (const row of (disciples ?? []) as unknown as { id: string }[]) ids.add(row.id)
+  }
   return ids
+}
+
+/**
+ * Point a member at the circle's leader as their discipler, but ONLY when the
+ * member has no discipler yet. Never overwrites an existing assignment (that is
+ * an audited change in Agapay via reassign_disciples) and never points a leader
+ * at themselves. Best-effort: a failure here must not undo the account link.
+ */
+async function setDisciplerIfEmpty(
+  admin: AdminClient,
+  memberId: string,
+  cellGroupId: string,
+): Promise<void> {
+  const { data: group } = await admin
+    .from('cell_groups')
+    .select('leader_id')
+    .eq('id', cellGroupId)
+    .maybeSingle()
+  const leaderId = (group as unknown as { leader_id: string | null } | null)?.leader_id ?? null
+  if (!leaderId || leaderId === memberId) return
+
+  const { error } = await admin
+    .from('members')
+    .update({ discipler_id: leaderId })
+    .eq('id', memberId)
+    .is('discipler_id', null)
+  if (error) console.error('Error setting discipler from claim:', error)
 }
 
 /** Member ids that already back an account (never auto-link to these). */
@@ -161,7 +207,7 @@ async function loadClaimDirectory(admin: AdminClient): Promise<ClaimCandidateMem
     .eq('is_archived', false)
   if (error) {
     console.error('Error loading member directory for claims:', error)
-    throw new Error('Failed to load the member directory')
+    throw new Error('Member directory failed to load.')
   }
   return (data ?? []) as unknown as ClaimCandidateMember[]
 }
@@ -260,13 +306,13 @@ async function requireGroupApprover(
   }
 
   if (!cellGroupId) {
-    throw new Error('Only an admin can act on this request')
+    throw new Error('Admin access required.')
   }
 
   const memberId = await getCallerMemberId(admin, caller.userId)
   if (!memberId) {
     throw new Error(
-      'Your account is not linked to a member record yet — ask an admin to link it first',
+      'Account not linked to a member record. Admin link required.',
     )
   }
 
@@ -277,7 +323,7 @@ async function requireGroupApprover(
     .maybeSingle()
   const g = group as unknown as { leader_id: string | null; co_leader_id: string | null } | null
   if (!g || (g.leader_id !== memberId && g.co_leader_id !== memberId)) {
-    throw new Error('You do not lead that Quest Circle')
+    throw new Error('Not the leader of this circle.')
   }
 
   return { userId: caller.userId, global: false }
@@ -290,7 +336,7 @@ async function loadClaim(admin: AdminClient, claimId: string): Promise<MemberCla
     .select('*')
     .eq('id', claimId)
     .maybeSingle()
-  if (error || !data) throw new Error('That sign-up request no longer exists')
+  if (error || !data) throw new Error('Sign-up request not found.')
   return data as unknown as MemberClaimRequest
 }
 
@@ -305,7 +351,7 @@ async function assertMemberUnlinked(admin: AdminClient, memberId: string, userId
     .eq('member_id', memberId)
     .neq('id', userId)
   if (others && others.length > 0) {
-    throw new Error('Another account is already linked to that member record')
+    throw new Error('Member record already linked to another account.')
   }
 }
 
@@ -335,12 +381,12 @@ export const getSignupGroup = createServerFn({ method: 'GET' })
 
 const submitClaimSchema = z.object({
   token: z.string().min(4).max(100),
-  name: z.string().trim().min(2, 'Please enter your full name').max(100),
-  email: z.string().trim().email('Please enter a valid email address').max(200),
+  name: z.string().trim().min(2, 'Full name required.').max(100),
+  email: z.string().trim().email('Email address invalid.').max(200),
   phone: z.string().trim().max(30).optional().nullable(),
   birthday: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the date picker')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Birthday format invalid.')
     .optional()
     .nullable(),
 })
@@ -366,7 +412,7 @@ export const submitClaimSignup = createServerFn({ method: 'POST' })
     const admin = createServerAdminClient()
 
     const target = await resolveSignupToken(admin, data.token)
-    if (!target) throw new Error('This sign-up link is not active. Ask your leader for a new one.')
+    if (!target) throw new Error('Sign-up link inactive. Request a new QR code from the circle leader.')
 
     // Blunt a leaked-link flood. The token is secret, so this is a backstop.
     const windowStart = new Date(Date.now() - CLAIM_RATE_WINDOW_MINUTES * 60_000).toISOString()
@@ -376,7 +422,7 @@ export const submitClaimSignup = createServerFn({ method: 'POST' })
       .eq('cell_group_id', target.cellGroupId)
       .gte('created_at', windowStart)
     if ((count ?? 0) >= CLAIM_RATE_LIMIT) {
-      throw new Error('Too many sign-ups on this link right now. Please try again in a few minutes.')
+      throw new Error('Too many sign-ups on this link. Retry in a few minutes.')
     }
 
     const email = data.email.toLowerCase()
@@ -384,6 +430,7 @@ export const submitClaimSignup = createServerFn({ method: 'POST' })
       roleLabel: 'Member',
       variant: 'claim' as const,
       groupName: target.groupName,
+      recipientName: data.name,
     }
 
     // Existing account? Resend only when it was never used AND already has a
@@ -393,15 +440,18 @@ export const submitClaimSignup = createServerFn({ method: 'POST' })
     if (existing) {
       const { data: priorClaim } = await admin
         .from('member_claim_requests')
-        .select('id')
+        .select('id, submitted_name')
         .eq('user_id', existing.id)
         .maybeSingle()
       if (!existing.last_sign_in_at && priorClaim) {
-        const { emailed } = await resendConfirmLink(admin, email, emailParams)
+        const { emailed } = await resendConfirmLink(admin, email, {
+          ...emailParams,
+          recipientName: (priorClaim as unknown as { submitted_name: string }).submitted_name,
+        })
         return { emailed, resent: true }
       }
       throw new Error(
-        'An account already exists for that email. Please sign in, or use "Forgot password".',
+        'Account already exists for this email. Sign in or reset the password.',
       )
     }
 
@@ -441,6 +491,8 @@ export const submitClaimSignup = createServerFn({ method: 'POST' })
         if (linkErr) throw new Error(linkErr.message)
         status = 'auto_linked'
         matchedMemberId = resolution.autoMember.id
+        // An existing member with a discipler joins that discipler's Agapay queue.
+        await enrollInAgapayIfEligible(admin, matchedMemberId, null, 'circle sign-up')
       } catch (err) {
         // Fall back to review rather than losing the sign-up.
         console.error('Auto-link failed, queuing claim for review:', err)
@@ -460,7 +512,7 @@ export const submitClaimSignup = createServerFn({ method: 'POST' })
     })
     if (insErr) {
       console.error('Error recording claim request:', insErr)
-      throw new Error('We could not record your sign-up. Please tell your leader.')
+      throw new Error('Sign-up not recorded. Contact the circle leader.')
     }
 
     return { emailed, resent: false }
@@ -503,7 +555,7 @@ export const getMyLedGroups = createServerFn({ method: 'GET' })
     const { data: groups, error } = await query
     if (error) {
       console.error('Error loading led circles:', error)
-      throw new Error('Failed to load your Quest Circles')
+      throw new Error('Circles failed to load.')
     }
 
     const rows = (groups ?? []) as unknown as {
@@ -589,7 +641,7 @@ export const setGroupSignupEnabled = createServerFn({ method: 'POST' })
       )
     if (error) {
       console.error('Error toggling circle sign-up link:', error)
-      throw new Error('Failed to update the sign-up link')
+      throw new Error('Sign-up link update failed.')
     }
     return { success: true }
   })
@@ -615,7 +667,7 @@ export const regenerateGroupSignupToken = createServerFn({ method: 'POST' })
       )
     if (error) {
       console.error('Error regenerating circle sign-up token:', error)
-      throw new Error('Failed to generate a new link')
+      throw new Error('Link replacement failed.')
     }
     return { success: true, token }
   })
@@ -653,14 +705,14 @@ export const getClaimQueue = createServerFn({ method: 'GET' })
       query = query.eq('cell_group_id', data.cellGroupId)
     } else if (!approver.global) {
       // Defensive: requireGroupApprover already rejects this combination.
-      throw new Error('Pick a Quest Circle to review')
+      throw new Error('Circle selection required.')
     }
     query = data.status ? query.eq('status', data.status) : query.eq('status', 'pending')
 
     const { data: rows, error } = await query
     if (error) {
       console.error('Error loading claim queue:', error)
-      throw new Error('Failed to load sign-up requests')
+      throw new Error('Sign-up requests failed to load.')
     }
 
     const claims = (rows ?? []) as unknown as MemberClaimRequest[]
@@ -740,7 +792,7 @@ export const confirmClaim = createServerFn({ method: 'POST' })
       .select('id')
       .eq('id', data.memberId)
       .maybeSingle()
-    if (!member) throw new Error('That member record no longer exists')
+    if (!member) throw new Error('Member record not found.')
 
     await assertMemberUnlinked(admin, data.memberId, claim.user_id)
 
@@ -750,7 +802,7 @@ export const confirmClaim = createServerFn({ method: 'POST' })
       .eq('id', claim.user_id)
     if (linkErr) {
       console.error('Error linking claim to member:', linkErr)
-      throw new Error('Failed to link the account')
+      throw new Error('Account link failed.')
     }
 
     if (data.addToGroup && claim.cell_group_id) {
@@ -763,7 +815,11 @@ export const confirmClaim = createServerFn({ method: 'POST' })
         },
         { onConflict: 'member_id,cell_group_id' },
       )
+      await setDisciplerIfEmpty(admin, data.memberId, claim.cell_group_id)
     }
+
+    // Puts the person in their discipler's Agapay follow-up queue.
+    await enrollInAgapayIfEligible(admin, data.memberId, approver.userId, 'circle sign-up')
 
     const { error } = await admin
       .from('member_claim_requests')
@@ -776,7 +832,7 @@ export const confirmClaim = createServerFn({ method: 'POST' })
       .eq('id', data.claimId)
     if (error) {
       console.error('Error updating claim status:', error)
-      throw new Error('Account linked, but the request status could not be updated')
+      throw new Error('Account linked. Request status update failed.')
     }
     return { success: true }
   })
@@ -825,6 +881,7 @@ export const createMemberFromClaim = createServerFn({ method: 'POST' })
         city: '',
         discipleship_stage: 'Newbie',
         membership_status: 'active',
+        joined_date: todayIsoDate(),
       })
       .select('id')
       .single()
@@ -833,10 +890,10 @@ export const createMemberFromClaim = createServerFn({ method: 'POST' })
       // members.email is UNIQUE — a collision means the record already exists.
       if (memErr.code === '23505') {
         throw new Error(
-          'A member record already uses that email. Link to it instead of creating a new one.',
+          'Email already on a member record. Link that record instead.',
         )
       }
-      throw new Error('Failed to create the member record')
+      throw new Error('Member record creation failed.')
     }
 
     const memberId = member.id as string
@@ -847,7 +904,7 @@ export const createMemberFromClaim = createServerFn({ method: 'POST' })
       .eq('id', claim.user_id)
     if (linkErr) {
       console.error('Error linking new member to claim account:', linkErr)
-      throw new Error('Member created but the account could not be linked')
+      throw new Error('Member record created. Account link failed.')
     }
 
     if (claim.cell_group_id) {
@@ -860,7 +917,10 @@ export const createMemberFromClaim = createServerFn({ method: 'POST' })
         },
         { onConflict: 'member_id,cell_group_id' },
       )
+      await setDisciplerIfEmpty(admin, memberId, claim.cell_group_id)
     }
+
+    await enrollInAgapayIfEligible(admin, memberId, approver.userId, 'circle sign-up')
 
     await admin
       .from('member_claim_requests')
@@ -905,7 +965,7 @@ export const rejectClaim = createServerFn({ method: 'POST' })
       .eq('id', data.claimId)
     if (error) {
       console.error('Error rejecting claim:', error)
-      throw new Error('Failed to update the request')
+      throw new Error('Request update failed.')
     }
     return { success: true }
   })
@@ -923,7 +983,7 @@ export const undoClaimLink = createServerFn({ method: 'POST' })
     const claim = await loadClaim(admin, data.claimId)
     const approver = await requireGroupApprover(data.accessToken, claim.cell_group_id)
     if (!approver.global) {
-      throw new Error('Only an admin can undo a completed link')
+      throw new Error('Admin access required to undo a link.')
     }
 
     const { error: unlinkErr } = await admin
@@ -932,7 +992,7 @@ export const undoClaimLink = createServerFn({ method: 'POST' })
       .eq('id', claim.user_id)
     if (unlinkErr) {
       console.error('Error unlinking claim account:', unlinkErr)
-      throw new Error('Failed to unlink the account')
+      throw new Error('Account unlink failed.')
     }
 
     const { error } = await admin
@@ -946,7 +1006,7 @@ export const undoClaimLink = createServerFn({ method: 'POST' })
       .eq('id', data.claimId)
     if (error) {
       console.error('Error resetting claim status:', error)
-      throw new Error('Account unlinked, but the request status could not be reset')
+      throw new Error('Account unlinked. Request status reset failed.')
     }
     return { success: true }
   })

@@ -2910,7 +2910,7 @@ function AdminDashboard() {
                         Finance access is protected by a private per-user PIN, set the first time each finance user opens the Finances page.
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        Member sign-ups are people claiming an existing member record through a Quest Circle QR code.
+                        Member sign-ups: member record claims from Quest Circle QR codes.
                       </p>
                     </CardContent>
                   </Card>
