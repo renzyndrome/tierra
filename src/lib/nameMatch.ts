@@ -90,6 +90,29 @@ export function nameMatchConfidence(typed: string | null | undefined, candidate:
 }
 
 /**
+ * Staff directory search (manual check-in). Every typed token must appear in
+ * the member's normalized name, in any order, so "cruz juan" finds
+ * "Juan Dela Cruz" and "pena" finds "Peña". Ranked: exact name, then names
+ * starting with the query, then the rest; alphabetical within each rank.
+ */
+export function searchDirectoryByName<T extends NamedRecord>(
+  query: string,
+  members: readonly T[],
+  limit: number = 15,
+): T[] {
+  const q = normalizeName(query)
+  if (!q) return []
+  const tokens = q.split(' ')
+  const rank = (name: string) => (name === q ? 0 : name.startsWith(q) ? 1 : 2)
+  return members
+    .map((m) => ({ m, name: normalizeName(m.name) }))
+    .filter(({ name }) => tokens.every((t) => name.includes(t)))
+    .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name))
+    .slice(0, limit)
+    .map(({ m }) => m)
+}
+
+/**
  * Resolve a typed name/phone to a single directory member for auto-linking.
  * Resolution order:
  *   1. Confident name match (exact or high-confidence subset) — auto-link only

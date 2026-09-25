@@ -7,6 +7,7 @@ import {
   findExactNameMatches,
   resolveMemberMatch,
   nameMatchConfidence,
+  searchDirectoryByName,
   AUTO_MATCH_CONFIDENCE,
   type DirectoryMember,
 } from '../../lib/nameMatch'
@@ -170,5 +171,39 @@ describe('resolveMemberMatch — confident subset (middle-name) auto-match', () 
       { id: 'm', name: 'Maria Laurence Rebadulla', phone: '09990001111' },
     ]
     expect(resolveMemberMatch('Laurence Rebadulla', '0917 147 7836', dir)?.id).toBe('g')
+  })
+})
+
+describe('searchDirectoryByName (staff manual check-in search)', () => {
+  const dir = [
+    { id: '1', name: 'Juan Dela Cruz' },
+    { id: '2', name: 'Maria Peña' },
+    { id: '3', name: 'Juan' },
+    { id: '4', name: 'Anna Juanico' },
+    { id: '5', name: 'Pedro Santos' },
+  ]
+
+  it('returns nothing for a blank query', () => {
+    expect(searchDirectoryByName('   ', dir)).toEqual([])
+  })
+
+  it('matches every typed token in any order', () => {
+    expect(searchDirectoryByName('cruz juan', dir).map((m) => m.id)).toEqual(['1'])
+  })
+
+  it('ignores accents and case', () => {
+    expect(searchDirectoryByName('PENA', dir).map((m) => m.id)).toEqual(['2'])
+  })
+
+  it('ranks exact, then prefix, then substring matches', () => {
+    expect(searchDirectoryByName('juan', dir).map((m) => m.id)).toEqual(['3', '1', '4'])
+  })
+
+  it('respects the limit', () => {
+    expect(searchDirectoryByName('a', dir, 2)).toHaveLength(2)
+  })
+
+  it('returns no match when a token is missing', () => {
+    expect(searchDirectoryByName('juan santos', dir)).toEqual([])
   })
 })

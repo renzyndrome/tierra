@@ -1074,6 +1074,9 @@ export interface ServiceSessionWithRelations extends ServiceSession {
   satellite?: { id: string; name: string } | null
   checkin_count?: number
   pending_count?: number
+  // Open AND dated before today (church time): QR check-in refuses it and the
+  // admin list flags it for closing. Computed server-side, not a column.
+  is_overdue?: boolean
 }
 
 export interface AttendanceRecord {
@@ -1122,6 +1125,14 @@ export interface MatchCandidate {
   satellite_id: string | null
   phone: string | null
   sim: number
+}
+
+// A directory member offered by the staff manual check-in search.
+export interface CheckinMemberOption {
+  id: string
+  name: string
+  phone: string | null
+  satellite_name: string | null
 }
 
 // A pending attendance record plus recomputed suggestions for the admin queue.
