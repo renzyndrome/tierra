@@ -1,9 +1,14 @@
 // Quest Laguna Directory - Cell Group Server Functions
+//
+// Every function takes the caller's accessToken. Reads need a signed-in user
+// (the same exposure as the table RLS); writes need cell_groups.write and
+// deletes cell_groups.delete.
 
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
-import { createServerSupabaseClient, createServerAdminClient } from '../../lib/supabase'
-import type { CellGroup, CellGroupInsert, CellGroupUpdate, PaginatedResult, MemberCellGroup } from '../../lib/types'
+import { createServerAdminClient } from '../../lib/supabase'
+import { getCaller, requirePermission } from './_authGuard'
+import type { CellGroup, CellGroupInsert, CellGroupUpdate, MemberCellGroup } from '../../lib/types'
 
 // ============================================
 // VALIDATION SCHEMAS
@@ -24,78 +29,16 @@ const cellGroupInsertSchema = z.object({
 
 const cellGroupUpdateSchema = cellGroupInsertSchema.partial()
 
-const searchParamsSchema = z.object({
-  query: z.string().optional(),
-  satelliteId: z.string().uuid().optional(),
-  isActive: z.boolean().optional(),
-  page: z.number().min(1).default(1),
-  limit: z.number().min(1).max(100).default(20),
-  sortBy: z.enum(['name', 'created_at']).default('name'),
-  sortOrder: z.enum(['asc', 'desc']).default('asc'),
-})
-
-// ============================================
-// GET CELL GROUPS (with pagination and filters)
-// ============================================
-
-export const getCellGroups = createServerFn({ method: 'GET' })
-  .inputValidator((data: z.infer<typeof searchParamsSchema>) => searchParamsSchema.parse(data))
-  .handler(async ({ data }): Promise<PaginatedResult<CellGroup>> => {
-    const supabase = createServerSupabaseClient()
-
-    let query = supabase
-      .from('cell_groups')
-      .select('*', { count: 'exact' })
-
-    // Apply filters
-    if (data.query) {
-      query = query.or(`name.ilike.%${data.query}%,description.ilike.%${data.query}%`)
-    }
-
-    if (data.satelliteId) {
-      query = query.eq('satellite_id', data.satelliteId)
-    }
-
-    if (data.isActive !== undefined) {
-      query = query.eq('is_active', data.isActive)
-    }
-
-    // Pagination
-    const from = (data.page - 1) * data.limit
-    const to = from + data.limit - 1
-
-    // Sorting
-    query = query
-      .order(data.sortBy, { ascending: data.sortOrder === 'asc' })
-      .range(from, to)
-
-    const { data: groups, error, count } = await query
-
-    if (error) {
-      console.error('Error fetching cell groups:', error)
-      throw new Error('Failed to fetch Quest Circles')
-    }
-
-    return {
-      data: groups as CellGroup[],
-      pagination: {
-        page: data.page,
-        limit: data.limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / data.limit),
-      },
-    }
-  })
-
 // ============================================
 // GET ALL CELL GROUPS (simple list for dropdowns)
 // ============================================
 
 export const getAllCellGroups = createServerFn({ method: 'GET' })
-  .inputValidator((data: { activeOnly?: boolean }) =>
-    z.object({ activeOnly: z.boolean().optional().default(true) }).parse(data)
+  .inputValidator((data: { accessToken: string; activeOnly?: boolean }) =>
+    z.object({ accessToken: z.string(), activeOnly: z.boolean().optional().default(true) }).parse(data)
   )
   .handler(async ({ data }): Promise<CellGroup[]> => {
+    await getCaller(data.accessToken)
     const supabase = createServerAdminClient()
 
     let query = supabase
@@ -118,38 +61,15 @@ export const getAllCellGroups = createServerFn({ method: 'GET' })
   })
 
 // ============================================
-// GET SINGLE CELL GROUP
-// ============================================
-
-export const getCellGroup = createServerFn({ method: 'GET' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
-  .handler(async ({ data }): Promise<CellGroup | null> => {
-    const supabase = createServerSupabaseClient()
-
-    const { data: group, error } = await supabase
-      .from('cell_groups')
-      .select('*')
-      .eq('id', data.id)
-      .single()
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null // Not found
-      }
-      console.error('Error fetching cell group:', error)
-      throw new Error('Failed to fetch Quest Circle')
-    }
-
-    return group as CellGroup
-  })
-
-// ============================================
 // GET CELL GROUP WITH RELATIONS
 // ============================================
 
 export const getCellGroupWithRelations = createServerFn({ method: 'GET' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
+  )
   .handler(async ({ data }) => {
+    await getCaller(data.accessToken)
     const supabase = createServerAdminClient()
 
     const { data: group, error } = await supabase
@@ -186,13 +106,17 @@ export const getCellGroupWithRelations = createServerFn({ method: 'GET' })
 // ============================================
 
 export const createCellGroup = createServerFn({ method: 'POST' })
-  .inputValidator((data: CellGroupInsert) => cellGroupInsertSchema.parse(data))
+  .inputValidator((data: CellGroupInsert & { accessToken: string }) =>
+    cellGroupInsertSchema.extend({ accessToken: z.string() }).parse(data)
+  )
   .handler(async ({ data }): Promise<CellGroup> => {
+    const { accessToken, ...insert } = data
+    await requirePermission(accessToken, 'cell_groups.write')
     const supabase = createServerAdminClient()
 
     const { data: group, error } = await supabase
       .from('cell_groups')
-      .insert(data)
+      .insert(insert)
       .select()
       .single()
 
@@ -209,13 +133,15 @@ export const createCellGroup = createServerFn({ method: 'POST' })
 // ============================================
 
 export const updateCellGroup = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string; updates: CellGroupUpdate }) =>
+  .inputValidator((data: { accessToken: string; id: string; updates: CellGroupUpdate }) =>
     z.object({
+      accessToken: z.string(),
       id: z.string().uuid(),
       updates: cellGroupUpdateSchema,
     }).parse(data)
   )
   .handler(async ({ data }): Promise<CellGroup> => {
+    await requirePermission(data.accessToken, 'cell_groups.write')
     const supabase = createServerAdminClient()
 
     const { data: group, error } = await supabase
@@ -238,8 +164,11 @@ export const updateCellGroup = createServerFn({ method: 'POST' })
 // ============================================
 
 export const deleteCellGroup = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
+  )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'cell_groups.delete')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase
@@ -260,14 +189,16 @@ export const deleteCellGroup = createServerFn({ method: 'POST' })
 // ============================================
 
 export const addMemberToCellGroup = createServerFn({ method: 'POST' })
-  .inputValidator((data: { memberId: string; cellGroupId: string; role?: 'leader' | 'co_leader' | 'member' }) =>
+  .inputValidator((data: { accessToken: string; memberId: string; cellGroupId: string; role?: 'leader' | 'co_leader' | 'member' }) =>
     z.object({
+      accessToken: z.string(),
       memberId: z.string().uuid(),
       cellGroupId: z.string().uuid(),
       role: z.enum(['leader', 'co_leader', 'member']).optional().default('member'),
     }).parse(data)
   )
   .handler(async ({ data }): Promise<MemberCellGroup> => {
+    await requirePermission(data.accessToken, 'cell_groups.write')
     const supabase = createServerAdminClient()
 
     // Check if already a member
@@ -306,13 +237,15 @@ export const addMemberToCellGroup = createServerFn({ method: 'POST' })
 // ============================================
 
 export const removeMemberFromCellGroup = createServerFn({ method: 'POST' })
-  .inputValidator((data: { memberId: string; cellGroupId: string }) =>
+  .inputValidator((data: { accessToken: string; memberId: string; cellGroupId: string }) =>
     z.object({
+      accessToken: z.string(),
       memberId: z.string().uuid(),
       cellGroupId: z.string().uuid(),
     }).parse(data)
   )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'cell_groups.write')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase
@@ -334,14 +267,16 @@ export const removeMemberFromCellGroup = createServerFn({ method: 'POST' })
 // ============================================
 
 export const updateMemberCellGroupRole = createServerFn({ method: 'POST' })
-  .inputValidator((data: { memberId: string; cellGroupId: string; role: 'leader' | 'co_leader' | 'member' }) =>
+  .inputValidator((data: { accessToken: string; memberId: string; cellGroupId: string; role: 'leader' | 'co_leader' | 'member' }) =>
     z.object({
+      accessToken: z.string(),
       memberId: z.string().uuid(),
       cellGroupId: z.string().uuid(),
       role: z.enum(['leader', 'co_leader', 'member']),
     }).parse(data)
   )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'cell_groups.write')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase
@@ -358,47 +293,3 @@ export const updateMemberCellGroupRole = createServerFn({ method: 'POST' })
     return { success: true }
   })
 
-// ============================================
-// GET CELL GROUP COUNT
-// ============================================
-
-export const getCellGroupCount = createServerFn({ method: 'GET' })
-  .handler(async (): Promise<number> => {
-    const supabase = createServerSupabaseClient()
-
-    const { count, error } = await supabase
-      .from('cell_groups')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_active', true)
-
-    if (error) {
-      console.error('Error getting cell group count:', error)
-      throw new Error('Failed to get Quest Circle count')
-    }
-
-    return count || 0
-  })
-
-// ============================================
-// GET CELL GROUPS BY SATELLITE
-// ============================================
-
-export const getCellGroupsBySatellite = createServerFn({ method: 'GET' })
-  .inputValidator((data: { satelliteId: string }) => z.object({ satelliteId: z.string().uuid() }).parse(data))
-  .handler(async ({ data }): Promise<CellGroup[]> => {
-    const supabase = createServerSupabaseClient()
-
-    const { data: groups, error } = await supabase
-      .from('cell_groups')
-      .select('*')
-      .eq('satellite_id', data.satelliteId)
-      .eq('is_active', true)
-      .order('name')
-
-    if (error) {
-      console.error('Error fetching cell groups by satellite:', error)
-      throw new Error('Failed to fetch Quest Circles')
-    }
-
-    return groups as CellGroup[]
-  })

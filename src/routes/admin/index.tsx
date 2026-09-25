@@ -13,7 +13,7 @@ import { Input } from '../../components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { Label } from '../../components/ui/label'
 import { Textarea } from '../../components/ui/textarea'
-import { importSpreadsheetData, relinkMemberRelationships, generateCellGroupsFromDisciplers } from '../../server/functions/importMembers'
+import { importSpreadsheetData } from '../../server/functions/importMembers'
 import { createCellGroup, updateCellGroup, deleteCellGroup } from '../../server/functions/cellGroups'
 import { createMinistry, updateMinistry, deleteMinistry } from '../../server/functions/ministries'
 import { addSatellite, deleteSatellite } from '../../server/functions/satellites'
@@ -42,7 +42,7 @@ import { getRolePermissions } from '../../server/functions/rolePermissions'
 import { getFinancialOverview } from '../../server/functions/finances'
 import { getInventoryItems, createInventoryItem, updateInventoryItem, deleteInventoryItem, getInventoryCategories, createInventoryCategory, deleteInventoryCategory } from '../../server/functions/inventory'
 import { uploadInventoryPhoto } from '../../lib/storage'
-import { ADMIN_PIN, formatCurrency, formatNumber, INVENTORY_LOCATIONS, INVENTORY_CONDITIONS } from '../../lib/constants'
+import { formatCurrency, formatNumber, INVENTORY_LOCATIONS, INVENTORY_CONDITIONS } from '../../lib/constants'
 import { downloadExcel, downloadPDF } from '../../lib/export'
 import { FinancePinGate } from '../../components/FinancePinGate'
 
@@ -71,6 +71,8 @@ export const Route = createFileRoute('/admin/')({
 function AdminDashboard() {
   const navigate = useNavigate()
   const { isAuthenticated, isLoading: authLoading, profile, signOut, session, user } = useAuth()
+  // Sent with every guarded server function call ('' fails the server guard).
+  const accessToken = session?.access_token ?? ''
 
   // The auth context carries only the user_profiles row (role, member_id), not
   // the member record — so fetch the signed-in user's own name for the header.
@@ -253,10 +255,6 @@ function AdminDashboard() {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number; disciplerLinks: number; ministryLinks: number; errors: string[] } | null>(null)
-  const [isRelinking, setIsRelinking] = useState(false)
-  const [relinkResult, setRelinkResult] = useState<{ disciplerLinks: number; ministryLinks: number; errors: string[] } | null>(null)
-  const [isGeneratingCellGroups, setIsGeneratingCellGroups] = useState(false)
-  const [cellGroupGenResult, setCellGroupGenResult] = useState<{ cellGroupsCreated: number; membershipsCreated: number; disciplerLinksUpdated: number; disciplersAutoCreated: number; skipped: number; errors: string[] } | null>(null)
 
   // Cell Group CRUD
   const [showCGDialog, setShowCGDialog] = useState(false)
@@ -406,8 +404,8 @@ function AdminDashboard() {
             : Promise.resolve(null)
         const [finOverview, inventoryData, categoriesData] = await Promise.all([
           finOverviewPromise,
-          getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } }),
-          getInventoryCategories({ data: {} }),
+          getInventoryItems({ data: { accessToken, sortBy: 'name', sortOrder: 'asc' } }),
+          getInventoryCategories({ data: { accessToken } }),
         ])
         if (!cancelled) {
           setFinancialOverview(finOverview)
@@ -466,7 +464,7 @@ function AdminDashboard() {
 
       const result = await importSpreadsheetData({
         data: {
-          adminPin: ADMIN_PIN,
+          accessToken,
           data: {
             COMMUNITY: rawData.tabs?.COMMUNITY,
             SATELIGHTS: rawData.tabs?.SATELIGHTS,
@@ -480,67 +478,6 @@ function AdminDashboard() {
       alert(error instanceof Error ? error.message : 'Failed to import data')
     } finally {
       setIsImporting(false)
-    }
-  }
-
-  // Handle re-link relationships (ministry + discipler)
-  const handleRelinkRelationships = async () => {
-    setIsRelinking(true)
-    setRelinkResult(null)
-    try {
-      const response = await fetch('/data/spreadsheet-raw.json')
-      if (!response.ok) {
-        throw new Error('Could not load spreadsheet data file.')
-      }
-      const rawData = await response.json()
-
-      const result = await relinkMemberRelationships({
-        data: {
-          adminPin: ADMIN_PIN,
-          data: {
-            COMMUNITY: rawData.tabs?.COMMUNITY,
-            SATELIGHTS: rawData.tabs?.SATELIGHTS,
-            QUEST_LAGUNA: rawData.tabs?.QUEST_LAGUNA,
-          },
-        },
-      })
-      setRelinkResult(result.results)
-    } catch (error) {
-      console.error('Re-link failed:', error)
-      alert(error instanceof Error ? error.message : 'Failed to re-link relationships')
-    } finally {
-      setIsRelinking(false)
-    }
-  }
-
-  // Handle generate cell groups from discipler relationships
-  const handleGenerateCellGroups = async () => {
-    setIsGeneratingCellGroups(true)
-    setCellGroupGenResult(null)
-    try {
-      // Fetch spreadsheet data for name matching
-      const response = await fetch('/data/spreadsheet-raw.json')
-      if (!response.ok) {
-        throw new Error('Could not load spreadsheet data file.')
-      }
-      const rawData = await response.json()
-
-      const result = await generateCellGroupsFromDisciplers({
-        data: {
-          adminPin: ADMIN_PIN,
-          data: {
-            COMMUNITY: rawData.tabs?.COMMUNITY,
-            SATELIGHTS: rawData.tabs?.SATELIGHTS,
-            QUEST_LAGUNA: rawData.tabs?.QUEST_LAGUNA,
-          },
-        },
-      })
-      setCellGroupGenResult(result.results)
-    } catch (error) {
-      console.error('Generate cell groups failed:', error)
-      alert(error instanceof Error ? error.message : 'Failed to generate Quest Circles')
-    } finally {
-      setIsGeneratingCellGroups(false)
     }
   }
 
@@ -591,8 +528,8 @@ function AdminDashboard() {
             : Promise.resolve(null)
         const [finOverview, inventoryData, categoriesData] = await Promise.all([
           finOverviewPromise,
-          getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } }),
-          getInventoryCategories({ data: {} }),
+          getInventoryItems({ data: { accessToken, sortBy: 'name', sortOrder: 'asc' } }),
+          getInventoryCategories({ data: { accessToken } }),
         ])
         setFinancialOverview(finOverview)
         setInventoryItems(inventoryData)
@@ -659,9 +596,9 @@ function AdminDashboard() {
         is_active: cgForm.is_active,
       }
       if (editingCG) {
-        await updateCellGroup({ data: { id: editingCG.id, updates: payload } })
+        await updateCellGroup({ data: { accessToken, id: editingCG.id, updates: payload } })
       } else {
-        await createCellGroup({ data: payload })
+        await createCellGroup({ data: { ...payload, accessToken } })
       }
       setShowCGDialog(false)
       await refreshData()
@@ -676,7 +613,7 @@ function AdminDashboard() {
     if (!cgToDelete) return
     setIsSavingCG(true)
     try {
-      await deleteCellGroup({ data: { id: cgToDelete.id } })
+      await deleteCellGroup({ data: { accessToken, id: cgToDelete.id } })
       setCGToDelete(null)
       await refreshData()
     } catch (error) {
@@ -744,9 +681,9 @@ function AdminDashboard() {
         is_active: minForm.is_active,
       }
       if (editingMin) {
-        await updateMinistry({ data: { id: editingMin.id, updates: payload } })
+        await updateMinistry({ data: { accessToken, id: editingMin.id, updates: payload } })
       } else {
-        await createMinistry({ data: payload })
+        await createMinistry({ data: { ...payload, accessToken } })
       }
       setShowMinDialog(false)
       setMinPhotoFile(null)
@@ -764,7 +701,7 @@ function AdminDashboard() {
     if (!minToDelete) return
     setIsSavingMin(true)
     try {
-      await deleteMinistry({ data: { id: minToDelete.id } })
+      await deleteMinistry({ data: { accessToken, id: minToDelete.id } })
       setMinToDelete(null)
       await refreshData()
     } catch (error) {
@@ -782,7 +719,7 @@ function AdminDashboard() {
     if (!satForm.name.trim()) return
     setIsSavingSat(true)
     try {
-      await addSatellite({ data: { name: satForm.name.trim(), pin: ADMIN_PIN } })
+      await addSatellite({ data: { accessToken, name: satForm.name.trim() } })
       setShowSatDialog(false)
       setSatForm({ name: '' })
       await refreshData()
@@ -797,7 +734,7 @@ function AdminDashboard() {
     if (!satToDelete) return
     setIsSavingSat(true)
     try {
-      await deleteSatellite({ data: { id: satToDelete.id, pin: ADMIN_PIN } })
+      await deleteSatellite({ data: { accessToken, id: satToDelete.id } })
       setSatToDelete(null)
       await refreshData()
     } catch (error) {
@@ -863,13 +800,13 @@ function AdminDashboard() {
       }
 
       if (editingInventory) {
-        await updateInventoryItem({ data: { id: editingInventory.id, updates: payload } })
+        await updateInventoryItem({ data: { accessToken, id: editingInventory.id, updates: payload } })
       } else {
-        await createInventoryItem({ data: payload })
+        await createInventoryItem({ data: { ...payload, accessToken } })
       }
 
       setShowInventoryDialog(false)
-      const items = await getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } })
+      const items = await getInventoryItems({ data: { accessToken, sortBy: 'name', sortOrder: 'asc' } })
       setInventoryItems(items)
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to save inventory item')
@@ -881,9 +818,9 @@ function AdminDashboard() {
   const handleDeleteInventory = async () => {
     if (!inventoryToDelete) return
     try {
-      await deleteInventoryItem({ data: { id: inventoryToDelete.id } })
+      await deleteInventoryItem({ data: { accessToken, id: inventoryToDelete.id } })
       setInventoryToDelete(null)
-      const items = await getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } })
+      const items = await getInventoryItems({ data: { accessToken, sortBy: 'name', sortOrder: 'asc' } })
       setInventoryItems(items)
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to delete inventory item')
@@ -894,8 +831,8 @@ function AdminDashboard() {
     if (!newCategoryName.trim()) return
     setIsSavingCategory(true)
     try {
-      await createInventoryCategory({ data: { name: newCategoryName.trim() } })
-      const cats = await getInventoryCategories({ data: {} })
+      await createInventoryCategory({ data: { accessToken, name: newCategoryName.trim() } })
+      const cats = await getInventoryCategories({ data: { accessToken } })
       setInventoryCategories(cats)
       setNewCategoryName('')
     } catch (error) {
@@ -908,8 +845,8 @@ function AdminDashboard() {
   const handleDeleteCategory = async (cat: InventoryCategory) => {
     if (!confirm(`Delete category "${cat.name}"?`)) return
     try {
-      await deleteInventoryCategory({ data: { id: cat.id } })
-      const cats = await getInventoryCategories({ data: {} })
+      await deleteInventoryCategory({ data: { accessToken, id: cat.id } })
+      const cats = await getInventoryCategories({ data: { accessToken } })
       setInventoryCategories(cats)
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to delete category')

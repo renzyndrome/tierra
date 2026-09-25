@@ -7,6 +7,7 @@ import { getAllMinistries } from '../../../server/functions/ministries'
 import { addMemberToCellGroup } from '../../../server/functions/cellGroups'
 import { getAllCellGroups } from '../../../server/functions/cellGroups'
 import { MemberAttendanceSection } from '../../../components/MemberAttendanceSection'
+import { useAuth } from '../../../components/AuthProvider'
 import { getPlaceholderAvatar, uploadMemberPhoto } from '../../../lib/storage'
 import {
   DISCIPLESHIP_JOURNEY_STAGES,
@@ -228,13 +229,16 @@ function LeaderChip({
 
 function MemberProfilePage() {
   const { memberId } = Route.useParams()
+  const { session } = useAuth()
+  const accessToken = session?.access_token ?? ''
   const [member, setMember] = useState<any>(null)
   const [memberLoading, setMemberLoading] = useState(true)
   const [memberError, setMemberError] = useState('')
 
   const reloadMember = useCallback(async () => {
+    if (!accessToken) return
     try {
-      const data = await getMemberWithRelations({ data: { id: memberId } })
+      const data = await getMemberWithRelations({ data: { accessToken, id: memberId } })
       if (data) {
         setMember(data)
         setMemberError('')
@@ -247,7 +251,7 @@ function MemberProfilePage() {
     } finally {
       setMemberLoading(false)
     }
-  }, [memberId])
+  }, [memberId, accessToken])
 
   useEffect(() => {
     reloadMember()
@@ -276,15 +280,15 @@ function MemberProfilePage() {
   // Fetch ministries/cell groups for dropdowns when dialogs open
   useEffect(() => {
     if (showMinistryDialog && allMinistries.length === 0) {
-      getAllMinistries({ data: { activeOnly: true } }).then(setAllMinistries).catch(console.error)
+      getAllMinistries({ data: { accessToken, activeOnly: true } }).then(setAllMinistries).catch(console.error)
     }
-  }, [showMinistryDialog, allMinistries.length])
+  }, [showMinistryDialog, allMinistries.length, accessToken])
 
   useEffect(() => {
     if (showCellGroupDialog && allCellGroups.length === 0) {
-      getAllCellGroups({ data: { activeOnly: true } }).then(setAllCellGroups).catch(console.error)
+      getAllCellGroups({ data: { accessToken, activeOnly: true } }).then(setAllCellGroups).catch(console.error)
     }
-  }, [showCellGroupDialog, allCellGroups.length])
+  }, [showCellGroupDialog, allCellGroups.length, accessToken])
 
   // Loading / not-found states (client-side fetch; all hooks are above this).
   if (memberLoading) {
@@ -317,7 +321,7 @@ function MemberProfilePage() {
     setIsSaving(true)
     setActionError('')
     try {
-      await addMemberToMinistry({ data: { memberId: member.id, ministryId: selectedMinistryId, role: selectedMinistryRole } })
+      await addMemberToMinistry({ data: { accessToken, memberId: member.id, ministryId: selectedMinistryId, role: selectedMinistryRole } })
       setShowMinistryDialog(false)
       setSelectedMinistryId('')
       setSelectedMinistryRole('volunteer')
@@ -334,7 +338,7 @@ function MemberProfilePage() {
     setIsSaving(true)
     setActionError('')
     try {
-      await addMemberToCellGroup({ data: { memberId: member.id, cellGroupId: selectedCellGroupId, role: selectedCellGroupRole } })
+      await addMemberToCellGroup({ data: { accessToken, memberId: member.id, cellGroupId: selectedCellGroupId, role: selectedCellGroupRole } })
       setShowCellGroupDialog(false)
       setSelectedCellGroupId('')
       setSelectedCellGroupRole('member')
@@ -354,10 +358,10 @@ function MemberProfilePage() {
         alert(`Upload failed: ${error.message}`)
         return
       }
-      await updateMember({ data: { id: member.id, updates: { photo_url: url } } })
+      await updateMember({ data: { accessToken, id: member.id, updates: { photo_url: url } } })
       reloadMember()
     } catch (error) {
-      alert('Failed to upload photo')
+      alert(error instanceof Error ? error.message : 'Failed to upload photo')
     } finally {
       setIsUploadingPhoto(false)
     }

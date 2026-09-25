@@ -92,7 +92,7 @@ function InventoryItemDetail() {
     setError('')
     try {
       const [it, ls, bs] = await Promise.all([
-        getInventoryItem({ data: { id: itemId } }),
+        getInventoryItem({ data: { accessToken, id: itemId } }),
         getMaintenanceLogs({ data: { accessToken, itemId } }),
         getBorrowRequests({ data: { accessToken, itemId } }),
       ])

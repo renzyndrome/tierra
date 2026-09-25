@@ -35,10 +35,17 @@ function CompleteProfilePage() {
 
   useEffect(() => {
     getSatellites({ data: true }).then(setSatellites).catch(() => {})
-    getAllMinistries({ data: { activeOnly: true } })
+  }, [])
+
+  // Ministries need a signed-in caller; this /auth page can render before the
+  // session has loaded, so wait for the token.
+  const accessToken = session?.access_token
+  useEffect(() => {
+    if (!accessToken) return
+    getAllMinistries({ data: { accessToken, activeOnly: true } })
       .then((rows) => setMinistries(rows.map((m) => ({ id: m.id, name: m.name }))))
       .catch(() => {})
-  }, [])
+  }, [accessToken])
 
   // A claim sign-up must never land here: this page CREATES a member record,
   // which would orphan the imported record they are waiting to be matched to.

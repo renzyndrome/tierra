@@ -6,6 +6,7 @@ import { getMemberWithRelations, updateMember, getAllMembersLite } from '../../.
 import { getSatellites } from '../../../../server/functions/satellites'
 import { getAllCellGroups, addMemberToCellGroup, removeMemberFromCellGroup } from '../../../../server/functions/cellGroups'
 import { MemberForm } from '../../../../components/MemberForm'
+import { useAuth } from '../../../../components/AuthProvider'
 import type { Member, MemberInsert, SatelliteRow, CellGroup } from '../../../../lib/types'
 
 // shadcn/ui components
@@ -30,6 +31,8 @@ function EditMemberPage() {
 // Edit Member Form
 function EditMemberForm({ memberId }: { memberId: string }) {
   const navigate = useNavigate()
+  const { session } = useAuth()
+  const accessToken = session?.access_token ?? ''
   const [member, setMember] = useState<Member | null>(null)
   const [satellites, setSatellites] = useState<SatelliteRow[]>([])
   const [cellGroups, setCellGroups] = useState<CellGroup[]>([])
@@ -41,13 +44,14 @@ function EditMemberForm({ memberId }: { memberId: string }) {
   const [notFound, setNotFound] = useState(false)
 
   useEffect(() => {
+    if (!accessToken) return
     const fetchData = async () => {
       try {
         const [memberData, sats, cgs, membersLite] = await Promise.all([
-          getMemberWithRelations({ data: { id: memberId } }),
+          getMemberWithRelations({ data: { accessToken, id: memberId } }),
           getSatellites({ data: false }),
-          getAllCellGroups({ data: { activeOnly: true } }),
-          getAllMembersLite(),
+          getAllCellGroups({ data: { accessToken, activeOnly: true } }),
+          getAllMembersLite({ data: { accessToken } }),
         ])
 
         if (!memberData) {
@@ -72,22 +76,22 @@ function EditMemberForm({ memberId }: { memberId: string }) {
     }
 
     fetchData()
-  }, [memberId])
+  }, [memberId, accessToken])
 
   const handleSubmit = async (data: MemberInsert, newCellGroupId?: string | null) => {
     setIsSubmitting(true)
     setError(null)
 
     try {
-      await updateMember({ data: { id: memberId, updates: data } })
+      await updateMember({ data: { accessToken, id: memberId, updates: data } })
 
       // Handle cell group change if needed
       if (newCellGroupId !== undefined && newCellGroupId !== currentCellGroupId) {
         if (currentCellGroupId) {
-          await removeMemberFromCellGroup({ data: { memberId, cellGroupId: currentCellGroupId } })
+          await removeMemberFromCellGroup({ data: { accessToken, memberId, cellGroupId: currentCellGroupId } })
         }
         if (newCellGroupId) {
-          await addMemberToCellGroup({ data: { memberId, cellGroupId: newCellGroupId, role: 'member' } })
+          await addMemberToCellGroup({ data: { accessToken, memberId, cellGroupId: newCellGroupId, role: 'member' } })
         }
       }
 

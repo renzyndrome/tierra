@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { createMember } from '../../../server/functions/members'
 import { getSatellites } from '../../../server/functions/satellites'
 import { MemberForm } from '../../../components/MemberForm'
+import { useAuth } from '../../../components/AuthProvider'
 import type { MemberInsert, SatelliteRow } from '../../../lib/types'
 import { ADMIN_PIN } from '../../../lib/constants'
 
@@ -97,6 +98,8 @@ function PinScreen({
 // New Member Form
 function NewMemberForm() {
   const navigate = useNavigate()
+  const { session } = useAuth()
+  const accessToken = session?.access_token ?? ''
   const [satellites, setSatellites] = useState<SatelliteRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -122,7 +125,7 @@ function NewMemberForm() {
     setError(null)
 
     try {
-      await createMember({ data })
+      await createMember({ data: { ...data, accessToken } })
       navigate({ to: '/admin', search: { tab: 'members' } })
     } catch (err) {
       console.error('Error creating member:', err)

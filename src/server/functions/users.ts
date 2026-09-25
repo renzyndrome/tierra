@@ -5,6 +5,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
+import { toSafeSearchTerm } from '../../lib/searchTerm'
 import { requirePermission, getCaller } from './_authGuard'
 import { isResendConfigured, sendInviteEmail } from '../email'
 import { getRoleDisplayName } from '../../lib/auth'
@@ -653,7 +654,8 @@ export const searchLinkableMembers = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<LinkableMember[]> => {
     await requirePermission(data.accessToken, 'users.manage')
     const admin = createServerAdminClient()
-    const term = data.query.trim()
+    const term = toSafeSearchTerm(data.query)
+    if (!term) return []
 
     const { data: rows, error } = await admin
       .from('members')
