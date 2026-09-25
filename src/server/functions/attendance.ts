@@ -12,9 +12,9 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
 import { getCaller, requirePermission } from './_authGuard'
-import { resolveMemberMatch, nameMatchConfidence, searchDirectoryByName } from '../../lib/nameMatch'
+import { resolveMemberMatch, nameMatchConfidence, searchDirectoryByName, findSimilarMembers } from '../../lib/nameMatch'
 import { churchToday, isSessionOverdue, acceptsQrCheckin } from '../../lib/sessionSchedule'
-import { MATCH_SIMILARITY_THRESHOLD } from '../../lib/constants'
+import { MATCH_SIMILARITY_THRESHOLD, WALK_IN_SIMILAR_THRESHOLD } from '../../lib/constants'
 import type {
   ServiceType,
   ServiceSession,
@@ -29,6 +29,7 @@ import type {
   MemberAttendanceEntry,
   CheckinMethod,
   CheckinMemberOption,
+  WalkInResult,
 } from '../../lib/types'
 
 // ============================================
@@ -76,6 +77,85 @@ async function fuzzyCandidates(
     return []
   }
   return (data ?? []) as MatchCandidate[]
+}
+
+// Attach satellite names so staff can tell apart members who share a name.
+async function withSatelliteNames(
+  admin: ReturnType<typeof createServerAdminClient>,
+  members: readonly LiteMember[],
+): Promise<CheckinMemberOption[]> {
+  if (members.length === 0) return []
+  const { data: sats } = await admin.from('satellites').select('id, name')
+  const satName = new Map((sats ?? []).map((s) => [s.id as string, s.name as string]))
+  return members.map((m) => ({
+    id: m.id,
+    name: m.name,
+    phone: m.phone,
+    satellite_name: m.satellite_id ? satName.get(m.satellite_id) ?? null : null,
+  }))
+}
+
+// Directory members a walk-in may already be: confident token matches
+// (middle-name variants) plus trigram look-alikes (typos), best first.
+async function similarDirectoryMembers(
+  admin: ReturnType<typeof createServerAdminClient>,
+  name: string,
+): Promise<LiteMember[]> {
+  const directory = await loadDirectory(admin)
+  const byId = new Map(directory.map((m) => [m.id, m]))
+  const scores = new Map<string, number>()
+  for (const m of findSimilarMembers(name, directory)) {
+    scores.set(m.id, nameMatchConfidence(name, m.name))
+  }
+  for (const c of await fuzzyCandidates(admin, name)) {
+    const score = Math.max(c.sim, nameMatchConfidence(name, c.name))
+    if (score >= WALK_IN_SIMILAR_THRESHOLD && byId.has(c.id)) {
+      scores.set(c.id, Math.max(score, scores.get(c.id) ?? 0))
+    }
+  }
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .flatMap(([id]) => {
+      const m = byId.get(id)
+      return m ? [m] : []
+    })
+}
+
+// Insert a visitor member created from a check-in (review queue or booth
+// walk-in) and return its id.
+async function insertVisitorMember(
+  admin: ReturnType<typeof createServerAdminClient>,
+  args: {
+    name: string
+    phone: string | null
+    satelliteId: string | null
+    gender?: 'male' | 'female' | null
+    age?: number | null
+    city?: string | null
+  },
+): Promise<string> {
+  const { data: member, error } = await admin
+    .from('members')
+    .insert({
+      name: args.name,
+      phone: args.phone,
+      satellite_id: args.satelliteId,
+      gender: args.gender ?? null,
+      age: args.age ?? null,
+      // city is NOT NULL in the schema; when not collected it starts empty
+      // for an admin to fill in later on the member profile.
+      city: args.city ?? '',
+      discipleship_stage: 'Newbie',
+      membership_status: 'visitor',
+    })
+    .select('id')
+    .single()
+  if (error || !member) {
+    console.error('Error creating member from check-in:', error)
+    throw new Error('Failed to create member')
+  }
+  return member.id as string
 }
 
 // ============================================
@@ -576,17 +656,76 @@ export const searchMembersForCheckin = createServerFn({ method: 'GET' })
     await requirePermission(data.accessToken, 'registration.write')
     const admin = createServerAdminClient()
     const hits = searchDirectoryByName(data.query, await loadDirectory(admin), 15)
-    if (hits.length === 0) return []
+    return withSatelliteNames(admin, hits)
+  })
 
-    // Satellite names help staff tell apart members who share a name.
-    const { data: sats } = await admin.from('satellites').select('id, name')
-    const satName = new Map((sats ?? []).map((s) => [s.id as string, s.name as string]))
-    return hits.map((m) => ({
-      id: m.id,
-      name: m.name,
-      phone: m.phone,
-      satellite_name: m.satellite_id ? satName.get(m.satellite_id) ?? null : null,
-    }))
+const registerWalkInSchema = z.object({
+  accessToken: z.string(),
+  sessionId: z.string().uuid(),
+  name: z.string().trim().min(2, 'Name required. At least 2 characters.').max(100),
+  phone: z.string().trim().max(20).optional().nullable(),
+  gender: z.enum(['male', 'female']).optional().nullable(),
+  age: z.number().int().min(1, 'Age: 1 to 120.').max(120, 'Age: 1 to 120.').optional().nullable(),
+  city: z.string().trim().max(50).optional().nullable(),
+  satelliteId: z.string().uuid().optional().nullable(),
+  invitedBy: z.string().trim().max(100).optional().nullable(),
+  // Set after staff chose "Register anyway" on the similar-name warning.
+  force: z.boolean().optional(),
+})
+
+// Staff registration at the booth for someone not in the directory (e.g. a
+// guest without a phone): creates a visitor member and checks them in. Unless
+// `force` is set, it first returns directory members with a confidently similar
+// name, so staff can check one of them in instead of adding a duplicate.
+export const registerWalkIn = createServerFn({ method: 'POST' })
+  .inputValidator((data: z.input<typeof registerWalkInSchema>) => registerWalkInSchema.parse(data))
+  .handler(async ({ data }): Promise<WalkInResult> => {
+    const caller = await requirePermission(data.accessToken, 'registration.write')
+    const admin = createServerAdminClient()
+
+    const { data: session, error: sErr } = await admin
+      .from('service_sessions')
+      .select('id, is_open, satellite_id')
+      .eq('id', data.sessionId)
+      .single()
+    if (sErr || !session) throw new Error('Session not found')
+    if (!session.is_open) throw new Error('This session is closed.')
+
+    if (!data.force) {
+      const similar = await similarDirectoryMembers(admin, data.name)
+      if (similar.length > 0) {
+        return { status: 'possible_duplicate', matches: await withSatelliteNames(admin, similar) }
+      }
+    }
+
+    const memberId = await insertVisitorMember(admin, {
+      name: data.name,
+      phone: data.phone || null,
+      gender: data.gender ?? null,
+      age: data.age ?? null,
+      city: data.city || null,
+      // null is an explicit "Unassigned"; only an omitted value falls back.
+      satelliteId:
+        data.satelliteId === undefined
+          ? ((session.satellite_id as string | null) ?? null)
+          : data.satelliteId,
+    })
+    try {
+      await linkCheckIn(admin, {
+        sessionId: data.sessionId,
+        memberId,
+        method: 'manual',
+        matchStatus: 'new_member',
+        rawName: data.name,
+        rawPhone: data.phone || null,
+        invitedBy: data.invitedBy || null,
+        matchedBy: caller.userId,
+        displayName: data.name,
+      })
+    } catch {
+      throw new Error('Member created. Check-in not recorded: search the name and check in.')
+    }
+    return { status: 'registered', memberId, displayName: data.name }
   })
 
 export const manualCheckIn = createServerFn({ method: 'POST' })
@@ -777,29 +916,16 @@ export const createMemberFromCheckin = createServerFn({ method: 'POST' })
       satelliteId = session?.satellite_id ?? null
     }
 
-    const { data: member, error: memErr } = await admin
-      .from('members')
-      .insert({
-        name: data.name,
-        phone: data.phone ?? null,
-        satellite_id: satelliteId,
-        // city is NOT NULL in the schema; not collected at check-in, so start
-        // empty for an admin to fill in later on the member profile.
-        city: '',
-        discipleship_stage: 'Newbie',
-        membership_status: 'visitor',
-      })
-      .select('id')
-      .single()
-    if (memErr) {
-      console.error('Error creating member from check-in:', memErr)
-      throw new Error('Failed to create member')
-    }
+    const memberId = await insertVisitorMember(admin, {
+      name: data.name,
+      phone: data.phone ?? null,
+      satelliteId,
+    })
 
     const { error: updErr } = await admin
       .from('attendance_records')
       .update({
-        member_id: member.id,
+        member_id: memberId,
         match_status: 'new_member',
         matched_by: caller.userId,
       })
@@ -808,7 +934,7 @@ export const createMemberFromCheckin = createServerFn({ method: 'POST' })
       console.error('Error linking new member to check-in:', updErr)
       throw new Error('Member created but failed to link the check-in')
     }
-    return { success: true, memberId: member.id as string }
+    return { success: true, memberId }
   })
 
 export const ignoreCheckin = createServerFn({ method: 'POST' })

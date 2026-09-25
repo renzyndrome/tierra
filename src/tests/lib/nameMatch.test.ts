@@ -8,6 +8,7 @@ import {
   resolveMemberMatch,
   nameMatchConfidence,
   searchDirectoryByName,
+  findSimilarMembers,
   AUTO_MATCH_CONFIDENCE,
   type DirectoryMember,
 } from '../../lib/nameMatch'
@@ -205,5 +206,34 @@ describe('searchDirectoryByName (staff manual check-in search)', () => {
 
   it('returns no match when a token is missing', () => {
     expect(searchDirectoryByName('juan santos', dir)).toEqual([])
+  })
+})
+
+describe('findSimilarMembers (walk-in duplicate check)', () => {
+  const dir = [
+    { id: 'g', name: 'Gabriel Laurence Rebadulla' },
+    { id: 'm', name: 'Maria Laurence Rebadulla' },
+    { id: 'e', name: 'Laurence Eusebio' },
+    { id: 'p', name: 'Pedro Santos' },
+  ]
+
+  it('finds an exact name, ignoring case and accents', () => {
+    expect(findSimilarMembers('pedro SANTOS', dir).map((m) => m.id)).toEqual(['p'])
+  })
+
+  it('finds middle-name variants (confident subset matches)', () => {
+    expect(findSimilarMembers('Laurence Rebadulla', dir).map((m) => m.id)).toEqual(['g', 'm'])
+  })
+
+  it('ignores a single shared first name', () => {
+    expect(findSimilarMembers('Laurence', dir)).toEqual([])
+  })
+
+  it('returns nothing for a new name', () => {
+    expect(findSimilarMembers('Lola Remedios Cruz', dir)).toEqual([])
+  })
+
+  it('respects the limit', () => {
+    expect(findSimilarMembers('Laurence Rebadulla', dir, 1)).toHaveLength(1)
   })
 })

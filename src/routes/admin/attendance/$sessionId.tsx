@@ -6,6 +6,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../components/AuthProvider'
 import { AdminRoute } from '../../../components/ProtectedRoute'
+import { RegisterWalkInDialog } from '../../../components/RegisterWalkInDialog'
 import {
   getSessionDetail,
   getSessionCheckins,
@@ -336,6 +337,7 @@ function SessionDetail() {
               <ManualCheckinTab
                 accessToken={accessToken}
                 sessionId={sessionId}
+                sessionSatelliteId={info.satellite_id}
                 checkedInIds={checkedInIds}
                 onCheckedIn={loadAll}
               />
@@ -414,16 +416,19 @@ function CheckinsTab({
 function ManualCheckinTab({
   accessToken,
   sessionId,
+  sessionSatelliteId,
   checkedInIds,
   onCheckedIn,
 }: {
   accessToken: string | undefined
   sessionId: string
+  sessionSatelliteId: string | null
   // Members already counted in this session (disables their button).
   checkedInIds: ReadonlySet<string>
   onCheckedIn: () => Promise<void>
 }) {
   const [query, setQuery] = useState('')
+  const [showRegister, setShowRegister] = useState(false)
   const [results, setResults] = useState<CheckinMemberOption[]>([])
   const [searchError, setSearchError] = useState('')
   const [searching, setSearching] = useState(false)
@@ -525,6 +530,29 @@ function ManualCheckinTab({
           )
         })}
       </div>
+      {!searching && query.trim().length >= 2 && (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-dashed border-gray-300 px-3 py-2">
+          <p className="text-sm text-gray-500">Not listed.</p>
+          <Button size="sm" variant="outline" onClick={() => setShowRegister(true)}>
+            Register new member
+          </Button>
+        </div>
+      )}
+      {showRegister && (
+        <RegisterWalkInDialog
+          accessToken={accessToken}
+          sessionId={sessionId}
+          initialName={query.trim()}
+          sessionSatelliteId={sessionSatelliteId}
+          onClose={() => setShowRegister(false)}
+          onDone={async (message) => {
+            setShowRegister(false)
+            setNotice(message)
+            setQuery('')
+            await onCheckedIn()
+          }}
+        />
+      )}
     </div>
   )
 }
