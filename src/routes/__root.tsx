@@ -3,6 +3,7 @@ import {
   Outlet,
   Scripts,
   createRootRoute,
+  useRouterState,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
@@ -47,7 +48,16 @@ export const Route = createRootRoute({
   component: RootComponent,
 })
 
+// Attendee-facing screens (projected QR, check-in, sign-up) never show the
+// dev-only TanStack devtools button.
+const NO_DEVTOOLS_PREFIXES = ['/display', '/checkin', '/join']
+
 function RootComponent() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const showDevtools =
+    process.env.NODE_ENV === 'development' &&
+    !NO_DEVTOOLS_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'))
+
   return (
     <html lang="en">
       <head>
@@ -63,7 +73,7 @@ function RootComponent() {
             <Outlet />
           </AuthGate>
         </AuthProvider>
-        {process.env.NODE_ENV === 'development' && (
+        {showDevtools && (
           <TanStackDevtools
             config={{
               position: 'bottom-right',

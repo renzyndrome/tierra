@@ -122,6 +122,9 @@ export function getSimpleStageFromJourney(journey: DiscipleshipJourney | null | 
 // Church name — used for neutral branding, e.g. the service check-in page.
 export const CHURCH_NAME = 'Quest Laguna'
 
+// Satellite a new service session defaults to (must match satellites.name).
+export const MAIN_SATELLITE_NAME = 'Quest Laguna Main'
+
 // Logo path
 export const LOGO_PATH = '/questlogo.jpg'
 

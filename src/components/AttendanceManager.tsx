@@ -14,6 +14,7 @@ import {
 } from '../server/functions/attendance'
 import { getSatellites } from '../server/functions/satellites'
 import { hasPermission } from '../lib/auth'
+import { MAIN_SATELLITE_NAME } from '../lib/constants'
 import type { ServiceSessionWithRelations, ServiceType, SatelliteRow } from '../lib/types'
 import { Card, CardContent } from './ui/card'
 import { Button } from './ui/button'
@@ -88,6 +89,8 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
       setSessions(s)
       setServiceTypes(types)
       setSatellites(sats)
+      // New sessions default to the main satellite until one is picked.
+      setNewSatelliteId((prev) => prev || (sats.find((sat) => sat.name === MAIN_SATELLITE_NAME)?.id ?? ''))
       if (types.length > 0 && !newTypeId) setNewTypeId(types[0].id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load sessions')
