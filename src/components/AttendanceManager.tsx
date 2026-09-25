@@ -10,6 +10,7 @@ import {
   getServiceTypes,
   createSession,
   setSessionOpen,
+  closeOverdueSessions,
 } from '../server/functions/attendance'
 import { getSatellites } from '../server/functions/satellites'
 import { hasPermission } from '../lib/auth'
@@ -72,6 +73,7 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
   const [createError, setCreateError] = useState('')
 
   const [rowBusyId, setRowBusyId] = useState<string | null>(null)
+  const [closingOverdue, setClosingOverdue] = useState(false)
 
   const load = useCallback(async () => {
     if (!accessToken) return
@@ -136,6 +138,22 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
     }
   }
 
+  const overdueCount = sessions.filter((s) => s.is_overdue).length
+
+  const handleCloseOverdue = async () => {
+    if (!accessToken) return
+    setClosingOverdue(true)
+    setError('')
+    try {
+      await closeOverdueSessions({ data: { accessToken } })
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to close overdue sessions')
+    } finally {
+      setClosingOverdue(false)
+    }
+  }
+
   const body = (
     <>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
@@ -165,6 +183,20 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
 
       {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
 
+      {!loading && overdueCount > 0 && (
+        <div className="mb-4 p-3 bg-amber-50 text-amber-800 rounded-lg text-sm flex items-center justify-between gap-3 flex-wrap">
+          <span>
+            {overdueCount} open {overdueCount === 1 ? 'session' : 'sessions'} past the service date.
+            QR check-in stopped.
+          </span>
+          {canWrite && (
+            <Button size="sm" variant="outline" disabled={closingOverdue} onClick={handleCloseOverdue}>
+              {closingOverdue ? 'Closing…' : 'Close overdue sessions'}
+            </Button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="py-20 text-center text-gray-500">Loading sessions…</div>
       ) : sessions.length === 0 ? (
@@ -186,7 +218,9 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold text-gray-900">{s.service_type?.name ?? 'Service'}</h3>
-                    {s.is_open ? (
+                    {s.is_overdue ? (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">Overdue</span>
+                    ) : s.is_open ? (
                       <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">Open</span>
                     ) : (
                       <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-medium">Closed</span>

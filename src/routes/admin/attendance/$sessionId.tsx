@@ -10,6 +10,7 @@ import {
   getSessionDetail,
   getSessionCheckins,
   getPendingMatches,
+  searchMembersForCheckin,
   manualCheckIn,
   confirmMatch,
   createMemberFromCheckin,
@@ -18,7 +19,6 @@ import {
   setSessionOpen,
   deleteSession,
 } from '../../../server/functions/attendance'
-import { searchMembers } from '../../../server/functions/members'
 import { getSatellites } from '../../../server/functions/satellites'
 import { hasPermission } from '../../../lib/auth'
 import {
@@ -29,7 +29,7 @@ import type {
   ServiceSessionWithRelations,
   AttendanceRecordWithMember,
   PendingMatch,
-  Member,
+  CheckinMemberOption,
   SatelliteRow,
 } from '../../../lib/types'
 import { Card, CardContent } from '../../../components/ui/card'
@@ -105,6 +105,7 @@ function SessionDetail() {
   const [copied, setCopied] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [toggleBusy, setToggleBusy] = useState(false)
 
   const loadAll = useCallback(async () => {
     if (!accessToken) return
@@ -143,6 +144,21 @@ function SessionDetail() {
   }, [tab, accessToken, sessionId])
 
   const countable = checkins.filter((c) => c.match_status !== 'ignored')
+  const checkedInIds = new Set(countable.flatMap((c) => (c.member_id ? [c.member_id] : [])))
+
+  const toggleOpen = async () => {
+    if (!accessToken || !info) return
+    setToggleBusy(true)
+    setError('')
+    try {
+      await setSessionOpen({ data: { accessToken, sessionId, isOpen: !info.is_open } })
+      await loadAll()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update session')
+    } finally {
+      setToggleBusy(false)
+    }
+  }
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>
@@ -168,7 +184,9 @@ function SessionDetail() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               {info.service_type?.name}
-              {info.is_open ? (
+              {info.is_overdue ? (
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">Overdue</span>
+              ) : info.is_open ? (
                 <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">Open</span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-medium">Closed</span>
@@ -187,6 +205,12 @@ function SessionDetail() {
         </div>
 
         {error && <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
+
+        {info.is_overdue && (
+          <div className="mb-4 p-3 bg-amber-50 text-amber-800 rounded-lg text-sm">
+            Service date passed. QR check-in stopped, manual check-in only.
+          </div>
+        )}
 
         <div className="mb-4 flex gap-2 flex-wrap items-center">
           {/* Opens the projectable QR in a separate window so you can show it on a
@@ -226,11 +250,8 @@ function SessionDetail() {
             <Button
               variant="outline"
               size="sm"
-              onClick={async () => {
-                if (!accessToken) return
-                await setSessionOpen({ data: { accessToken, sessionId, isOpen: !info.is_open } })
-                loadAll()
-              }}
+              disabled={toggleBusy}
+              onClick={toggleOpen}
             >
               {info.is_open ? 'Close session' : 'Reopen session'}
             </Button>
@@ -299,8 +320,13 @@ function SessionDetail() {
               canWrite={canWrite}
               onDelete={async (recordId) => {
                 if (!accessToken) return
-                await deleteCheckin({ data: { accessToken, recordId } })
-                loadAll()
+                setError('')
+                try {
+                  await deleteCheckin({ data: { accessToken, recordId } })
+                  await loadAll()
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Failed to remove check-in')
+                }
               }}
             />
           </TabsContent>
@@ -310,6 +336,7 @@ function SessionDetail() {
               <ManualCheckinTab
                 accessToken={accessToken}
                 sessionId={sessionId}
+                checkedInIds={checkedInIds}
                 onCheckedIn={loadAll}
               />
             </TabsContent>
@@ -387,14 +414,18 @@ function CheckinsTab({
 function ManualCheckinTab({
   accessToken,
   sessionId,
+  checkedInIds,
   onCheckedIn,
 }: {
   accessToken: string | undefined
   sessionId: string
-  onCheckedIn: () => void
+  // Members already counted in this session (disables their button).
+  checkedInIds: ReadonlySet<string>
+  onCheckedIn: () => Promise<void>
 }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<Member[]>([])
+  const [results, setResults] = useState<CheckinMemberOption[]>([])
+  const [searchError, setSearchError] = useState('')
   const [searching, setSearching] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
@@ -408,12 +439,16 @@ function ManualCheckinTab({
     }
     let active = true
     setSearching(true)
+    setSearchError('')
     const t = setTimeout(async () => {
       try {
-        const res = await searchMembers({ data: { query: q, limit: 15 } })
+        const res = await searchMembersForCheckin({ data: { accessToken, query: q } })
         if (active) setResults(res)
-      } catch {
-        if (active) setResults([])
+      } catch (err) {
+        if (active) {
+          setResults([])
+          setSearchError(err instanceof Error ? err.message : 'Member search failed')
+        }
       } finally {
         if (active) setSearching(false)
       }
@@ -424,7 +459,7 @@ function ManualCheckinTab({
     }
   }, [query, accessToken])
 
-  const checkIn = async (member: Member) => {
+  const checkIn = async (member: CheckinMemberOption) => {
     if (!accessToken) return
     setBusyId(member.id)
     setNotice('')
@@ -435,7 +470,7 @@ function ManualCheckinTab({
           ? `${member.name} is already checked in.`
           : `${member.name} checked in ✓`,
       )
-      onCheckedIn()
+      await onCheckedIn()
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Failed to check in')
     } finally {
@@ -452,29 +487,43 @@ function ManualCheckinTab({
         autoFocus
       />
       {notice && <p className="mt-2 text-sm text-[#8B1538]">{notice}</p>}
+      {searchError && <p className="mt-2 text-sm text-red-600">{searchError}</p>}
       <div className="mt-3 grid gap-2">
         {searching && <p className="text-sm text-gray-400">Searching…</p>}
-        {!searching && query.trim().length >= 2 && results.length === 0 && (
+        {!searching && !searchError && query.trim().length >= 2 && results.length === 0 && (
           <p className="text-sm text-gray-400">No members found.</p>
         )}
-        {results.map((m) => (
-          <Card key={m.id}>
-            <CardContent className="p-3 flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-900">{m.name}</p>
-                {m.phone && <p className="text-xs text-gray-400">{m.phone}</p>}
-              </div>
-              <Button
-                size="sm"
-                disabled={busyId === m.id}
-                onClick={() => checkIn(m)}
-                className="bg-[#8B1538] hover:bg-[#6B0F2B]"
-              >
-                {busyId === m.id ? '…' : 'Check in'}
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+        {results.map((m) => {
+          const already = checkedInIds.has(m.id)
+          return (
+            <Card key={m.id}>
+              <CardContent className="p-3 flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">{m.name}</p>
+                  {(m.satellite_name || m.phone) && (
+                    <p className="text-xs text-gray-400">
+                      {[m.satellite_name, m.phone].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </div>
+                {already ? (
+                  <Button size="sm" variant="outline" disabled>
+                    Checked in
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    disabled={busyId === m.id}
+                    onClick={() => checkIn(m)}
+                    className="bg-[#8B1538] hover:bg-[#6B0F2B]"
+                  >
+                    {busyId === m.id ? '…' : 'Check in'}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
     </div>
   )
@@ -496,6 +545,7 @@ function QueueTab({
 }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [createFor, setCreateFor] = useState<PendingMatch | null>(null)
+  const [queueError, setQueueError] = useState('')
 
   if (pending.length === 0) {
     return <p className="py-12 text-center text-gray-500">Nothing to review. All check-ins are matched. 🎉</p>
@@ -504,9 +554,12 @@ function QueueTab({
   const confirm = async (recordId: string, memberId: string) => {
     if (!accessToken) return
     setBusyId(recordId)
+    setQueueError('')
     try {
       await confirmMatch({ data: { accessToken, recordId, memberId } })
       onResolved()
+    } catch (err) {
+      setQueueError(err instanceof Error ? err.message : 'Failed to confirm match')
     } finally {
       setBusyId(null)
     }
@@ -515,9 +568,12 @@ function QueueTab({
   const ignore = async (recordId: string) => {
     if (!accessToken) return
     setBusyId(recordId)
+    setQueueError('')
     try {
       await ignoreCheckin({ data: { accessToken, recordId, note: null } })
       onResolved()
+    } catch (err) {
+      setQueueError(err instanceof Error ? err.message : 'Failed to update check-in')
     } finally {
       setBusyId(null)
     }
@@ -525,6 +581,7 @@ function QueueTab({
 
   return (
     <div className="mt-4 grid gap-3">
+      {queueError && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{queueError}</div>}
       {pending.map(({ record, candidates }) => (
         <Card key={record.id}>
           <CardContent className="p-4">

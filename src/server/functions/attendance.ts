@@ -12,7 +12,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
 import { getCaller, requirePermission } from './_authGuard'
-import { resolveMemberMatch, nameMatchConfidence } from '../../lib/nameMatch'
+import { resolveMemberMatch, nameMatchConfidence, searchDirectoryByName } from '../../lib/nameMatch'
+import { churchToday, isSessionOverdue, acceptsQrCheckin } from '../../lib/sessionSchedule'
 import { MATCH_SIMILARITY_THRESHOLD } from '../../lib/constants'
 import type {
   ServiceType,
@@ -27,6 +28,7 @@ import type {
   MemberAttendanceSummary,
   MemberAttendanceEntry,
   CheckinMethod,
+  CheckinMemberOption,
 } from '../../lib/types'
 
 // ============================================
@@ -184,10 +186,12 @@ export const getSessions = createServerFn({ method: 'GET' })
         pending_count: Number(c.pending_count),
       })
     }
+    const today = churchToday()
     return rows.map((r) => ({
       ...r,
       checkin_count: countMap.get(r.id)?.checkin_count ?? 0,
       pending_count: countMap.get(r.id)?.pending_count ?? 0,
+      is_overdue: r.is_open && isSessionOverdue(r.session_date, today),
     }))
   })
 
@@ -216,10 +220,12 @@ export const getSessionDetail = createServerFn({ method: 'GET' })
       p_session_ids: [data.sessionId],
     })
     const c = ((counts ?? []) as { checkin_count: number; pending_count: number }[])[0]
+    const row = session as ServiceSessionWithRelations
     return {
-      ...(session as ServiceSessionWithRelations),
+      ...row,
       checkin_count: Number(c?.checkin_count ?? 0),
       pending_count: Number(c?.pending_count ?? 0),
+      is_overdue: row.is_open && isSessionOverdue(row.session_date),
     }
   })
 
@@ -264,6 +270,28 @@ export const deleteSession = createServerFn({ method: 'POST' })
     return { success: true }
   })
 
+// Close every session that is still open after its date has passed (church
+// time). QR check-in already refuses these; this clears them from the list.
+export const closeOverdueSessions = createServerFn({ method: 'POST' })
+  .inputValidator((input: { accessToken: string }) =>
+    z.object({ accessToken: z.string() }).parse(input),
+  )
+  .handler(async ({ data }): Promise<{ closed: number }> => {
+    await requirePermission(data.accessToken, 'registration.write')
+    const admin = createServerAdminClient()
+    const { data: rows, error } = await admin
+      .from('service_sessions')
+      .update({ is_open: false, closed_at: new Date().toISOString() })
+      .eq('is_open', true)
+      .lt('session_date', churchToday())
+      .select('id')
+    if (error) {
+      console.error('Error closing overdue sessions:', error)
+      throw new Error('Failed to close overdue sessions')
+    }
+    return { closed: rows?.length ?? 0 }
+  })
+
 // ============================================
 // PUBLIC CHECK-IN  (no access token required)
 // ============================================
@@ -302,7 +330,11 @@ export const getCheckinSession = createServerFn({ method: 'GET' })
         sessionDate: session.session_date as string,
         satelliteName: sat?.name ?? null,
         title: (session.title as string | null) ?? null,
-        isOpen: session.is_open as boolean,
+        // An open session stops accepting QR check-ins once its date passes.
+        isOpen: acceptsQrCheckin({
+          is_open: session.is_open as boolean,
+          session_date: session.session_date as string,
+        }),
       }
     },
   )
@@ -348,7 +380,10 @@ export const getPublicSessionDisplay = createServerFn({ method: 'GET' })
         sessionDate: session.session_date as string,
         satelliteName: sat?.name ?? null,
         title: (session.title as string | null) ?? null,
-        isOpen: session.is_open as boolean,
+        isOpen: acceptsQrCheckin({
+          is_open: session.is_open as boolean,
+          session_date: session.session_date as string,
+        }),
         checkinCount: Number(c?.checkin_count ?? 0),
       }
     },
@@ -371,11 +406,14 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
     // Validate the session via the token (not RLS) and require it to be open.
     const { data: session, error: sErr } = await admin
       .from('service_sessions')
-      .select('id, is_open')
+      .select('id, is_open, session_date')
       .eq('qr_token', data.qrToken)
       .single()
     if (sErr || !session) throw new Error('This check-in link is invalid.')
-    if (!session.is_open) throw new Error('Check-in for this service is closed.')
+    // Closed, or still open but past its date (a stale QR code).
+    if (!acceptsQrCheckin({ is_open: session.is_open as boolean, session_date: session.session_date as string })) {
+      throw new Error('Check-in for this service is closed.')
+    }
     const sessionId = session.id as string
 
     // Self check-in: a logged-in user with a linked member profile.
@@ -524,6 +562,32 @@ async function linkCheckIn(
 // ============================================
 // MANUAL CHECK-IN  (staff)
 // ============================================
+
+// Staff directory search for manual check-in. Uses the service-role client:
+// members RLS only allows signed-in sessions, and a server function has no
+// user session, so the anon client silently returns zero rows.
+export const searchMembersForCheckin = createServerFn({ method: 'GET' })
+  .inputValidator((input: { accessToken: string; query: string }) =>
+    z
+      .object({ accessToken: z.string(), query: z.string().trim().min(2).max(100) })
+      .parse(input),
+  )
+  .handler(async ({ data }): Promise<CheckinMemberOption[]> => {
+    await requirePermission(data.accessToken, 'registration.write')
+    const admin = createServerAdminClient()
+    const hits = searchDirectoryByName(data.query, await loadDirectory(admin), 15)
+    if (hits.length === 0) return []
+
+    // Satellite names help staff tell apart members who share a name.
+    const { data: sats } = await admin.from('satellites').select('id, name')
+    const satName = new Map((sats ?? []).map((s) => [s.id as string, s.name as string]))
+    return hits.map((m) => ({
+      id: m.id,
+      name: m.name,
+      phone: m.phone,
+      satellite_name: m.satellite_id ? satName.get(m.satellite_id) ?? null : null,
+    }))
+  })
 
 export const manualCheckIn = createServerFn({ method: 'POST' })
   .inputValidator((input: { accessToken: string; sessionId: string; memberId: string }) =>

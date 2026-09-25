@@ -5,6 +5,11 @@ import { test, expect, type Page } from '@playwright/test'
 //   2. Open the live projectable QR display
 //   3. Session detail tabs (check-ins / manual / review queue)
 //   4. Analytics page renders
+//   5. Full workflow: guest QR check-in -> manual check-in -> review -> close
+//   6. Overdue sessions (dated before today) are flagged and refuse QR check-in
+//
+// Every test that creates a session deletes it again (the e2e target is often
+// the live database; deleting a session cascades its check-ins).
 //
 // Preconditions (see e2e/README.md): migration applied, app running, and an
 // account with the registration.read/write permissions (admin works) in
@@ -15,6 +20,55 @@ const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || ''
 // A session id that already has a pending (unmatched) guest check-in in its
 // review queue — seed one, then pass its id here.
 const QUEUE_SESSION_ID = process.env.E2E_QUEUE_SESSION_ID || ''
+// A name fragment that matches at least one directory member (manual check-in).
+const MEMBER_QUERY = process.env.E2E_MEMBER_QUERY || 'an'
+
+// YYYY-MM-DD in the church's time zone, offset by whole days.
+function manilaDate(offsetDays = 0): string {
+  const d = new Date(Date.now() + offsetDays * 86_400_000)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+// Create a labeled session (optionally on a given date) and return the URL of
+// its Manage page, where the browser lands after creation.
+async function createSession(page: Page, label: string, date?: string): Promise<string> {
+  await page.goto('/admin/attendance')
+  await page.getByRole('button', { name: /start a session|start your first session/i }).first().click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  if (date) await page.locator('#svc-date').fill(date)
+  await page.getByLabel(/^label/i).fill(label)
+  await page.getByRole('button', { name: /create & open/i }).click()
+  await page.waitForURL(/\/admin\/attendance\/[0-9a-f-]{36}/, { timeout: 15_000 })
+  // The URL flips before the Manage page renders; wait for its own controls.
+  await expect(page.getByRole('button', { name: /delete session/i })).toBeVisible({ timeout: 15_000 })
+  return page.url()
+}
+
+// Delete the session at the given Manage URL (cleanup).
+async function deleteSessionAt(page: Page, url: string) {
+  await page.goto(url)
+  await page.getByRole('button', { name: /delete session/i }).click()
+  await page.getByRole('button', { name: /yes, delete/i }).click()
+  await page.waitForURL(/\/admin\/attendance\/?$/, { timeout: 15_000 })
+}
+
+// Read the session's public QR token from the "Show QR (new window)" popup URL.
+async function readQrToken(page: Page): Promise<string> {
+  const [popup] = await Promise.all([
+    page.context().waitForEvent('page'),
+    page.getByRole('button', { name: /show qr/i }).click(),
+  ])
+  await popup.waitForLoadState()
+  const token = new URL(popup.url()).pathname.split('/').pop() ?? ''
+  await popup.close()
+  expect(token).not.toBe('')
+  return token
+}
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/auth/login')
@@ -56,9 +110,13 @@ test.describe('Admin — Service Attendance', () => {
     await page.getByRole('tab', { name: /manual check-in/i }).click()
     await expect(page.getByPlaceholder(/search members/i)).toBeVisible()
 
+    const sessionUrl = page.url()
+
     // Back on the list, the new session shows up with its label.
     await page.goto('/admin/attendance')
     await expect(page.getByText(label)).toBeVisible({ timeout: 15_000 })
+
+    await deleteSessionAt(page, sessionUrl)
   })
 
   test('admin can open the projectable QR display in a new window', async ({ page, context }) => {
@@ -161,5 +219,102 @@ test.describe('Admin — Service Attendance', () => {
       timeout: 15_000,
     })
     await expect(page.getByRole('button', { name: /start a session|start your first session/i }).first()).toBeVisible()
+  })
+
+  test('full workflow: guest QR check-in, manual check-in, review, close', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000)
+    await loginAsAdmin(page)
+    const sessionUrl = await createSession(page, `E2E FLOW ${Date.now()}`)
+
+    try {
+      const token = await readQrToken(page)
+
+      // 1. A guest scans the QR in a separate, signed-out browser.
+      const guestCtx = await browser.newContext({ baseURL })
+      const guest = await guestCtx.newPage()
+      const guestName = `E2E Guest ${Date.now()}`
+      await guest.goto(`/checkin/${token}`)
+      await guest.getByLabel(/your name/i).fill(guestName)
+      await guest.getByRole('button', { name: /^check in$/i }).click()
+      await expect(guest.getByRole('heading', { name: /you're checked in/i })).toBeVisible({
+        timeout: 15_000,
+      })
+
+      // 2. Staff sees the guest check-in.
+      await page.reload()
+      await expect(page.getByRole('tab', { name: /check-ins \(1\)/i })).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByText(guestName)).toBeVisible()
+
+      // 3. Manual check-in: search the directory and check a member in.
+      await page.getByRole('tab', { name: /manual check-in/i }).click()
+      await page.getByPlaceholder(/search members/i).fill(MEMBER_QUERY)
+      const checkInBtn = page.getByRole('button', { name: /^check in$/i }).first()
+      await expect(checkInBtn).toBeVisible({ timeout: 15_000 })
+      await checkInBtn.click()
+      await expect(page.getByText(/checked in ✓/)).toBeVisible({ timeout: 15_000 })
+      // The same member now shows as already checked in, and the count moved.
+      await expect(page.getByRole('button', { name: /^checked in$/i }).first()).toBeDisabled()
+      await expect(page.getByRole('tab', { name: /check-ins \(2\)/i })).toBeVisible()
+
+      // 4. Review queue: the guest is pending; ignore it (a test entry).
+      await page.getByRole('tab', { name: /review queue/i }).click()
+      await expect(page.getByText(guestName)).toBeVisible()
+      await page.getByRole('button', { name: /^ignore$/i }).first().click()
+      await expect(page.getByText(/nothing to review/i)).toBeVisible({ timeout: 15_000 })
+      // Ignored check-ins do not count.
+      await expect(page.getByRole('tab', { name: /check-ins \(1\)/i })).toBeVisible()
+
+      // 5. Close the session; the QR now refuses check-ins.
+      await page.getByRole('button', { name: /close session/i }).click()
+      await expect(page.getByRole('button', { name: /reopen session/i })).toBeVisible({ timeout: 15_000 })
+      await guest.goto(`/checkin/${token}`)
+      await expect(guest.getByRole('heading', { name: /check-in is closed/i })).toBeVisible({
+        timeout: 15_000,
+      })
+      await guestCtx.close()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
+  })
+
+  test('an open session dated before today is flagged overdue and its QR refuses check-in', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    test.setTimeout(90_000)
+    await loginAsAdmin(page)
+    const label = `E2E OVERDUE ${Date.now()}`
+    const sessionUrl = await createSession(page, label, manilaDate(-1))
+
+    try {
+      // Manage page: overdue badge + notice. Manual check-in stays available
+      // on an open past session (backfill from a paper list).
+      await expect(page.getByText(/^overdue$/i).first()).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByText(/service date passed/i)).toBeVisible()
+      await expect(page.getByRole('tab', { name: /manual check-in/i })).toBeVisible()
+
+      // The public QR refuses check-ins even though the session is still open.
+      const token = await readQrToken(page)
+      const anonCtx = await browser.newContext({ baseURL })
+      const anon = await anonCtx.newPage()
+      await anon.goto(`/checkin/${token}`)
+      await expect(anon.getByRole('heading', { name: /check-in is closed/i })).toBeVisible({
+        timeout: 15_000,
+      })
+      await anonCtx.close()
+
+      // Session list: the bulk close action is offered. It is NOT clicked here:
+      // it would also close real overdue sessions in the target database.
+      await page.goto('/admin/attendance')
+      await expect(page.getByText(label)).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByRole('button', { name: /close overdue sessions/i })).toBeVisible()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
   })
 })
