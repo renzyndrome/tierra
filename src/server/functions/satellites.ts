@@ -1,6 +1,11 @@
+// Satellite server functions. getSatellites is deliberately PUBLIC: it uses the
+// anon client and the satellites table is public-read (names only). Writes
+// need satellites.write.
+
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerSupabaseClient, createServerAdminClient } from '../../lib/supabase'
+import { requirePermission } from './_authGuard'
 
 export interface SatelliteRow {
   id: string
@@ -36,19 +41,14 @@ export const getSatellites = createServerFn({ method: 'GET' })
 
 // Add a new satellite
 const addSatelliteSchema = z.object({
+  accessToken: z.string(),
   name: z.string().min(1, 'Satellite name is required').max(100),
-  pin: z.string(),
 })
 
 export const addSatellite = createServerFn({ method: 'POST' })
   .inputValidator((data: z.infer<typeof addSatelliteSchema>) => addSatelliteSchema.parse(data))
   .handler(async ({ data }) => {
-    const adminPin = process.env.VITE_ADMIN_PIN || 'quest2026'
-
-    if (data.pin !== adminPin) {
-      throw new Error('Invalid admin PIN')
-    }
-
+    await requirePermission(data.accessToken, 'satellites.write')
     const supabase = createServerAdminClient()
 
     const { data: satellite, error } = await supabase
@@ -68,54 +68,16 @@ export const addSatellite = createServerFn({ method: 'POST' })
     return satellite as SatelliteRow
   })
 
-// Toggle satellite active status
-const toggleSatelliteSchema = z.object({
-  id: z.string().uuid(),
-  is_active: z.boolean(),
-  pin: z.string(),
-})
-
-export const toggleSatellite = createServerFn({ method: 'POST' })
-  .inputValidator((data: z.infer<typeof toggleSatelliteSchema>) => toggleSatelliteSchema.parse(data))
-  .handler(async ({ data }) => {
-    const adminPin = process.env.VITE_ADMIN_PIN || 'quest2026'
-
-    if (data.pin !== adminPin) {
-      throw new Error('Invalid admin PIN')
-    }
-
-    const supabase = createServerAdminClient()
-
-    const { data: satellite, error } = await supabase
-      .from('satellites')
-      .update({ is_active: data.is_active })
-      .eq('id', data.id)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Toggle satellite error:', error)
-      throw new Error('Failed to update satellite')
-    }
-
-    return satellite as SatelliteRow
-  })
-
 // Delete a satellite
 const deleteSatelliteSchema = z.object({
+  accessToken: z.string(),
   id: z.string().uuid(),
-  pin: z.string(),
 })
 
 export const deleteSatellite = createServerFn({ method: 'POST' })
   .inputValidator((data: z.infer<typeof deleteSatelliteSchema>) => deleteSatelliteSchema.parse(data))
   .handler(async ({ data }) => {
-    const adminPin = process.env.VITE_ADMIN_PIN || 'quest2026'
-
-    if (data.pin !== adminPin) {
-      throw new Error('Invalid admin PIN')
-    }
-
+    await requirePermission(data.accessToken, 'satellites.write')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase

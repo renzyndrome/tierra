@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { MemberCard, MemberCardSkeleton } from './MemberCard'
 import { archiveMember, restoreMember, deleteMember } from '../server/functions/members'
+import { useAuth } from './AuthProvider'
 import { getPlaceholderAvatar } from '../lib/storage'
 import { MEMBER_CATEGORIES, LEADERSHIP_LEVELS, DISCIPLESHIP_JOURNEY_STAGES, STAGE_LABELS } from '../lib/constants'
 import type { Member, Satellite } from '../lib/types'
@@ -55,6 +56,8 @@ type ViewMode = 'card' | 'table'
 // ============================================
 
 export function MembersTabContent({ members, satellites, isLoading, onDataChanged, memberIdsInCellGroups }: MembersTabContentProps) {
+  const { session } = useAuth()
+  const accessToken = session?.access_token ?? ''
   // View mode
   const [viewMode, setViewMode] = useState<ViewMode>('card')
 
@@ -179,7 +182,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
 
   const handleArchive = async (member: Member) => {
     try {
-      await archiveMember({ data: { id: member.id } })
+      await archiveMember({ data: { accessToken, id: member.id } })
       onDataChanged()
     } catch (error) {
       console.error('Error archiving member:', error)
@@ -189,7 +192,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
 
   const handleRestore = async (member: Member) => {
     try {
-      await restoreMember({ data: { id: member.id } })
+      await restoreMember({ data: { accessToken, id: member.id } })
       onDataChanged()
     } catch (error) {
       console.error('Error restoring member:', error)
@@ -201,7 +204,7 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
     if (!selectedMember) return
     setIsDeleting(true)
     try {
-      await deleteMember({ data: { id: selectedMember.id } })
+      await deleteMember({ data: { accessToken, id: selectedMember.id } })
       setShowDeleteDialog(false)
       setSelectedMember(null)
       onDataChanged()

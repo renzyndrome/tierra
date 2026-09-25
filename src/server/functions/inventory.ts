@@ -1,8 +1,14 @@
 // Quest Laguna Directory - Inventory Management Server Functions
+//
+// Every function takes the caller's accessToken: reads need inventory.read
+// (every screen that uses them already requires it), writes inventory.write.
 
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
+import { requirePermission } from './_authGuard'
+import { pickProvided } from '../../lib/pickProvided'
+import { toSafeSearchTerm } from '../../lib/searchTerm'
 import type { InventoryItem, InventoryItemInsert, InventoryItemUpdate, InventoryCategory } from '../../lib/types'
 
 // ============================================
@@ -23,6 +29,7 @@ const inventoryItemInsertSchema = z.object({
 const inventoryItemUpdateSchema = inventoryItemInsertSchema.partial()
 
 const inventorySearchSchema = z.object({
+  accessToken: z.string(),
   query: z.string().optional(),
   location: z.enum(['Moriah Hall', 'Nxtgen Hall']).optional(),
   category: z.string().optional(),
@@ -36,16 +43,18 @@ const inventorySearchSchema = z.object({
 // ============================================
 
 export const getInventoryItems = createServerFn({ method: 'GET' })
-  .inputValidator((data: z.infer<typeof inventorySearchSchema>) => inventorySearchSchema.parse(data))
+  .inputValidator((data: z.input<typeof inventorySearchSchema>) => inventorySearchSchema.parse(data))
   .handler(async ({ data }): Promise<InventoryItem[]> => {
+    await requirePermission(data.accessToken, 'inventory.read')
     const supabase = createServerAdminClient()
 
     let query = supabase
       .from('inventory_items')
       .select('*')
 
-    if (data.query) {
-      query = query.or(`name.ilike.%${data.query}%,description.ilike.%${data.query}%`)
+    const q = toSafeSearchTerm(data.query ?? '')
+    if (q) {
+      query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`)
     }
 
     if (data.location) {
@@ -124,8 +133,11 @@ export const getInventoryItems = createServerFn({ method: 'GET' })
 // ============================================
 
 export const getInventoryItem = createServerFn({ method: 'GET' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
+  )
   .handler(async ({ data }): Promise<InventoryItem | null> => {
+    await requirePermission(data.accessToken, 'inventory.read')
     const supabase = createServerAdminClient()
 
     const { data: item, error } = await supabase
@@ -160,13 +172,17 @@ export const getInventoryItem = createServerFn({ method: 'GET' })
 // ============================================
 
 export const createInventoryItem = createServerFn({ method: 'POST' })
-  .inputValidator((data: InventoryItemInsert) => inventoryItemInsertSchema.parse(data))
+  .inputValidator((data: InventoryItemInsert & { accessToken: string }) =>
+    inventoryItemInsertSchema.extend({ accessToken: z.string() }).parse(data)
+  )
   .handler(async ({ data }): Promise<InventoryItem> => {
+    const { accessToken, ...insert } = data
+    await requirePermission(accessToken, 'inventory.write')
     const supabase = createServerAdminClient()
 
     const { data: item, error } = await supabase
       .from('inventory_items')
-      .insert(data)
+      .insert(insert)
       .select()
       .single()
 
@@ -183,13 +199,18 @@ export const createInventoryItem = createServerFn({ method: 'POST' })
 // ============================================
 
 export const updateInventoryItem = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string; updates: InventoryItemUpdate }) =>
-    z.object({
+  .inputValidator((data: { accessToken: string; id: string; updates: InventoryItemUpdate }) => {
+    const parsed = z.object({
+      accessToken: z.string(),
       id: z.string().uuid(),
       updates: inventoryItemUpdateSchema,
     }).parse(data)
-  )
+    // .partial() still fills schema defaults (quantity, condition); write only
+    // the fields the caller actually sent.
+    return { ...parsed, updates: pickProvided(parsed.updates, data.updates) }
+  })
   .handler(async ({ data }): Promise<InventoryItem> => {
+    await requirePermission(data.accessToken, 'inventory.write')
     const supabase = createServerAdminClient()
 
     const { data: item, error } = await supabase
@@ -212,8 +233,11 @@ export const updateInventoryItem = createServerFn({ method: 'POST' })
 // ============================================
 
 export const deleteInventoryItem = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
+  )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'inventory.write')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase
@@ -234,8 +258,9 @@ export const deleteInventoryItem = createServerFn({ method: 'POST' })
 // ============================================
 
 export const getInventoryCategories = createServerFn({ method: 'GET' })
-  .inputValidator((data: Record<string, never>) => data)
-  .handler(async (): Promise<InventoryCategory[]> => {
+  .inputValidator((data: { accessToken: string }) => z.object({ accessToken: z.string() }).parse(data))
+  .handler(async ({ data }): Promise<InventoryCategory[]> => {
+    await requirePermission(data.accessToken, 'inventory.read')
     const supabase = createServerAdminClient()
 
     const { data: categories, error } = await supabase
@@ -256,10 +281,11 @@ export const getInventoryCategories = createServerFn({ method: 'GET' })
 // ============================================
 
 export const createInventoryCategory = createServerFn({ method: 'POST' })
-  .inputValidator((data: { name: string }) =>
-    z.object({ name: z.string().min(1).max(100) }).parse(data)
+  .inputValidator((data: { accessToken: string; name: string }) =>
+    z.object({ accessToken: z.string(), name: z.string().min(1).max(100) }).parse(data)
   )
   .handler(async ({ data }): Promise<InventoryCategory> => {
+    await requirePermission(data.accessToken, 'inventory.write')
     const supabase = createServerAdminClient()
 
     const { data: category, error } = await supabase
@@ -284,8 +310,11 @@ export const createInventoryCategory = createServerFn({ method: 'POST' })
 // ============================================
 
 export const deleteInventoryCategory = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
+  )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'inventory.write')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase

@@ -146,15 +146,16 @@ function BorrowRequestsPage() {
     load()
   }, [load])
 
-  // Load dropdown data once.
+  // Load dropdown data once the session token is available.
   useEffect(() => {
+    if (!accessToken) return
     let cancelled = false
     ;(async () => {
       try {
         const [its, mems, mins, sats] = await Promise.all([
-          getInventoryItems({ data: { sortBy: 'name', sortOrder: 'asc' } }),
-          getAllMembersLite(),
-          getAllMinistries({ data: { activeOnly: true } }),
+          getInventoryItems({ data: { accessToken, sortBy: 'name', sortOrder: 'asc' } }),
+          getAllMembersLite({ data: { accessToken } }),
+          getAllMinistries({ data: { accessToken, activeOnly: true } }),
           getSatellites({ data: false }),
         ])
         if (cancelled) return
@@ -169,7 +170,7 @@ function BorrowRequestsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [accessToken])
 
   const pendingCount = useMemo(
     () => requests.filter((r) => r.status === 'pending').length,

@@ -42,7 +42,8 @@ interface CellGroupDetail extends Omit<CellGroupWithRelations, 'members'> {
 function CellGroupDetailPage() {
   const navigate = useNavigate()
   const { groupId } = Route.useParams()
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, session } = useAuth()
+  const accessToken = session?.access_token ?? ''
 
   const [cellGroup, setCellGroup] = useState<CellGroupDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -73,7 +74,7 @@ function CellGroupDetailPage() {
     setError(null)
 
     try {
-      const group = await getCellGroupWithRelations({ data: { id: groupId } })
+      const group = await getCellGroupWithRelations({ data: { accessToken, id: groupId } })
 
       if (!group) {
         setError('Quest Circle not found')
@@ -87,7 +88,7 @@ function CellGroupDetailPage() {
 
     setIsLoading(false)
     hasFetchedRef.current = true
-  }, [groupId])
+  }, [groupId, accessToken])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -121,7 +122,7 @@ function CellGroupDetailPage() {
     searchTimerRef.current = setTimeout(async () => {
       setIsSearching(true)
       try {
-        const results = await searchMembers({ data: { query: searchQuery.trim(), limit: 20 } })
+        const results = await searchMembers({ data: { accessToken, query: searchQuery.trim(), limit: 20 } })
         setSearchResults(results)
       } catch (err) {
         console.error('Search error:', err)
@@ -132,13 +133,13 @@ function CellGroupDetailPage() {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     }
-  }, [searchQuery])
+  }, [searchQuery, accessToken])
 
   // Add member handler
   const handleAddMember = async (memberId: string) => {
     setIsUpdating(true)
     try {
-      await addMemberToCellGroup({ data: { memberId, cellGroupId: groupId, role: addRole } })
+      await addMemberToCellGroup({ data: { accessToken, memberId, cellGroupId: groupId, role: addRole } })
       await fetchCellGroup(false)
     } catch (err: any) {
       alert(err.message || 'Failed to add member')
@@ -151,7 +152,7 @@ function CellGroupDetailPage() {
     if (!memberToRemove) return
     setIsUpdating(true)
     try {
-      await removeMemberFromCellGroup({ data: { memberId: memberToRemove.member.id, cellGroupId: groupId } })
+      await removeMemberFromCellGroup({ data: { accessToken, memberId: memberToRemove.member.id, cellGroupId: groupId } })
       setMemberToRemove(null)
       await fetchCellGroup(false)
     } catch (err: any) {
@@ -164,7 +165,7 @@ function CellGroupDetailPage() {
   const handleRoleChange = async (memberId: string, newRole: 'leader' | 'co_leader' | 'member') => {
     setIsUpdating(true)
     try {
-      await updateMemberCellGroupRole({ data: { memberId, cellGroupId: groupId, role: newRole } })
+      await updateMemberCellGroupRole({ data: { accessToken, memberId, cellGroupId: groupId, role: newRole } })
       await fetchCellGroup(false)
     } catch (err: any) {
       alert(err.message || 'Failed to update role')

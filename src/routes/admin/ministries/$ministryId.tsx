@@ -55,7 +55,8 @@ const departmentColors: Record<string, string> = {
 function MinistryDetailPage() {
   const navigate = useNavigate()
   const { ministryId } = Route.useParams()
-  const { isAuthenticated, isLoading: authLoading } = useAuth()
+  const { isAuthenticated, isLoading: authLoading, session } = useAuth()
+  const accessToken = session?.access_token ?? ''
 
   const [ministry, setMinistry] = useState<MinistryDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -155,7 +156,7 @@ function MinistryDetailPage() {
     searchTimerRef.current = setTimeout(async () => {
       setIsSearching(true)
       try {
-        const results = await searchMembers({ data: { query: searchQuery.trim(), limit: 20 } })
+        const results = await searchMembers({ data: { accessToken, query: searchQuery.trim(), limit: 20 } })
         setSearchResults(results)
       } catch (err) {
         console.error('Search error:', err)
@@ -166,13 +167,13 @@ function MinistryDetailPage() {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     }
-  }, [searchQuery])
+  }, [searchQuery, accessToken])
 
   // Add member handler
   const handleAddMember = async (memberId: string) => {
     setIsUpdating(true)
     try {
-      await addMemberToMinistry({ data: { memberId, ministryId, role: addRole } })
+      await addMemberToMinistry({ data: { accessToken, memberId, ministryId, role: addRole } })
       await fetchMinistry(false)
     } catch (err: any) {
       alert(err.message || 'Failed to add member')
@@ -185,7 +186,7 @@ function MinistryDetailPage() {
     if (!memberToRemove) return
     setIsUpdating(true)
     try {
-      await removeMemberFromMinistry({ data: { memberId: memberToRemove.member.id, ministryId } })
+      await removeMemberFromMinistry({ data: { accessToken, memberId: memberToRemove.member.id, ministryId } })
       setMemberToRemove(null)
       await fetchMinistry(false)
     } catch (err: any) {
@@ -198,7 +199,7 @@ function MinistryDetailPage() {
   const handleRoleChange = async (memberId: string, newRole: 'head' | 'coordinator' | 'volunteer') => {
     setIsUpdating(true)
     try {
-      await updateMemberMinistryRole({ data: { memberId, ministryId, role: newRole } })
+      await updateMemberMinistryRole({ data: { accessToken, memberId, ministryId, role: newRole } })
       await fetchMinistry(false)
     } catch (err: any) {
       alert(err.message || 'Failed to update role')
@@ -226,7 +227,7 @@ function MinistryDetailPage() {
     const errors: string[] = []
     for (const [memberId, memberName] of selectedMembers) {
       try {
-        await addMemberToMinistry({ data: { memberId, ministryId, role: addRole } })
+        await addMemberToMinistry({ data: { accessToken, memberId, ministryId, role: addRole } })
       } catch (err: any) {
         errors.push(`${memberName}: ${err.message || 'Failed'}`)
       }

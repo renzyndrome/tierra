@@ -37,9 +37,9 @@ below in the Dokploy **Environment** section only. (The client gets its public c
 | ---------------------------- | :---------: | ----------------------------------------------------------- |
 | `VITE_SUPABASE_URL`          |     ✅      | Supabase project URL                                        |
 | `VITE_SUPABASE_ANON_KEY`     |     ✅      | Supabase anon key                                           |
-| `VITE_ADMIN_PIN`             |     ✅      | ⚠️ Exposed to the client — **not secret** (see §4)         |
+| `VITE_ADMIN_PIN`             |     ✅      | ⚠️ Exposed to the client, **not secret**; UI-only (see §4) |
 | `SUPABASE_SERVICE_ROLE_KEY`  |     ✅      | **Secret.** Server only — never `VITE_`-prefixed            |
-| `ADMIN_EMAIL`                |     ✅      | Server only — used to seed the admin account                |
+| `ADMIN_EMAIL`                |     ✅      | Not read by the app; e2e login only (seed code removed)     |
 | `ADMIN_PASSWORD`             |     ✅      | **Secret.** Server only                                     |
 | `APP_URL`                    |     ✅      | Base URL for invite/confirm links, e.g. `https://admin.questlaguna.org` (see §6) |
 | `RESEND_API_KEY`             |  optional   | **Secret.** If set, invites are sent via Resend (branded email); else Supabase's built-in email (see §6) |
@@ -91,12 +91,14 @@ to `/`.
 ## 4. Security note: `VITE_ADMIN_PIN` is public
 
 Anything prefixed `VITE_` is compiled into the **public** client bundle, so the admin PIN
-is visible to anyone who opens the browser dev tools. Treat the PIN gate as a convenience,
-not a security boundary. Real protection comes from Supabase auth
-(`ADMIN_EMAIL` / `ADMIN_PASSWORD` + row-level security), which stays server-side.
+is visible to anyone who opens the browser dev tools. It is a UI convenience only: the
+"New member" page shows a PIN screen. **No server function accepts or checks the PIN.**
 
-Also remove the hardcoded `'quest2026'` fallback in `src/lib/constants.ts` before going
-live, so a missing value fails closed instead of defaulting to a known PIN.
+Real protection is the caller's Supabase session. Every server function receives the
+access token in its payload and authorizes it with `src/server/functions/_authGuard.ts`
+(`getCaller` / `requirePermission` / `requireAdmin`). The service-role client bypasses
+RLS, so a server function without a guard is open to anyone. `src/tests/server/authGuards.test.ts`
+fails the unit suite when a server function has no guard and is not on its public allowlist.
 
 ---
 

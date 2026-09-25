@@ -115,7 +115,7 @@ function UsersPage() {
         listUsers({ data: { accessToken } }),
         listInvitations({ data: { accessToken } }),
         getSatellites({ data: true }),
-        getAllMinistries({ data: { activeOnly: true } }),
+        getAllMinistries({ data: { accessToken, activeOnly: true } }),
       ])
       setUsers(u)
       setInvitations(inv)

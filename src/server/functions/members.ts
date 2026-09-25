@@ -1,9 +1,16 @@
 // Quest Laguna Directory - Member Server Functions
+//
+// Every function takes the caller's accessToken. Reads need a signed-in user
+// (the same exposure as the members RLS); writes need members.write and
+// permanent deletes members.delete. A member may change their own photo.
 
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
-import { createServerSupabaseClient, createServerAdminClient } from '../../lib/supabase'
-import type { Member, MemberInsert, MemberUpdate, PaginatedResult } from '../../lib/types'
+import { createServerAdminClient } from '../../lib/supabase'
+import { getCaller, getCallerMemberId, requirePermission } from './_authGuard'
+import { pickProvided } from '../../lib/pickProvided'
+import { toSafeSearchTerm } from '../../lib/searchTerm'
+import type { Member, MemberInsert, MemberUpdate } from '../../lib/types'
 
 // ============================================
 // VALIDATION SCHEMAS
@@ -47,113 +54,19 @@ const memberInsertSchema = z.object({
 
 const memberUpdateSchema = memberInsertSchema.partial()
 
-const searchParamsSchema = z.object({
-  query: z.string().optional(),
-  satelliteId: z.string().uuid().optional(),
-  discipleshipStage: z.enum(['Newbie', 'Growing', 'Leader']).optional(),
-  membershipStatus: z.enum(['visitor', 'regular', 'active', 'inactive']).optional(),
-  needsSupport: z.boolean().optional(),
-  page: z.number().min(1).default(1),
-  limit: z.number().min(1).max(100).default(20),
-  sortBy: z.enum(['name', 'joined_date', 'created_at']).default('name'),
-  sortOrder: z.enum(['asc', 'desc']).default('asc'),
-})
-
-// ============================================
-// GET MEMBERS (with pagination and filters)
-// ============================================
-
-export const getMembers = createServerFn({ method: 'GET' })
-  .inputValidator((data: z.infer<typeof searchParamsSchema>) => searchParamsSchema.parse(data))
-  .handler(async ({ data }): Promise<PaginatedResult<Member>> => {
-    const supabase = createServerSupabaseClient()
-
-    let query = supabase
-      .from('members')
-      .select('*', { count: 'exact' })
-      .eq('is_archived', false)
-
-    // Apply filters
-    if (data.query) {
-      query = query.or(`name.ilike.%${data.query}%,email.ilike.%${data.query}%,city.ilike.%${data.query}%`)
-    }
-
-    if (data.satelliteId) {
-      query = query.eq('satellite_id', data.satelliteId)
-    }
-
-    if (data.discipleshipStage) {
-      query = query.eq('discipleship_stage', data.discipleshipStage)
-    }
-
-    if (data.membershipStatus) {
-      query = query.eq('membership_status', data.membershipStatus)
-    }
-
-    if (data.needsSupport !== undefined) {
-      query = query.eq('needs_support', data.needsSupport)
-    }
-
-    // Pagination
-    const from = (data.page - 1) * data.limit
-    const to = from + data.limit - 1
-
-    // Sorting
-    query = query
-      .order(data.sortBy, { ascending: data.sortOrder === 'asc' })
-      .range(from, to)
-
-    const { data: members, error, count } = await query
-
-    if (error) {
-      console.error('Error fetching members:', error)
-      throw new Error('Failed to fetch members')
-    }
-
-    return {
-      data: members as Member[],
-      pagination: {
-        page: data.page,
-        limit: data.limit,
-        total: count || 0,
-        totalPages: Math.ceil((count || 0) / data.limit),
-      },
-    }
-  })
-
-// ============================================
-// GET SINGLE MEMBER
-// ============================================
-
-export const getMember = createServerFn({ method: 'GET' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
-  .handler(async ({ data }): Promise<Member | null> => {
-    const supabase = createServerSupabaseClient()
-
-    const { data: member, error } = await supabase
-      .from('members')
-      .select('*')
-      .eq('id', data.id)
-      .single()
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null // Not found
-      }
-      console.error('Error fetching member:', error)
-      throw new Error('Failed to fetch member')
-    }
-
-    return member as Member
-  })
+// Fields a member may change on their own record without members.write.
+const SELF_EDITABLE_FIELDS = new Set(['photo_url'])
 
 // ============================================
 // GET MEMBER WITH RELATIONS
 // ============================================
 
 export const getMemberWithRelations = createServerFn({ method: 'GET' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
+  )
   .handler(async ({ data }) => {
+    await getCaller(data.accessToken)
     const supabase = createServerAdminClient()
 
     const { data: member, error } = await supabase
@@ -200,8 +113,8 @@ export const getMemberWithRelations = createServerFn({ method: 'GET' })
 // ============================================
 
 export const createMember = createServerFn({ method: 'POST' })
-  .inputValidator((data: MemberInsert) => {
-    const result = memberInsertSchema.safeParse(data)
+  .inputValidator((data: MemberInsert & { accessToken: string }) => {
+    const result = memberInsertSchema.extend({ accessToken: z.string() }).safeParse(data)
     if (!result.success) {
       const fieldErrors = result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join(', ')
       throw new Error(`Validation failed — ${fieldErrors}`)
@@ -209,11 +122,13 @@ export const createMember = createServerFn({ method: 'POST' })
     return result.data
   })
   .handler(async ({ data }): Promise<Member> => {
+    const { accessToken, ...insert } = data
+    await requirePermission(accessToken, 'members.write')
     const supabase = createServerAdminClient()
 
     const { data: member, error } = await supabase
       .from('members')
-      .insert(data)
+      .insert(insert)
       .select()
       .single()
 
@@ -233,14 +148,24 @@ export const createMember = createServerFn({ method: 'POST' })
 // ============================================
 
 export const updateMember = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string; updates: MemberUpdate }) =>
-    z.object({
+  .inputValidator((data: { accessToken: string; id: string; updates: MemberUpdate }) => {
+    const parsed = z.object({
+      accessToken: z.string(),
       id: z.string().uuid(),
       updates: memberUpdateSchema,
     }).parse(data)
-  )
+    // .partial() still fills schema defaults (stage, status, leadership level);
+    // write only the fields the caller actually sent.
+    return { ...parsed, updates: pickProvided(parsed.updates, data.updates) }
+  })
   .handler(async ({ data }): Promise<Member> => {
+    const caller = await getCaller(data.accessToken)
     const supabase = createServerAdminClient()
+
+    const selfEdit =
+      Object.keys(data.updates).every((k) => SELF_EDITABLE_FIELDS.has(k)) &&
+      (await getCallerMemberId(supabase, caller.userId)) === data.id
+    if (!selfEdit) await requirePermission(data.accessToken, 'members.write')
 
     const { data: member, error } = await supabase
       .from('members')
@@ -265,8 +190,11 @@ export const updateMember = createServerFn({ method: 'POST' })
 // ============================================
 
 export const archiveMember = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
+  )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'members.write')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase
@@ -287,8 +215,11 @@ export const archiveMember = createServerFn({ method: 'POST' })
 // ============================================
 
 export const restoreMember = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
+  )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'members.write')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase
@@ -309,8 +240,11 @@ export const restoreMember = createServerFn({ method: 'POST' })
 // ============================================
 
 export const deleteMember = createServerFn({ method: 'POST' })
-  .inputValidator((data: { id: string }) => z.object({ id: z.string().uuid() }).parse(data))
+  .inputValidator((data: { accessToken: string; id: string }) =>
+    z.object({ accessToken: z.string(), id: z.string().uuid() }).parse(data)
+  )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'members.delete')
     const supabase = createServerAdminClient()
 
     const { error } = await supabase
@@ -327,32 +261,13 @@ export const deleteMember = createServerFn({ method: 'POST' })
   })
 
 // ============================================
-// GET MEMBER COUNT
-// ============================================
-
-export const getMemberCount = createServerFn({ method: 'GET' })
-  .handler(async (): Promise<number> => {
-    const supabase = createServerSupabaseClient()
-
-    const { count, error } = await supabase
-      .from('members')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_archived', false)
-
-    if (error) {
-      console.error('Error getting member count:', error)
-      throw new Error('Failed to get member count')
-    }
-
-    return count || 0
-  })
-
-// ============================================
 // GET ALL MEMBERS (lightweight: id + name only)
 // ============================================
 
 export const getAllMembersLite = createServerFn({ method: 'GET' })
-  .handler(async (): Promise<{ id: string; name: string }[]> => {
+  .inputValidator((data: { accessToken: string }) => z.object({ accessToken: z.string() }).parse(data))
+  .handler(async ({ data }): Promise<{ id: string; name: string }[]> => {
+    await getCaller(data.accessToken)
     const supabase = createServerAdminClient()
 
     const { data: members, error } = await supabase
@@ -370,48 +285,30 @@ export const getAllMembersLite = createServerFn({ method: 'GET' })
   })
 
 // ============================================
-// GET MEMBERS BY SATELLITE
-// ============================================
-
-export const getMembersBySatellite = createServerFn({ method: 'GET' })
-  .inputValidator((data: { satelliteId: string }) => z.object({ satelliteId: z.string().uuid() }).parse(data))
-  .handler(async ({ data }): Promise<Member[]> => {
-    const supabase = createServerSupabaseClient()
-
-    const { data: members, error } = await supabase
-      .from('members')
-      .select('*')
-      .eq('satellite_id', data.satelliteId)
-      .eq('is_archived', false)
-      .order('name')
-
-    if (error) {
-      console.error('Error fetching members by satellite:', error)
-      throw new Error('Failed to fetch members')
-    }
-
-    return members as Member[]
-  })
-
-// ============================================
 // SEARCH MEMBERS (simple text search)
 // ============================================
 
 export const searchMembers = createServerFn({ method: 'GET' })
-  .inputValidator((data: { query: string; limit?: number }) =>
+  .inputValidator((data: { accessToken: string; query: string; limit?: number }) =>
     z.object({
+      accessToken: z.string(),
       query: z.string().min(1),
       limit: z.number().min(1).max(50).default(10),
     }).parse(data)
   )
   .handler(async ({ data }): Promise<Member[]> => {
-    const supabase = createServerSupabaseClient()
+    await getCaller(data.accessToken)
+    // Service-role client: the anon server client has no user session, so the
+    // members RLS (authenticated only) returned zero rows.
+    const supabase = createServerAdminClient()
+    const q = toSafeSearchTerm(data.query)
+    if (!q) return []
 
     const { data: members, error } = await supabase
       .from('members')
       .select('*')
       .eq('is_archived', false)
-      .or(`name.ilike.%${data.query}%,email.ilike.%${data.query}%,city.ilike.%${data.query}%`)
+      .or(`name.ilike.%${q}%,email.ilike.%${q}%,city.ilike.%${q}%`)
       .order('name')
       .limit(data.limit)
 
@@ -423,63 +320,3 @@ export const searchMembers = createServerFn({ method: 'GET' })
     return members as Member[]
   })
 
-// ============================================
-// UPDATE MEMBER AI FIELDS
-// ============================================
-
-export const updateMemberAI = createServerFn({ method: 'POST' })
-  .inputValidator((data: {
-    id: string
-    spiritual_score: number
-    spiritual_sentiment: 'struggling' | 'stable' | 'thriving'
-    needs_support: boolean
-  }) =>
-    z.object({
-      id: z.string().uuid(),
-      spiritual_score: z.number().min(1).max(10),
-      spiritual_sentiment: z.enum(['struggling', 'stable', 'thriving']),
-      needs_support: z.boolean(),
-    }).parse(data)
-  )
-  .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const supabase = createServerSupabaseClient()
-
-    const { error } = await supabase
-      .from('members')
-      .update({
-        spiritual_score: data.spiritual_score,
-        spiritual_sentiment: data.spiritual_sentiment,
-        needs_support: data.needs_support,
-      })
-      .eq('id', data.id)
-
-    if (error) {
-      console.error('Error updating member AI fields:', error)
-      throw new Error('Failed to update member AI fields')
-    }
-
-    return { success: true }
-  })
-
-// ============================================
-// GET MEMBERS NEEDING SUPPORT
-// ============================================
-
-export const getMembersNeedingSupport = createServerFn({ method: 'GET' })
-  .handler(async (): Promise<Member[]> => {
-    const supabase = createServerSupabaseClient()
-
-    const { data: members, error } = await supabase
-      .from('members')
-      .select('*')
-      .eq('needs_support', true)
-      .eq('is_archived', false)
-      .order('name')
-
-    if (error) {
-      console.error('Error fetching members needing support:', error)
-      throw new Error('Failed to fetch members needing support')
-    }
-
-    return members as Member[]
-  })
