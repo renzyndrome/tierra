@@ -16,7 +16,6 @@
 export interface PublicRuntimeEnv {
   VITE_SUPABASE_URL: string
   VITE_SUPABASE_ANON_KEY: string
-  VITE_ADMIN_PIN: string
 }
 
 declare global {
@@ -28,7 +27,6 @@ declare global {
 const EMPTY: PublicRuntimeEnv = {
   VITE_SUPABASE_URL: '',
   VITE_SUPABASE_ANON_KEY: '',
-  VITE_ADMIN_PIN: '',
 }
 
 function resolve(key: keyof PublicRuntimeEnv): string {
@@ -36,9 +34,7 @@ function resolve(key: keyof PublicRuntimeEnv): string {
   const inlined =
     key === 'VITE_SUPABASE_URL'
       ? import.meta.env.VITE_SUPABASE_URL
-      : key === 'VITE_SUPABASE_ANON_KEY'
-        ? import.meta.env.VITE_SUPABASE_ANON_KEY
-        : import.meta.env.VITE_ADMIN_PIN
+      : import.meta.env.VITE_SUPABASE_ANON_KEY
   if (inlined) return inlined as string
 
   // 2) Browser: value injected by the SSR document.
@@ -52,7 +48,6 @@ function resolve(key: keyof PublicRuntimeEnv): string {
 export const PUBLIC_ENV: PublicRuntimeEnv = {
   VITE_SUPABASE_URL: resolve('VITE_SUPABASE_URL'),
   VITE_SUPABASE_ANON_KEY: resolve('VITE_SUPABASE_ANON_KEY'),
-  VITE_ADMIN_PIN: resolve('VITE_ADMIN_PIN'),
 }
 
 /**
@@ -69,8 +64,6 @@ export function getPublicEnvScript(): string {
             process.env.VITE_SUPABASE_ANON_KEY ??
             import.meta.env.VITE_SUPABASE_ANON_KEY ??
             '',
-          VITE_ADMIN_PIN:
-            process.env.VITE_ADMIN_PIN ?? import.meta.env.VITE_ADMIN_PIN ?? '',
         }
       : (window.__ENV__ ?? EMPTY)
   return `window.__ENV__=${JSON.stringify(env).replace(/</g, '\\u003c')}`
