@@ -117,13 +117,17 @@ they will **not** land in the review queue.
 For someone new, e.g. a senior guest with no phone.
 
 1. Search the name first. Result: **No members found.** or no match in the list.
-2. Click **Register new person** (below the results).
+2. Click **Register new member** (below the results).
 3. Fill in the form:
-   - **Name**: prefilled from the search.
-   - **Mobile** *(optional)*.
+   - **Name**: prefilled from the search. The only required field.
+   - **Mobile**, **City**, **Gender**, **Age** *(optional)*.
    - **Satellite**: defaults to the session's satellite, else Quest Laguna Main.
-   - **Invited by** *(optional)*.
+   - **Invited by** *(optional)*: saved on the check-in, shown in the session's check-ins list.
 4. Click **Register & check in**. Result: a new visitor record plus a check-in, status **New member**.
+5. Other details (birthday, address, email, and so on): later, on the member's profile, **Edit**.
+
+The new record is a normal directory member: membership status **Visitor**, stage
+**New Friends**. Every later check-in adds to the same attendance history.
 
 **Similar names in the directory**: the form lists existing members with a close
 name instead of registering. Pick **Check in** beside the right member, or
@@ -226,7 +230,7 @@ Check-ins are split between them. Pick the one to keep, manually re-check-in any
 from the other, then close (or delete) the extra one.
 
 **"A member's name isn't in the search."**
-Not in the directory yet. At the booth: **Manual check-in** → **Register new person**
+Not in the directory yet. At the booth: **Manual check-in** → **Register new member**
 (section 4). For a QR self check-in: **Create new member** in the review queue.
 
 ---

@@ -41,6 +41,9 @@ export function RegisterWalkInDialog({
 }: RegisterWalkInDialogProps) {
   const [name, setName] = useState(initialName)
   const [phone, setPhone] = useState('')
+  const [gender, setGender] = useState<'' | 'male' | 'female'>('')
+  const [age, setAge] = useState('')
+  const [city, setCity] = useState('')
   const [invitedBy, setInvitedBy] = useState('')
   const [satelliteId, setSatelliteId] = useState(sessionSatelliteId ?? '')
   const [satellites, setSatellites] = useState<SatelliteRow[]>([])
@@ -69,6 +72,11 @@ export function RegisterWalkInDialog({
       setError('Name required. At least 2 characters.')
       return
     }
+    const ageNum = age.trim() ? Number(age) : null
+    if (ageNum !== null && (!Number.isInteger(ageNum) || ageNum < 1 || ageNum > 120)) {
+      setError('Age: 1 to 120.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
@@ -78,6 +86,9 @@ export function RegisterWalkInDialog({
           sessionId,
           name: name.trim(),
           phone: phone.trim() || null,
+          gender: gender || null,
+          age: ageNum,
+          city: city.trim() || null,
           satelliteId: satelliteId || null,
           invitedBy: invitedBy.trim() || null,
           force,
@@ -117,7 +128,7 @@ export function RegisterWalkInDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Register new person</DialogTitle>
+          <DialogTitle>Register new member</DialogTitle>
         </DialogHeader>
 
         {matches ? (
@@ -153,9 +164,32 @@ export function RegisterWalkInDialog({
               <Label htmlFor="wi-name">Name</Label>
               <Input id="wi-name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1" autoFocus />
             </div>
-            <div>
-              <Label htmlFor="wi-phone">Mobile <span className="text-gray-400 font-normal">(optional)</span></Label>
-              <Input id="wi-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="wi-phone">Mobile <span className="text-gray-400 font-normal">(optional)</span></Label>
+                <Input id="wi-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1" inputMode="tel" />
+              </div>
+              <div>
+                <Label htmlFor="wi-city">City <span className="text-gray-400 font-normal">(optional)</span></Label>
+                <Input id="wi-city" value={city} onChange={(e) => setCity(e.target.value)} className="mt-1" maxLength={50} />
+              </div>
+              <div>
+                <Label htmlFor="wi-gender">Gender <span className="text-gray-400 font-normal">(optional)</span></Label>
+                <select
+                  id="wi-gender"
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value as '' | 'male' | 'female')}
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#8B1538] outline-none"
+                >
+                  <option value="">Not set</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="wi-age">Age <span className="text-gray-400 font-normal">(optional)</span></Label>
+                <Input id="wi-age" type="number" min={1} max={120} value={age} onChange={(e) => setAge(e.target.value)} className="mt-1" />
+              </div>
             </div>
             <div>
               <Label htmlFor="wi-sat">Satellite</Label>
@@ -179,7 +213,7 @@ export function RegisterWalkInDialog({
               <Label htmlFor="wi-invited">Invited by <span className="text-gray-400 font-normal">(optional)</span></Label>
               <Input id="wi-invited" value={invitedBy} onChange={(e) => setInvitedBy(e.target.value)} className="mt-1" />
             </div>
-            <p className="text-xs text-gray-400">Creates a visitor record and a check-in.</p>
+            <p className="text-xs text-gray-400">Creates a visitor record and a check-in. More details later on the member profile.</p>
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
         )}

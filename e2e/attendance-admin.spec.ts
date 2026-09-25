@@ -335,7 +335,7 @@ test.describe('Admin — Service Attendance', () => {
       //    warning instead of creating a duplicate. Nothing is written.
       await search.fill(MEMBER_QUERY)
       const firstName = (await page.locator('[data-slot="card"] p.font-medium').first().innerText()).trim()
-      await page.getByRole('button', { name: /register new person/i }).click()
+      await page.getByRole('button', { name: /register new member/i }).click()
       const dialog = page.getByRole('dialog')
       await dialog.getByLabel(/^name/i).fill(firstName)
       await dialog.getByRole('button', { name: /register & check in/i }).click()
@@ -346,7 +346,7 @@ test.describe('Admin — Service Attendance', () => {
 
       // A typo of that name (second letter dropped) is flagged too.
       const typo = firstName.slice(0, 1) + firstName.slice(2)
-      await page.getByRole('button', { name: /register new person/i }).click()
+      await page.getByRole('button', { name: /register new member/i }).click()
       await dialog.getByLabel(/^name/i).fill(typo)
       await dialog.getByRole('button', { name: /register & check in/i }).click()
       await expect(dialog.getByText(/similar names in the directory/i)).toBeVisible({ timeout: 15_000 })
@@ -359,10 +359,15 @@ test.describe('Admin — Service Attendance', () => {
       const walkIn = `E2E Walkin ${Date.now()}`
       await search.fill(walkIn)
       await expect(page.getByText(/no members found/i)).toBeVisible({ timeout: 15_000 })
-      await page.getByRole('button', { name: /register new person/i }).click()
+      await page.getByRole('button', { name: /register new member/i }).click()
       await expect(dialog.getByLabel(/^name/i)).toHaveValue(walkIn)
       // An explicit "Unassigned" must be kept (not replaced by the session's satellite).
       await dialog.locator('#wi-sat').selectOption('')
+      // Optional details land on the new member record.
+      await dialog.getByLabel(/^mobile/i).fill('09171234567')
+      await dialog.getByLabel(/^city/i).fill('Santa Rosa')
+      await dialog.locator('#wi-gender').selectOption('female')
+      await dialog.getByLabel(/^age/i).fill('72')
       await dialog.getByRole('button', { name: /register & check in/i }).click()
       await expect(page.getByText(`${walkIn} registered and checked in ✓`)).toBeVisible({ timeout: 15_000 })
       await expect(page.getByRole('tab', { name: /check-ins \(1\)/i })).toBeVisible()

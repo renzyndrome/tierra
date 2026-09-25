@@ -126,7 +126,14 @@ async function similarDirectoryMembers(
 // walk-in) and return its id.
 async function insertVisitorMember(
   admin: ReturnType<typeof createServerAdminClient>,
-  args: { name: string; phone: string | null; satelliteId: string | null },
+  args: {
+    name: string
+    phone: string | null
+    satelliteId: string | null
+    gender?: 'male' | 'female' | null
+    age?: number | null
+    city?: string | null
+  },
 ): Promise<string> {
   const { data: member, error } = await admin
     .from('members')
@@ -134,9 +141,11 @@ async function insertVisitorMember(
       name: args.name,
       phone: args.phone,
       satellite_id: args.satelliteId,
-      // city is NOT NULL in the schema; not collected at check-in, so start
-      // empty for an admin to fill in later on the member profile.
-      city: '',
+      gender: args.gender ?? null,
+      age: args.age ?? null,
+      // city is NOT NULL in the schema; when not collected it starts empty
+      // for an admin to fill in later on the member profile.
+      city: args.city ?? '',
       discipleship_stage: 'Newbie',
       membership_status: 'visitor',
     })
@@ -655,6 +664,9 @@ const registerWalkInSchema = z.object({
   sessionId: z.string().uuid(),
   name: z.string().trim().min(2, 'Name required. At least 2 characters.').max(100),
   phone: z.string().trim().max(20).optional().nullable(),
+  gender: z.enum(['male', 'female']).optional().nullable(),
+  age: z.number().int().min(1, 'Age: 1 to 120.').max(120, 'Age: 1 to 120.').optional().nullable(),
+  city: z.string().trim().max(50).optional().nullable(),
   satelliteId: z.string().uuid().optional().nullable(),
   invitedBy: z.string().trim().max(100).optional().nullable(),
   // Set after staff chose "Register anyway" on the similar-name warning.
@@ -689,6 +701,9 @@ export const registerWalkIn = createServerFn({ method: 'POST' })
     const memberId = await insertVisitorMember(admin, {
       name: data.name,
       phone: data.phone || null,
+      gender: data.gender ?? null,
+      age: data.age ?? null,
+      city: data.city || null,
       // null is an explicit "Unassigned"; only an omitted value falls back.
       satelliteId:
         data.satelliteId === undefined
