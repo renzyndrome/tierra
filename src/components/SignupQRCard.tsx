@@ -47,11 +47,11 @@ export function SignupQRCard({ token, groupName, enabled, size = 200 }: SignupQR
 
       {!enabled && (
         <p className="mt-3 text-sm text-amber-700 text-center">
-          Turn the sign-up link on before showing this QR code.
+          Sign-up link off. Turn on before showing.
         </p>
       )}
 
-      <p className="mt-3 text-xs text-gray-500 text-center">Scan to set up your Quest account</p>
+      <p className="mt-3 text-xs text-gray-500 text-center">Scan for Quest account setup</p>
 
       <div className="mt-3 w-full flex items-center gap-2">
         <input

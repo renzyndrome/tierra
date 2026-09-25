@@ -45,7 +45,7 @@ function AdminClaimsPage() {
     try {
       setItems(await getClaimQueue({ data: { accessToken, status } }))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sign-up requests')
+      setError(err instanceof Error ? err.message : 'Sign-up requests failed to load. Retry.')
     } finally {
       setLoading(false)
     }
@@ -62,7 +62,7 @@ function AdminClaimsPage() {
       await fn()
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'That action failed')
+      setError(err instanceof Error ? err.message : 'Action failed. Retry.')
     } finally {
       setBusyClaimId(null)
     }
@@ -75,7 +75,7 @@ function AdminClaimsPage() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">Member sign-ups</h1>
             <p className="text-sm text-gray-500">
-              People claiming an existing member record through a Quest Circle QR
+              Member record claims from Quest Circle QR codes
             </p>
           </div>
           <Link to="/admin" className="text-sm text-[#8B1538] font-semibold hover:underline">

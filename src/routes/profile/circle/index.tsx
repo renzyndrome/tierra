@@ -49,7 +49,7 @@ function MyCirclePage() {
       setCircles(rows)
       setSelectedId((prev) => prev ?? rows[0]?.id ?? null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load your Quest Circles')
+      setError(err instanceof Error ? err.message : 'Circles failed to load. Retry.')
     } finally {
       setLoading(false)
     }
@@ -71,7 +71,7 @@ function MyCirclePage() {
       })
       setQueue(rows)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sign-up requests')
+      setError(err instanceof Error ? err.message : 'Sign-up requests failed to load. Retry.')
     } finally {
       setQueueLoading(false)
     }
@@ -96,7 +96,7 @@ function MyCirclePage() {
       await fn()
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'That action failed')
+      setError(err instanceof Error ? err.message : 'Action failed. Retry.')
     } finally {
       setBusyClaimId(null)
     }
@@ -109,7 +109,7 @@ function MyCirclePage() {
       await setGroupSignupEnabled({ data: { accessToken, cellGroupId: selectedId, enabled } })
       await loadCircles()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update the sign-up link')
+      setError(err instanceof Error ? err.message : 'Sign-up link update failed. Retry.')
     }
   }
 
@@ -121,7 +121,7 @@ function MyCirclePage() {
       setConfirmingRotate(false)
       await loadCircles()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate a new link')
+      setError(err instanceof Error ? err.message : 'Link replacement failed. Retry.')
     }
   }
 
@@ -132,7 +132,7 @@ function MyCirclePage() {
   if (!isAuthenticated) {
     return (
       <CenteredNote>
-        Please <Link to="/auth/login" className="text-[#8B1538] font-semibold underline">sign in</Link> first.
+        Sign-in required. <Link to="/auth/login" className="text-[#8B1538] font-semibold underline">Sign in</Link>
       </CenteredNote>
     )
   }
@@ -142,7 +142,7 @@ function MyCirclePage() {
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">My Quest Circle</h1>
+            <h1 className="text-xl font-bold text-gray-900">Quest Circle</h1>
             <p className="text-sm text-gray-500">Sign-up QR and member requests</p>
           </div>
           <Link to="/profile" className="text-sm text-[#8B1538] font-semibold hover:underline">
@@ -160,11 +160,10 @@ function MyCirclePage() {
 
         {circles.length === 0 ? (
           <div className="p-8 bg-white rounded-xl border border-gray-200 text-center">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">You don't lead a circle yet</h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">No circle led</h2>
             <p className="text-gray-600 text-sm">
-              This page is for Quest Circle leaders. If you do lead one, ask an admin to link your
-              account to your member record (Admin → Users → Link member record) and to set you as
-              the circle's leader.
+              Circle leaders only. Admin setup: Admin → Users → Link member record, then set the
+              circle leader.
             </p>
           </div>
         ) : (
@@ -210,7 +209,7 @@ function MyCirclePage() {
                       onChange={(e) => toggleSignup(e.target.checked)}
                       className="w-5 h-5 rounded border-gray-300 text-[#8B1538] focus:ring-[#8B1538]"
                     />
-                    <span className="font-medium text-gray-700">Sign-up link is on</span>
+                    <span className="font-medium text-gray-700">Sign-up link active</span>
                   </label>
                 </div>
 
@@ -226,14 +225,14 @@ function MyCirclePage() {
                   {confirmingRotate ? (
                     <div className="flex flex-wrap items-center justify-center gap-2">
                       <span className="text-sm text-gray-600">
-                        The old QR code will stop working. Continue?
+                        Old QR code stops working.
                       </span>
                       <button
                         type="button"
                         onClick={rotateToken}
                         className="min-h-11 px-4 py-2.5 text-sm font-semibold bg-[#8B1538] hover:bg-[#6B0F2B] text-white rounded-lg"
                       >
-                        Yes, new link
+                        Replace link
                       </button>
                       <button
                         type="button"
@@ -249,7 +248,7 @@ function MyCirclePage() {
                       onClick={() => setConfirmingRotate(true)}
                       className="min-h-11 px-2 text-sm text-gray-500 hover:text-[#8B1538]"
                     >
-                      Generate a new link
+                      Replace link
                     </button>
                   )}
                 </div>
@@ -278,8 +277,8 @@ function MyCirclePage() {
                   busyClaimId={busyClaimId}
                   emptyMessage={
                     showResolved
-                      ? 'Nobody has been linked from this circle yet.'
-                      : 'No sign-ups waiting. Show the QR code at your next meeting.'
+                      ? 'No linked sign-ups.'
+                      : 'No pending sign-ups.'
                   }
                   onConfirm={(claimId, memberId, addToGroup) =>
                     withBusy(claimId, () =>

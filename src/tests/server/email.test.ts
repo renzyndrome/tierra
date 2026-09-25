@@ -46,38 +46,57 @@ describe('claim variant', () => {
     roleLabel: 'Member',
     variant: 'claim' as const,
     groupName: 'CG - Maria Santos',
+    recipientName: 'Juan Cruz',
   }
 
-  it('uses confirm-your-email copy instead of invite copy', () => {
+  it('follows the house email format in HTML', () => {
     const html = buildInviteEmailHtml(base)
-    expect(html).toContain('Confirm your email')
-    expect(html).toContain('CG - Maria Santos')
+    expect(html).toContain('Hello Juan Cruz,')
+    expect(html).toContain('Sign-up received for <strong>CG - Maria Santos</strong>.')
     expect(html).toContain('Confirm email')
-    // must NOT imply an admin invited them
-    expect(html).not.toContain("You've been invited")
+    expect(html).toContain('Single use. Time-limited.')
     expect(html).not.toContain('Accept invitation')
   })
 
-  it('uses claim copy in the plain-text part too', () => {
-    const text = buildInviteEmailText(base)
-    expect(text).toContain('You signed up to join CG - Maria Santos')
-    expect(text).toContain(base.inviteLink)
-    expect(text).not.toContain("You've been invited")
+  it('follows the house email format in plain text, link on its own line', () => {
+    const lines = buildInviteEmailText(base).split('\n')
+    expect(lines[0]).toBe('Hello Juan Cruz,')
+    expect(lines).toContain('Sign-up received for CG - Maria Santos.')
+    const labelAt = lines.indexOf('Confirm email:')
+    expect(labelAt).toBeGreaterThan(-1)
+    expect(lines[labelAt + 1]).toBe(base.inviteLink)
+    expect(lines).toContain('Single use. Time-limited.')
+    expect(lines[lines.length - 1]).toBe('Quest Laguna')
   })
 
-  it('omits the circle name when there is none', () => {
-    const html = buildInviteEmailHtml({ ...base, groupName: null })
-    expect(html).toContain('You signed up at Quest Laguna')
+  it('uses no second person, no please, no thank you, no em dash', () => {
+    for (const out of [buildInviteEmailHtml(base), buildInviteEmailText(base)]) {
+      const text = out.replace(/<[^>]+>/g, ' ')
+      expect(text).not.toMatch(/\b(you|your|we|our|please)\b/i)
+      expect(text).not.toMatch(/thank you/i)
+      expect(text).not.toContain('\u2014')
+    }
   })
 
-  it('escapes HTML in the circle name', () => {
-    const html = buildInviteEmailHtml({ ...base, groupName: '<script>x</script>' })
+  it('falls back when name or circle is missing', () => {
+    const html = buildInviteEmailHtml({ ...base, groupName: null, recipientName: null })
+    expect(html).toContain('Hello,')
+    expect(html).toContain('Sign-up received.')
+  })
+
+  it('escapes HTML in the name and circle', () => {
+    const html = buildInviteEmailHtml({
+      ...base,
+      groupName: '<script>x</script>',
+      recipientName: '<b>y</b>',
+    })
     expect(html).not.toContain('<script>x</script>')
+    expect(html).not.toContain('<b>y</b>')
     expect(html).toContain('&lt;script&gt;')
   })
 
   it('picks the subject line per variant', () => {
-    expect(inviteEmailSubject('claim')).toBe('Confirm your Quest Laguna account')
+    expect(inviteEmailSubject('claim')).toBe('Quest Laguna account confirmation')
     expect(inviteEmailSubject('invite')).toBe("You've been invited to Quest Laguna")
     expect(inviteEmailSubject(undefined)).toBe("You've been invited to Quest Laguna")
   })

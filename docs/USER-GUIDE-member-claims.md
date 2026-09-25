@@ -1,89 +1,115 @@
-# Member sign-ups — guide for Quest Circle leaders
+# Member sign-ups: Quest Circle leader guide
 
-Your circle members are already in the church records. This lets them create
-their own login and connect it to their own record, so their giving statement
-and attendance history show up for them.
+Sign-up by Quest Circle QR code. Existing members: account linked to the
+existing member record, giving and attendance history included. New people:
+new member record, created by the circle leader.
 
-## What you need first
+## Rollout steps (admin)
 
-Your own account must be linked to your member record. If it is not, ask an
-admin to do it (Admin → Users → **Link member record**). Until then the My
-Circle page will tell you it cannot find a circle for you.
+Once, before the first meeting. Circle leaders need a linked account before
+the QR works.
 
-## Show the QR code at your meeting
+**Step 1. Bootstrap the 28 leaders.** Per leader:
 
-1. Sign in and open your profile.
-2. Tap **My Circle** at the top.
-3. Tick **Sign-up link is on**.
-4. Show the QR code on your phone, or tap **Copy** to send the link in your
-   group chat.
+1. Admin → Users → **Invite**. Leader's email address.
+2. **Link member record**: the leader's own record.
+3. Role: **Member**.
 
-Leave the link off between meetings. Turn it on only while you are with your
-group.
+Never the **Discipleship** role. That role edits any member record directly
+and skips the Agapay audit log. Member role plus the link: enough for a
+circle leader.
 
-## What your members do
+**Step 2. Leaders turn on the link at the meeting.** On at the start of the
+meeting. Off when it ends.
 
-They scan the code and fill in:
+## Leader prerequisite
 
-- Full name (the name the church has on record, if they know it)
+Account linked to the leader's own member record. Missing link: the
+**Quest Circle** page shows "No circle led". Fix: Admin → Users →
+**Link member record**.
+
+## Showing the QR code
+
+1. Sign in. Open the profile.
+2. **Quest Circle**, top of the profile.
+3. Tick **Sign-up link active**.
+4. QR code on screen, or **Copy** for the group chat.
+
+Link off between meetings.
+
+## Sign-up form
+
+Fields:
+
+- Full name, as on church records
 - Email address
 - Mobile number (optional)
 - Birthday (optional)
 
-The phone number and birthday are optional, but they help us find the right
-record when two people have similar names. Encourage your members to fill them
-in.
+Mobile number and birthday: optional, but they separate similar names.
 
-They then get an email. They must open the link in that email, set a password,
-and they are done. If the email does not arrive, tell them to check their spam
-folder.
+Next: confirmation email. Open the link, set a password. Missing email: check
+the spam folder.
 
 ## Reviewing requests
 
-Open **My Circle** again. Under **Waiting for review** you will see each sign-up.
+**Quest Circle** page, **Waiting for review** list. Confident matches link
+automatically and skip this list.
 
-Most people are matched automatically and never appear here. The ones that do
-appear need you, because the computer was not sure enough.
+Per request: the submitted details, then possible matches. Per match:
 
-For each request you will see what the person typed, then a list of possible
-existing records. Each one shows:
+- Match score, for example "85% match"
+- Match reasons: same email, name matches, same phone, in this circle
+- Giving on record, for telling similar names apart
 
-- A match score, like "85% match"
-- Why it matched: same email, name matches, same phone, in this circle
-- Their giving on record, so you can tell two similar names apart
+Actions:
 
-Then choose one:
+- **Link record**: links the account to that record. The normal case.
+- **Create new member**: new to the church, no record yet.
+- **Reject**: unknown person.
 
-- **This is them** — links the account to that record. This is the normal case.
-- **Create new member** — only if the person is genuinely new to the church and
-  has no record yet.
-- **Reject** — if the sign-up is not someone you know.
+**Add to this circle as a disciple**: on by default. Adds the person to the
+circle. Sets the circle leader as discipler when none is set. Existing
+discipler unchanged.
 
-Leave **Also add them to this Quest Circle** ticked to put them in your group at
-the same time.
+Agapay follow-up queue: automatic. A linked person with a discipler joins that
+discipler's Agapay queue the moment the leader confirms.
 
-### If you are not sure
+### New people (not yet in the directory)
 
-Do not guess. A wrong link gives one person another person's giving history.
-Leave it in the queue and ask an admin, or ask the person directly which email
-and birthday the church has for them.
+Same QR, same form. No record matches, so the request arrives with no
+candidates.
 
-### A record marked "Already has an account"
+Leader action: **Create new member**.
 
-Somebody else already claimed that record. You cannot pick it. Tell an admin.
+Result: member record created, account linked, person added to the circle,
+circle leader set as discipler, person added to the leader's Agapay queue.
+Stage: Newbie. City: blank, for an admin to fill in.
 
-## If the link leaks
+Before the leader acts: sign-in works, profile shows "Sign-up under review".
 
-Tap **Generate a new link** on your circle page. The old QR code stops working
-straight away. Requests people already sent are not affected.
+### Uncertain match
 
-## Common questions
+No guessing. A wrong link hands one person another person's giving history.
+Leave the request in the queue. Ask an admin, or confirm the email and
+birthday with the person.
 
-**Someone signed up twice.** The second try sends them a fresh email instead of
-making another account. Nothing breaks.
+### "Account exists" badge
 
-**Someone says they cannot sign in yet.** They must open the email link first.
-Until they do, the account is not usable.
+Record already claimed by another account. Not selectable. Report to an admin.
 
-**A member's giving is missing after linking.** You probably linked them to the
-wrong record. Ask an admin to undo it from Admin → Member Sign-ups.
+## Leaked link
+
+**Replace link** on the Quest Circle page. Old QR code stops working at once.
+Requests already submitted: unaffected.
+
+## Common cases
+
+**Duplicate sign-up.** Second attempt: fresh confirmation email, no second
+account.
+
+**Sign-in not working yet.** Email link not opened yet. Account unusable until
+then.
+
+**Giving missing after a link.** Likely the wrong record. Admin undo: Admin →
+Member Sign-ups.

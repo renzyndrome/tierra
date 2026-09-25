@@ -214,7 +214,7 @@ function LoginPage() {
               member record. */}
           <div className="mt-6 pt-6 border-t border-gray-200 text-center">
             <p className="text-sm text-gray-500">
-              New here? Ask your Quest Circle leader for their sign-up QR code.
+              Account sign-up: Quest Circle QR code only.
             </p>
           </div>
         </div>

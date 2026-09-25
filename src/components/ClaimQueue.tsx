@@ -113,13 +113,12 @@ function ClaimCard({ item, showGroup, onUndo, onConfirm, onCreateMember, onRejec
         <div className="p-4">
           {candidates.length === 0 ? (
             <p className="text-sm text-gray-500 mb-4">
-              No existing record looks like a match. If they are genuinely new, create a member
-              record for them.
+              No matching record. New to the church: Create new member.
             </p>
           ) : (
             <>
               <p className="text-sm text-gray-600 mb-3">
-                Pick the existing record that belongs to this person:
+                Possible matches:
               </p>
               <div className="space-y-2 mb-4">
                 {candidates.map((cand, idx) => (
@@ -140,7 +139,7 @@ function ClaimCard({ item, showGroup, onUndo, onConfirm, onCreateMember, onRejec
                     onChange={(e) => setAddToGroup(e.target.checked)}
                     className="w-5 h-5 rounded border-gray-300 text-[#8B1538] focus:ring-[#8B1538]"
                   />
-                  Also add them to this Quest Circle
+                  Add to this circle as a disciple
                 </label>
               )}
             </>
@@ -150,7 +149,7 @@ function ClaimCard({ item, showGroup, onUndo, onConfirm, onCreateMember, onRejec
             {confirmingCreate ? (
               <>
                 <span className="text-sm text-gray-600 self-center">
-                  Create a brand-new member record?
+                  New member record: confirm.
                 </span>
                 <button
                   type="button"
@@ -161,7 +160,7 @@ function ClaimCard({ item, showGroup, onUndo, onConfirm, onCreateMember, onRejec
                   }}
                   className="min-h-11 px-4 py-2.5 text-sm font-semibold bg-[#8B1538] hover:bg-[#6B0F2B] disabled:opacity-60 text-white rounded-lg"
                 >
-                  Yes, create
+                  Create record
                 </button>
                 <button
                   type="button"
@@ -201,7 +200,7 @@ function ClaimCard({ item, showGroup, onUndo, onConfirm, onCreateMember, onRejec
                 Linked to <span className="font-semibold">{item.matched_member_name}</span>
               </>
             ) : claim.status === 'rejected' ? (
-              <>Rejected{claim.note ? ` — ${claim.note}` : ''}</>
+              <>Rejected{claim.note ? `: ${claim.note}` : ''}</>
             ) : (
               'Not linked to a member record'
             )}
@@ -251,7 +250,7 @@ function CandidateRow({
           )}
           {candidate.already_linked && (
             <span className="px-2 py-0.5 text-[10px] uppercase tracking-wide bg-amber-100 text-amber-800 rounded-full">
-              Already has an account
+              Account exists
             </span>
           )}
         </div>
@@ -275,10 +274,10 @@ function CandidateRow({
         type="button"
         disabled={busy || candidate.already_linked}
         onClick={onPick}
-        title={candidate.already_linked ? 'Another account already uses this record' : undefined}
+        title={candidate.already_linked ? 'Linked to another account' : undefined}
         className="shrink-0 min-h-11 px-4 py-2.5 text-sm font-semibold bg-[#8B1538] hover:bg-[#6B0F2B] disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg"
       >
-        This is them
+        Link record
       </button>
     </div>
   )
