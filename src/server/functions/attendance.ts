@@ -12,9 +12,27 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
 import { getCaller, requirePermission } from './_authGuard'
-import { resolveMemberMatch, nameMatchConfidence, searchDirectoryByName, findSimilarMembers } from '../../lib/nameMatch'
+import {
+  resolveMemberMatch,
+  nameMatchConfidence,
+  searchDirectoryByName,
+  findSimilarMembers,
+  findEmailMatches,
+  findSurnameCandidates,
+  normalizeEmail,
+} from '../../lib/nameMatch'
 import { churchToday, isSessionOverdue, acceptsQrCheckin } from '../../lib/sessionSchedule'
-import { MATCH_SIMILARITY_THRESHOLD, WALK_IN_SIMILAR_THRESHOLD } from '../../lib/constants'
+import {
+  mergeMatchCandidates,
+  applyJevProbabilities,
+  canArchiveDuplicateVisitor,
+} from '../../lib/attendanceResolve'
+import { jevMatchProbabilities } from './_jevMatch'
+import {
+  MATCH_SIMILARITY_THRESHOLD,
+  WALK_IN_SIMILAR_THRESHOLD,
+  MAX_MATCH_CANDIDATES,
+} from '../../lib/constants'
 import type {
   ServiceType,
   ServiceSession,
@@ -30,6 +48,8 @@ import type {
   CheckinMethod,
   CheckinMemberOption,
   WalkInResult,
+  CreateFromCheckinResult,
+  ConfirmMatchResult,
 } from '../../lib/types'
 
 // ============================================
@@ -41,10 +61,11 @@ interface LiteMember {
   id: string
   name: string
   phone: string | null
+  email: string | null
   satellite_id: string | null
 }
 
-// Load the un-archived directory (id, name, phone, satellite) for in-memory
+// Load the un-archived directory (id, name, phone, email, satellite) for in-memory
 // exact/phone matching. The directory is ~200 rows for this church, so a single
 // fetch is cheaper and more predictable than per-check-in queries.
 async function loadDirectory(
@@ -52,7 +73,7 @@ async function loadDirectory(
 ): Promise<LiteMember[]> {
   const { data, error } = await admin
     .from('members')
-    .select('id, name, phone, satellite_id')
+    .select('id, name, phone, email, satellite_id')
     .eq('is_archived', false)
   if (error) {
     console.error('Error loading member directory:', error)
@@ -95,23 +116,27 @@ async function withSatelliteNames(
   }))
 }
 
-// Directory members a walk-in may already be: confident token matches
-// (middle-name variants) plus trigram look-alikes (typos), best first.
+// Directory members a walk-in may already be: owners of the typed email,
+// confident token matches (middle-name variants) and trigram look-alikes
+// (typos), best first.
 async function similarDirectoryMembers(
   admin: ReturnType<typeof createServerAdminClient>,
   name: string,
+  email?: string | null,
 ): Promise<LiteMember[]> {
   const directory = await loadDirectory(admin)
   const byId = new Map(directory.map((m) => [m.id, m]))
   const scores = new Map<string, number>()
-  for (const m of findSimilarMembers(name, directory)) {
-    scores.set(m.id, nameMatchConfidence(name, m.name))
-  }
+  // Members already holding the typed email rank above any name match.
+  for (const m of findEmailMatches(email, directory)) scores.set(m.id, 2)
   for (const c of await fuzzyCandidates(admin, name)) {
     const score = Math.max(c.sim, nameMatchConfidence(name, c.name))
     if (score >= WALK_IN_SIMILAR_THRESHOLD && byId.has(c.id)) {
       scores.set(c.id, Math.max(score, scores.get(c.id) ?? 0))
     }
+  }
+  for (const m of findSimilarMembers(name, directory)) {
+    scores.set(m.id, Math.max(nameMatchConfidence(name, m.name), scores.get(m.id) ?? 0))
   }
   return [...scores.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -129,6 +154,7 @@ async function insertVisitorMember(
   args: {
     name: string
     phone: string | null
+    email?: string | null
     satelliteId: string | null
     gender?: 'male' | 'female' | null
     age?: number | null
@@ -140,6 +166,7 @@ async function insertVisitorMember(
     .insert({
       name: args.name,
       phone: args.phone,
+      email: args.email ?? null,
       satellite_id: args.satelliteId,
       gender: args.gender ?? null,
       age: args.age ?? null,
@@ -152,11 +179,26 @@ async function insertVisitorMember(
     .select('id')
     .single()
   if (error || !member) {
+    // 23505 on members_email_key: the email already belongs to another member.
+    if (error?.code === '23505') {
+      throw new Error('Email already on another member. Clear the email or link that member.')
+    }
     console.error('Error creating member from check-in:', error)
     throw new Error('Failed to create member')
   }
   return member.id as string
 }
+
+// Optional email typed on a form: '' and whitespace mean none; anything else
+// must look like an address.
+const optionalEmail = z
+  .string()
+  .trim()
+  .max(254)
+  .optional()
+  .nullable()
+  .refine((v) => !v || normalizeEmail(v) !== null, 'Email address invalid.')
+
 
 // ============================================
 // SERVICE TYPES
@@ -473,6 +515,7 @@ const publicCheckInSchema = z.object({
   qrToken: z.string().min(1),
   name: z.string().max(100).optional().nullable(),
   phone: z.string().max(20).optional().nullable(),
+  email: optionalEmail,
   invitedBy: z.string().max(100).optional().nullable(),
   accessToken: z.string().optional().nullable(),
 })
@@ -528,12 +571,18 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
     const rawName = (data.name ?? '').trim()
     if (rawName.length < 2) throw new Error('Please enter your name.')
     const rawPhone = data.phone?.trim() || null
+    const rawEmail = normalizeEmail(data.email)
     const invitedBy = data.invitedBy?.trim() || null
 
     const directory = await loadDirectory(admin)
     const matched = resolveMemberMatch(rawName, rawPhone, directory)
+    // The typed email belongs to a different member than the name match: a
+    // human decides (review queue) instead of auto-linking.
+    const emailOwners = findEmailMatches(rawEmail, directory)
+    const emailConflict =
+      matched !== null && emailOwners.length > 0 && !emailOwners.some((m) => m.id === matched.id)
 
-    if (matched) {
+    if (matched && !emailConflict) {
       return linkCheckIn(admin, {
         sessionId,
         memberId: matched.id,
@@ -541,6 +590,7 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
         matchStatus: 'auto_matched',
         rawName,
         rawPhone,
+        rawEmail,
         invitedBy,
         displayName: matched.name,
       })
@@ -554,6 +604,7 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
         member_id: null,
         raw_name: rawName,
         raw_phone: rawPhone,
+        raw_email: rawEmail,
         invited_by: invitedBy,
         checkin_method: 'qr_guest',
         match_status: 'pending',
@@ -583,6 +634,7 @@ async function linkCheckIn(
     matchStatus: 'auto_matched' | 'confirmed' | 'new_member'
     rawName: string | null
     rawPhone: string | null
+    rawEmail?: string | null
     invitedBy?: string | null
     matchedBy?: string | null
     displayName?: string | null
@@ -595,6 +647,7 @@ async function linkCheckIn(
       member_id: args.memberId,
       raw_name: args.rawName,
       raw_phone: args.rawPhone,
+      raw_email: args.rawEmail ?? null,
       invited_by: args.invitedBy ?? null,
       checkin_method: args.method,
       match_status: args.matchStatus,
@@ -664,6 +717,7 @@ const registerWalkInSchema = z.object({
   sessionId: z.string().uuid(),
   name: z.string().trim().min(2, 'Name required. At least 2 characters.').max(100),
   phone: z.string().trim().max(20).optional().nullable(),
+  email: optionalEmail,
   gender: z.enum(['male', 'female']).optional().nullable(),
   age: z.number().int().min(1, 'Age: 1 to 120.').max(120, 'Age: 1 to 120.').optional().nullable(),
   city: z.string().trim().max(50).optional().nullable(),
@@ -691,8 +745,9 @@ export const registerWalkIn = createServerFn({ method: 'POST' })
     if (sErr || !session) throw new Error('Session not found')
     if (!session.is_open) throw new Error('This session is closed.')
 
+    const email = normalizeEmail(data.email)
     if (!data.force) {
-      const similar = await similarDirectoryMembers(admin, data.name)
+      const similar = await similarDirectoryMembers(admin, data.name, email)
       if (similar.length > 0) {
         return { status: 'possible_duplicate', matches: await withSatelliteNames(admin, similar) }
       }
@@ -701,6 +756,7 @@ export const registerWalkIn = createServerFn({ method: 'POST' })
     const memberId = await insertVisitorMember(admin, {
       name: data.name,
       phone: data.phone || null,
+      email,
       gender: data.gender ?? null,
       age: data.age ?? null,
       city: data.city || null,
@@ -718,6 +774,7 @@ export const registerWalkIn = createServerFn({ method: 'POST' })
         matchStatus: 'new_member',
         rawName: data.name,
         rawPhone: data.phone || null,
+        rawEmail: email,
         invitedBy: data.invitedBy || null,
         matchedBy: caller.userId,
         displayName: data.name,
@@ -810,46 +867,182 @@ export const getPendingMatches = createServerFn({ method: 'GET' })
       console.error('Error fetching pending matches:', error)
       throw new Error('Failed to fetch pending matches')
     }
-
-    // Recompute fuzzy candidates per pending record (no candidate table needed).
     const rows = (records ?? []) as AttendanceRecord[]
-    const result: PendingMatch[] = []
-    for (const rec of rows) {
-      const candidates = await fuzzyCandidates(admin, rec.raw_name)
-      // Character-trigram similarity under-scores middle-name cases (e.g.
-      // "Laurence Rebadulla" vs "Gabriel Laurence Rebadulla" is ~0.70 by
-      // trigrams because the extra token dilutes it). Blend in the token-based
-      // confidence and keep the higher score so suggestions rank the way a
-      // human would expect, then sort best-first.
-      const rescored = candidates
-        .map((c) => ({ ...c, sim: Math.max(c.sim, nameMatchConfidence(rec.raw_name, c.name)) }))
-        .sort((a, b) => b.sim - a.sim)
-      result.push({ record: rec as AttendanceRecordWithMember, candidates: rescored })
-    }
-    return result
+    if (rows.length === 0) return []
+
+    // Recompute suggestions per pending record (no candidate table needed):
+    // trigram look-alikes (the RPC), same-surname members (nicknames and
+    // initials: "JC Eugenio" -> "Justin Eugenio") and owners of the typed email.
+    // Trigram similarity under-scores middle-name cases, so each suggestion
+    // keeps the higher of its trigram and token scores.
+    const directory = await loadDirectory(admin)
+    const { data: sats } = await admin.from('satellites').select('id, name')
+    const satName = new Map((sats ?? []).map((s) => [s.id as string, s.name as string]))
+    const merged = await Promise.all(
+      rows.map(async (rec) =>
+        mergeMatchCandidates(
+          rec.raw_name,
+          {
+            fuzzy: await fuzzyCandidates(admin, rec.raw_name),
+            surname: findSurnameCandidates(rec.raw_name ?? '', directory),
+            email: findEmailMatches(rec.raw_email, directory),
+          },
+          MAX_MATCH_CANDIDATES,
+        ),
+      ),
+    )
+
+    // Jev re-ranks and tags likely matches (suggest-only; off without a key).
+    const jev = await jevMatchProbabilities(
+      rows.map((rec, i) => ({
+        recordId: rec.id,
+        typedName: rec.raw_name ?? '',
+        candidates: merged[i].map((c) => ({ id: c.id, name: c.name })),
+      })),
+    )
+
+    return rows.map((rec, i) => ({
+      record: rec as AttendanceRecordWithMember,
+      candidates: applyJevProbabilities(merged[i], jev.get(rec.id)).map((c) => ({
+        ...c,
+        satellite_name: c.satellite_id ? satName.get(c.satellite_id) ?? null : null,
+      })),
+    }))
   })
 
-export const confirmMatch = createServerFn({ method: 'POST' })
-  .inputValidator((input: { accessToken: string; recordId: string; memberId: string }) =>
-    z
-      .object({
-        accessToken: z.string(),
-        recordId: z.string().uuid(),
-        memberId: z.string().uuid(),
-      })
-      .parse(input),
+// Tables that can point at a member, by "schema.table.column". A visitor record
+// referenced from any of them (other than the check-in being re-linked) is
+// never archived by the duplicate cleanup.
+const MEMBER_REFERENCES: readonly { schema?: 'discipleship'; table: string; column: string }[] = [
+  { table: 'attendance_records', column: 'member_id' },
+  { table: 'cell_groups', column: 'leader_id' },
+  { table: 'cell_groups', column: 'co_leader_id' },
+  { table: 'expense_report_requests', column: 'member_id' },
+  { table: 'financial_transactions', column: 'member_id' },
+  { table: 'inventory_borrow_requests', column: 'borrower_member_id' },
+  { table: 'member_cell_groups', column: 'member_id' },
+  { table: 'member_claim_requests', column: 'matched_member_id' },
+  { table: 'member_ministries', column: 'member_id' },
+  { table: 'members', column: 'discipler_id' },
+  { table: 'ministries', column: 'head_id' },
+  { table: 'satellites', column: 'pastor_id' },
+  { table: 'user_profiles', column: 'member_id' },
+  { schema: 'discipleship', table: 'disciple_profiles', column: 'member_id' },
+]
+
+// Archive the visitor record a mistaken "new member" registration created, once
+// its check-in points at the right member. Only a plain visitor with no other
+// footprint qualifies; any unreadable count keeps it. Returns whether archived.
+async function archiveDuplicateVisitor(
+  admin: ReturnType<typeof createServerAdminClient>,
+  memberId: string,
+  relinkedRecordId: string,
+): Promise<boolean> {
+  const { data: member, error } = await admin
+    .from('members')
+    .select('id, membership_status, is_archived')
+    .eq('id', memberId)
+    .maybeSingle()
+  if (error || !member) return false
+
+  const referenceCounts: Record<string, number | null> = {}
+  await Promise.all(
+    MEMBER_REFERENCES.map(async (ref) => {
+      // The hand-written Database type only describes the public schema.
+      const base = ref.schema
+        ? admin.schema(ref.schema as 'public').from(ref.table as never)
+        : admin.from(ref.table as never)
+      let q = base.select('*', { count: 'exact', head: true }).eq(ref.column, memberId)
+      if (ref.table === 'attendance_records') q = q.neq('id', relinkedRecordId)
+      const { count, error: countErr } = await q
+      referenceCounts[`${ref.schema ?? 'public'}.${ref.table}.${ref.column}`] = countErr ? null : count ?? null
+    }),
   )
-  .handler(async ({ data }): Promise<{ success: boolean; alreadyCheckedIn?: boolean }> => {
+
+  const facts = {
+    membershipStatus: (member.membership_status as string | null) ?? null,
+    isArchived: member.is_archived === true,
+    referenceCounts,
+  }
+  if (!canArchiveDuplicateVisitor(facts)) return false
+
+  const { data: archived, error: archErr } = await admin
+    .from('members')
+    .update({ is_archived: true })
+    .eq('id', memberId)
+    .eq('membership_status', 'visitor')
+    .not('is_archived', 'is', true)
+    .select('id')
+  if (archErr) {
+    console.error('Error archiving duplicate visitor:', archErr)
+    return false
+  }
+  return (archived ?? []).length === 1
+}
+
+// Save the email typed at check-in to a member that has none. Never replaces an
+// existing email; a unique-email clash with another member just skips it.
+async function fillMemberEmail(
+  admin: ReturnType<typeof createServerAdminClient>,
+  memberId: string,
+  email: string,
+): Promise<boolean> {
+  const { data: member } = await admin.from('members').select('email').eq('id', memberId).maybeSingle()
+  if (!member) return false
+  const current = (member.email as string | null) ?? null
+  if (current && current.trim()) return false
+  let q = admin.from('members').update({ email }).eq('id', memberId)
+  q = current === null ? q.is('email', null) : q.eq('email', current)
+  const { data: updated, error } = await q.select('id')
+  if (error) {
+    if (error.code !== '23505') console.error('Error saving check-in email to member:', error)
+    return false
+  }
+  return (updated ?? []).length === 1
+}
+
+const confirmMatchSchema = z.object({
+  accessToken: z.string(),
+  recordId: z.string().uuid(),
+  memberId: z.string().uuid(),
+  // Re-linking a "new member" check-in: archive the visitor record that
+  // registration created, when it has no other footprint.
+  archiveDuplicate: z.boolean().optional(),
+  // Save the check-in's typed email to the member when the member has none.
+  saveEmail: z.boolean().optional(),
+})
+
+// Link a check-in (any status) to a member. Used by the review queue and by
+// "Link member" / "Change" on the check-ins list.
+export const confirmMatch = createServerFn({ method: 'POST' })
+  .inputValidator((input: z.input<typeof confirmMatchSchema>) => confirmMatchSchema.parse(input))
+  .handler(async ({ data }): Promise<ConfirmMatchResult> => {
     const caller = await requirePermission(data.accessToken, 'registration.write')
     const admin = createServerAdminClient()
 
-    // Load the pending record to get its session.
     const { data: rec, error: recErr } = await admin
       .from('attendance_records')
-      .select('id, session_id, member_id')
+      .select('id, session_id, member_id, match_status, raw_email')
       .eq('id', data.recordId)
       .single()
     if (recErr || !rec) throw new Error('Check-in record not found')
+
+    const afterLink = async (result: ConfirmMatchResult): Promise<ConfirmMatchResult> => {
+      const previousMemberId = rec.member_id as string | null
+      const archive =
+        data.archiveDuplicate === true &&
+        rec.match_status === 'new_member' &&
+        previousMemberId !== null &&
+        previousMemberId !== data.memberId
+      const email = normalizeEmail(rec.raw_email as string | null)
+      return {
+        ...result,
+        ...(archive && previousMemberId
+          ? { duplicateVisitorArchived: await archiveDuplicateVisitor(admin, previousMemberId, data.recordId) }
+          : {}),
+        ...(data.saveEmail && email ? { emailSaved: await fillMemberEmail(admin, data.memberId, email) } : {}),
+      }
+    }
 
     // Guard against linking a member already checked in to this session.
     const { data: existing } = await admin
@@ -860,11 +1053,15 @@ export const confirmMatch = createServerFn({ method: 'POST' })
       .maybeSingle()
     if (existing && existing.id !== data.recordId) {
       // Fold this duplicate into the existing record: mark it ignored.
-      await admin
+      const { error: foldErr } = await admin
         .from('attendance_records')
         .update({ match_status: 'ignored', note: 'Duplicate of an existing check-in', matched_by: caller.userId })
         .eq('id', data.recordId)
-      return { success: true, alreadyCheckedIn: true }
+      if (foldErr) {
+        console.error('Error folding duplicate check-in:', foldErr)
+        throw new Error('Failed to confirm match')
+      }
+      return afterLink({ success: true, alreadyCheckedIn: true })
     }
 
     const { error } = await admin
@@ -879,50 +1076,66 @@ export const confirmMatch = createServerFn({ method: 'POST' })
       console.error('Error confirming match:', error)
       throw new Error('Failed to confirm match')
     }
-    return { success: true }
+    return afterLink({ success: true })
   })
 
 const createMemberFromCheckinSchema = z.object({
   accessToken: z.string(),
   recordId: z.string().uuid(),
-  name: z.string().min(2).max(100),
-  phone: z.string().max(20).optional().nullable(),
+  name: z.string().trim().min(2, 'Name required. At least 2 characters.').max(100),
+  phone: z.string().trim().max(20).optional().nullable(),
+  email: optionalEmail,
+  // null is an explicit "Unassigned"; omitted falls back to the session's.
   satelliteId: z.string().uuid().optional().nullable(),
+  // Set after staff chose "Create anyway" on the similar-name warning.
+  force: z.boolean().optional(),
 })
 
 export const createMemberFromCheckin = createServerFn({ method: 'POST' })
-  .inputValidator((data: z.infer<typeof createMemberFromCheckinSchema>) =>
+  .inputValidator((data: z.input<typeof createMemberFromCheckinSchema>) =>
     createMemberFromCheckinSchema.parse(data),
   )
-  .handler(async ({ data }): Promise<{ success: boolean; memberId: string }> => {
+  .handler(async ({ data }): Promise<CreateFromCheckinResult> => {
     const caller = await requirePermission(data.accessToken, 'registration.write')
     const admin = createServerAdminClient()
 
-    // Determine satellite from the session when not provided.
     const { data: rec, error: recErr } = await admin
       .from('attendance_records')
-      .select('id, session_id')
+      .select('id, session_id, member_id')
       .eq('id', data.recordId)
       .single()
     if (recErr || !rec) throw new Error('Check-in record not found')
+    // Never replace a link another staff member already made.
+    if (rec.member_id) throw new Error('Check-in already linked. Reload the page.')
 
-    let satelliteId = data.satelliteId ?? null
-    if (!satelliteId) {
+    const email = normalizeEmail(data.email)
+    if (!data.force) {
+      const similar = await similarDirectoryMembers(admin, data.name, email)
+      if (similar.length > 0) {
+        return { status: 'possible_duplicate', matches: await withSatelliteNames(admin, similar) }
+      }
+    }
+
+    let satelliteId: string | null
+    if (data.satelliteId === undefined) {
       const { data: session } = await admin
         .from('service_sessions')
         .select('satellite_id')
         .eq('id', rec.session_id)
         .single()
-      satelliteId = session?.satellite_id ?? null
+      satelliteId = (session?.satellite_id as string | null) ?? null
+    } else {
+      satelliteId = data.satelliteId
     }
 
     const memberId = await insertVisitorMember(admin, {
       name: data.name,
-      phone: data.phone ?? null,
+      phone: data.phone || null,
+      email,
       satelliteId,
     })
 
-    const { error: updErr } = await admin
+    const { data: linked, error: updErr } = await admin
       .from('attendance_records')
       .update({
         member_id: memberId,
@@ -930,11 +1143,13 @@ export const createMemberFromCheckin = createServerFn({ method: 'POST' })
         matched_by: caller.userId,
       })
       .eq('id', data.recordId)
-    if (updErr) {
+      .is('member_id', null)
+      .select('id')
+    if (updErr || (linked ?? []).length !== 1) {
       console.error('Error linking new member to check-in:', updErr)
-      throw new Error('Member created but failed to link the check-in')
+      throw new Error('Member created. Check-in not linked: use Link member on the check-in.')
     }
-    return { success: true, memberId }
+    return { status: 'created', memberId }
   })
 
 export const ignoreCheckin = createServerFn({ method: 'POST' })
