@@ -84,10 +84,17 @@ When someone scans the QR, they see the service name and date, then:
 - **Signed-in members** get a single big button: **"I'm here — Check in"**. One tap
   and they're done. These are matched to their member record automatically.
 - **Guests / anyone not signed in** get a short form:
-  - **Full name**
+  - **Full name**: hint on the form, "First and last name. No nicknames or initials."
+  - **Email** *(optional)*: kept on the check-in. Used to suggest the right member
+    and for a church account invite later.
   - **Name of the person who invited you**
 
   These need to be matched to a member record afterwards — see the Review queue below.
+
+**Email and matching:**
+- An email never links a check-in by itself. Families often share one address.
+- An email that belongs to a member makes that member the top suggestion, tagged **Email match**.
+- A name match with an email that belongs to a different member goes to the review queue.
 
 **If the session is closed,** scanning shows *"Check-in is closed"* and no one can
 check in. Reopen the session if you closed it too early.
@@ -120,11 +127,12 @@ For someone new, e.g. a senior guest with no phone.
 2. Click **Register new member** (below the results).
 3. Fill in the form:
    - **Name**: prefilled from the search. The only required field.
-   - **Mobile**, **City**, **Gender**, **Age** *(optional)*.
+   - **Mobile**, **Email**, **City**, **Gender**, **Age** *(optional)*.
+     Email must be unique: an email already on another member shows that member first.
    - **Satellite**: defaults to the session's satellite, else Quest Laguna Main.
    - **Invited by** *(optional)*: saved on the check-in, shown in the session's check-ins list.
 4. Click **Register & check in**. Result: a new visitor record plus a check-in, status **New member**.
-5. Other details (birthday, address, email, and so on): later, on the member's profile, **Edit**.
+5. Other details (birthday, address, and so on): later, on the member's profile, **Edit**.
 
 The new record is a normal directory member: membership status **Visitor**, stage
 **New Friends**. Every later check-in adds to the same attendance history.
@@ -150,11 +158,43 @@ booth (section 4) skip it.
 2. For each person marked **Needs review** you'll see **Suggested matches**. Choose one:
    - **Pick a suggested member** — if it's the same person (e.g. "Jun Dela Cruz" =
      "Junnel Dela Cruz"), click that member. Status becomes **Confirmed**.
+   - **Find member** — the right person is not in the suggestions (e.g. a nickname
+     such as "JC Eugenio" for "Justin Eugenio"). Search the whole directory, then **Link**.
+     Status becomes **Confirmed**.
    - **Create new member** — a genuine first-timer. This adds them to the directory
-     and links the check-in. Status becomes **New member**.
+     and links the check-in. Status becomes **New member**. Similar names or the same
+     email in the directory: listed first, with **Link check-in** per member, or
+     **Create anyway** for a different person.
    - **Ignore** — a test entry, a duplicate, or an unusable name. It stays recorded
      but is **excluded from attendance numbers**.
 3. You're done when it says *"Nothing to review. All check-ins are matched."*
+
+**Suggestion tags:**
+- **Best match**: first in the list.
+- **Email match**: the typed email is on that member's record.
+- **Likely match**: Jev (AI name judgment) finds this member likely, e.g. "Kat Reyes"
+  for "Katherine Reyes". A hint only. Nothing links without a click.
+  Suggestions include members with the same surname, so nicknames and initials still
+  find the right person.
+
+### Fix a check-in from the Check-ins list
+
+Every row in the **Check-ins** tab has an action next to **Remove**:
+
+| Row | Button | Use |
+|---|---|---|
+| Unmatched (Needs review, or Ignored) | **Link member** | Same dialog as **Find member**: suggestions plus directory search. Also **New member**. |
+| Linked (Auto-matched, Confirmed, New member) | **Change** | Wrong person linked. Pick the right member. |
+
+- A linked row whose typed name differs from the member shows **Typed: …** under the name.
+- **Already checked in to this session** on a member: linking still works. The
+  check-in folds into the existing one and is marked **Ignored**. The count stays right.
+- **Change** on a **New member** row (a walk-in registered as new by mistake): the
+  checkbox **Archive duplicate record** is on by default. The visitor record from that
+  registration is archived, not deleted. Kept when it has any other history (other
+  check-ins, groups, an account, giving). Undo: Admin → Members, the member's menu, **Restore**.
+- A check-in with a typed email offers **Save email to member**. Fills the member's
+  email only when empty. Never replaces an existing email.
 
 > Do this the **same day**, while you still remember who was there. Suggested matches
 > get harder to judge later.
