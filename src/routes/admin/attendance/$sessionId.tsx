@@ -1,12 +1,15 @@
 // Admin — Service Attendance: single session detail.
-// Tabs: live check-ins, manual check-in (member search), and the match queue
-// (resolve pending guest check-ins: confirm / create member / ignore).
+// Tabs: live check-ins (link or correct each one), manual check-in (member
+// search), and the match queue (resolve pending guest check-ins: link /
+// create member / ignore).
 
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../components/AuthProvider'
 import { AdminRoute } from '../../../components/ProtectedRoute'
 import { RegisterWalkInDialog } from '../../../components/RegisterWalkInDialog'
+import { ResolveCheckinDialog } from '../../../components/ResolveCheckinDialog'
+import { CreateMemberFromCheckinDialog } from '../../../components/CreateMemberFromCheckinDialog'
 import {
   getSessionDetail,
   getSessionCheckins,
@@ -14,29 +17,27 @@ import {
   searchMembersForCheckin,
   manualCheckIn,
   confirmMatch,
-  createMemberFromCheckin,
   ignoreCheckin,
   deleteCheckin,
   setSessionOpen,
   deleteSession,
 } from '../../../server/functions/attendance'
-import { getSatellites } from '../../../server/functions/satellites'
 import { hasPermission } from '../../../lib/auth'
 import {
   CHECKIN_METHOD_LABELS,
   MATCH_STATUS_LABELS,
+  JEV_LIKELY_PROBABILITY,
 } from '../../../lib/constants'
 import type {
   ServiceSessionWithRelations,
   AttendanceRecordWithMember,
   PendingMatch,
   CheckinMemberOption,
-  SatelliteRow,
+  MatchCandidate,
 } from '../../../lib/types'
 import { Card, CardContent } from '../../../components/ui/card'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'
-import { Label } from '../../../components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs'
 import {
   Dialog,
@@ -146,6 +147,7 @@ function SessionDetail() {
 
   const countable = checkins.filter((c) => c.match_status !== 'ignored')
   const checkedInIds = new Set(countable.flatMap((c) => (c.member_id ? [c.member_id] : [])))
+  const candidatesByRecord = new Map(pending.map((p) => [p.record.id, p.candidates]))
 
   const toggleOpen = async () => {
     if (!accessToken || !info) return
@@ -319,6 +321,11 @@ function SessionDetail() {
             <CheckinsTab
               checkins={checkins}
               canWrite={canWrite}
+              accessToken={accessToken}
+              sessionSatelliteId={info.satellite_id}
+              candidatesByRecord={candidatesByRecord}
+              checkedInIds={checkedInIds}
+              onResolved={loadAll}
               onDelete={async (recordId) => {
                 if (!accessToken) return
                 setError('')
@@ -350,6 +357,7 @@ function SessionDetail() {
                 pending={pending}
                 accessToken={accessToken}
                 sessionSatelliteId={info.satellite_id}
+                checkedInIds={checkedInIds}
                 onResolved={loadAll}
               />
             </TabsContent>
@@ -366,46 +374,116 @@ function SessionDetail() {
 function CheckinsTab({
   checkins,
   canWrite,
+  accessToken,
+  sessionSatelliteId,
+  candidatesByRecord,
+  checkedInIds,
+  onResolved,
   onDelete,
 }: {
   checkins: AttendanceRecordWithMember[]
   canWrite: boolean
+  accessToken: string | undefined
+  sessionSatelliteId: string | null
+  // Review-queue suggestions for pending check-ins, by record id.
+  candidatesByRecord: ReadonlyMap<string, MatchCandidate[]>
+  checkedInIds: ReadonlySet<string>
+  onResolved: () => Promise<void>
   onDelete: (recordId: string) => Promise<void>
 }) {
+  const [resolveFor, setResolveFor] = useState<AttendanceRecordWithMember | null>(null)
+  const [createFor, setCreateFor] = useState<AttendanceRecordWithMember | null>(null)
+  const [notice, setNotice] = useState('')
+
+  const finish = async (message: string) => {
+    setResolveFor(null)
+    setCreateFor(null)
+    setNotice(message)
+    await onResolved()
+  }
+
   if (checkins.length === 0) {
     return <p className="py-12 text-center text-gray-500">No check-ins yet.</p>
   }
   return (
     <div className="mt-4 grid gap-2">
-      {checkins.map((c) => (
-        <Card key={c.id}>
-          <CardContent className="p-3 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-medium text-gray-900 truncate">
-                {c.member?.name ?? c.raw_name ?? 'Unknown'}
-                {!c.member && c.raw_name && <span className="text-gray-400 font-normal"> (unmatched)</span>}
-              </p>
-              <p className="text-xs text-gray-400">
-                {formatTime(c.checked_in_at)} · {CHECKIN_METHOD_LABELS[c.checkin_method] ?? c.checkin_method}
-              </p>
-              {c.invited_by && <p className="text-xs text-gray-400">Invited by {c.invited_by}</p>}
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusBadge status={c.match_status} />
-              {canWrite && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-red-600 hover:text-red-700"
-                  onClick={() => onDelete(c.id)}
-                >
-                  Remove
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+      {notice && <p className="text-sm text-[#8B1538]">{notice}</p>}
+      {checkins.map((c) => {
+        // A check-in is "linked" when it counts toward a known member.
+        const linked = Boolean(c.member) && c.match_status !== 'pending' && c.match_status !== 'ignored'
+        return (
+          <Card key={c.id}>
+            <CardContent className="p-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium text-gray-900 truncate">
+                  {c.member?.name ?? c.raw_name ?? 'Unknown'}
+                  {!c.member && c.raw_name && <span className="text-gray-400 font-normal"> (unmatched)</span>}
+                </p>
+                {c.member && c.raw_name && c.raw_name !== c.member.name && (
+                  <p className="text-xs text-gray-400 truncate">Typed: {c.raw_name}</p>
+                )}
+                <p className="text-xs text-gray-400">
+                  {formatTime(c.checked_in_at)} · {CHECKIN_METHOD_LABELS[c.checkin_method] ?? c.checkin_method}
+                </p>
+                {c.invited_by && <p className="text-xs text-gray-400">Invited by {c.invited_by}</p>}
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <StatusBadge status={c.match_status} />
+                {canWrite && (
+                  <Button
+                    variant={linked ? 'ghost' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setNotice('')
+                      setResolveFor(c)
+                    }}
+                  >
+                    {linked ? 'Change' : 'Link member'}
+                  </Button>
+                )}
+                {canWrite && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => onDelete(c.id)}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })}
+
+      {resolveFor && (
+        <ResolveCheckinDialog
+          accessToken={accessToken}
+          record={resolveFor}
+          candidates={candidatesByRecord.get(resolveFor.id)}
+          checkedInIds={checkedInIds}
+          onClose={() => setResolveFor(null)}
+          onResolved={finish}
+          onCreateNew={
+            resolveFor.member_id
+              ? undefined
+              : () => {
+                  setCreateFor(resolveFor)
+                  setResolveFor(null)
+                }
+          }
+        />
+      )}
+      {createFor && (
+        <CreateMemberFromCheckinDialog
+          accessToken={accessToken}
+          record={createFor}
+          defaultSatelliteId={sessionSatelliteId}
+          onClose={() => setCreateFor(null)}
+          onDone={finish}
+        />
+      )}
     </div>
   )
 }
@@ -564,28 +642,41 @@ function QueueTab({
   pending,
   accessToken,
   sessionSatelliteId,
+  checkedInIds,
   onResolved,
 }: {
   pending: PendingMatch[]
   accessToken: string | undefined
   sessionSatelliteId: string | null
-  onResolved: () => void
+  checkedInIds: ReadonlySet<string>
+  onResolved: () => Promise<void>
 }) {
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [createFor, setCreateFor] = useState<PendingMatch | null>(null)
+  const [resolveFor, setResolveFor] = useState<PendingMatch | null>(null)
+  const [createFor, setCreateFor] = useState<AttendanceRecordWithMember | null>(null)
   const [queueError, setQueueError] = useState('')
+  const [notice, setNotice] = useState('')
 
-  if (pending.length === 0) {
-    return <p className="py-12 text-center text-gray-500">Nothing to review. All check-ins are matched. 🎉</p>
+  const finish = async (message: string) => {
+    setResolveFor(null)
+    setCreateFor(null)
+    setNotice(message)
+    await onResolved()
   }
 
-  const confirm = async (recordId: string, memberId: string) => {
+  const confirm = async (recordId: string, candidate: MatchCandidate) => {
     if (!accessToken) return
     setBusyId(recordId)
     setQueueError('')
+    setNotice('')
     try {
-      await confirmMatch({ data: { accessToken, recordId, memberId } })
-      onResolved()
+      const res = await confirmMatch({ data: { accessToken, recordId, memberId: candidate.id } })
+      setNotice(
+        res.alreadyCheckedIn
+          ? `${candidate.name} already checked in. This check-in marked ignored.`
+          : `Linked to ${candidate.name} ✓`,
+      )
+      await onResolved()
     } catch (err) {
       setQueueError(err instanceof Error ? err.message : 'Failed to confirm match')
     } finally {
@@ -597,9 +688,10 @@ function QueueTab({
     if (!accessToken) return
     setBusyId(recordId)
     setQueueError('')
+    setNotice('')
     try {
       await ignoreCheckin({ data: { accessToken, recordId, note: null } })
-      onResolved()
+      await onResolved()
     } catch (err) {
       setQueueError(err instanceof Error ? err.message : 'Failed to update check-in')
     } finally {
@@ -609,14 +701,22 @@ function QueueTab({
 
   return (
     <div className="mt-4 grid gap-3">
+      {notice && <p className="text-sm text-[#8B1538]">{notice}</p>}
       {queueError && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{queueError}</div>}
+      {pending.length === 0 && (
+        <p className="py-12 text-center text-gray-500">Nothing to review. All check-ins are matched. 🎉</p>
+      )}
       {pending.map(({ record, candidates }) => (
         <Card key={record.id}>
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
+              <div className="min-w-0">
                 <p className="font-semibold text-gray-900">{record.raw_name ?? 'Unnamed'}</p>
-                {record.raw_phone && <p className="text-xs text-gray-400">{record.raw_phone}</p>}
+                {(record.raw_phone || record.raw_email) && (
+                  <p className="text-xs text-gray-400">
+                    {[record.raw_phone, record.raw_email].filter(Boolean).join(' · ')}
+                  </p>
+                )}
                 {record.invited_by && <p className="text-xs text-gray-400">Invited by {record.invited_by}</p>}
                 <p className="text-xs text-gray-400 mt-0.5">{formatTime(record.checked_in_at)}</p>
               </div>
@@ -626,35 +726,56 @@ function QueueTab({
             {candidates.length > 0 ? (
               <div className="space-y-2 mb-3">
                 <p className="text-xs text-gray-500 uppercase tracking-wide">Suggested matches</p>
-                {candidates.map((cand, idx) => (
-                  <div
-                    key={cand.id}
-                    className={`flex items-center justify-between rounded-lg px-3 py-2 ${
-                      idx === 0
-                        ? 'bg-[#8B1538]/5 ring-1 ring-[#8B1538]/25'
-                        : 'bg-gray-50'
-                    }`}
-                  >
-                    <div>
-                      <span className="font-medium text-gray-800">{cand.name}</span>
-                      <span className="ml-2 text-xs text-gray-400">{Math.round(cand.sim * 100)}% match</span>
-                      {idx === 0 && (
-                        <span className="ml-2 px-1.5 py-0.5 rounded bg-[#8B1538]/10 text-[#8B1538] text-[10px] font-semibold uppercase tracking-wide">
-                          Best match
-                        </span>
-                      )}
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={idx === 0 ? 'default' : 'outline'}
-                      disabled={busyId === record.id}
-                      onClick={() => confirm(record.id, cand.id)}
-                      className={idx === 0 ? 'bg-[#8B1538] hover:bg-[#6B0F2B]' : ''}
+                {candidates.map((cand, idx) => {
+                  const likely = (cand.jev_probability ?? 0) >= JEV_LIKELY_PROBABILITY
+                  return (
+                    <div
+                      key={cand.id}
+                      className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 ${
+                        idx === 0
+                          ? 'bg-[#8B1538]/5 ring-1 ring-[#8B1538]/25'
+                          : 'bg-gray-50'
+                      }`}
                     >
-                      This is them
-                    </Button>
-                  </div>
-                ))}
+                      <div className="min-w-0">
+                        <span className="font-medium text-gray-800">{cand.name}</span>
+                        <span className="ml-2 text-xs text-gray-400">{Math.round(cand.sim * 100)}% match</span>
+                        {idx === 0 && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded bg-[#8B1538]/10 text-[#8B1538] text-[10px] font-semibold uppercase tracking-wide">
+                            Best match
+                          </span>
+                        )}
+                        {cand.email_match && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-semibold uppercase tracking-wide">
+                            Email match
+                          </span>
+                        )}
+                        {likely && (
+                          <span className="ml-2 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-semibold uppercase tracking-wide">
+                            Likely match
+                          </span>
+                        )}
+                        {(cand.satellite_name || cand.phone) && (
+                          <p className="text-xs text-gray-400">
+                            {[cand.satellite_name, cand.phone].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                        {checkedInIds.has(cand.id) && (
+                          <p className="text-xs text-amber-700">Already checked in to this session</p>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={idx === 0 ? 'default' : 'outline'}
+                        disabled={busyId === record.id}
+                        onClick={() => confirm(record.id, cand)}
+                        className={idx === 0 ? 'bg-[#8B1538] hover:bg-[#6B0F2B]' : ''}
+                      >
+                        This is them
+                      </Button>
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-sm text-gray-400 mb-3">No similar members found.</p>
@@ -662,9 +783,23 @@ function QueueTab({
 
             <div className="flex gap-2 flex-wrap">
               <Button
+                variant="outline"
                 size="sm"
                 disabled={busyId === record.id}
-                onClick={() => setCreateFor({ record, candidates })}
+                onClick={() => {
+                  setNotice('')
+                  setResolveFor({ record, candidates })
+                }}
+              >
+                Find member
+              </Button>
+              <Button
+                size="sm"
+                disabled={busyId === record.id}
+                onClick={() => {
+                  setNotice('')
+                  setCreateFor(record)
+                }}
                 className="bg-[#8B1538] hover:bg-[#6B0F2B]"
               >
                 Create new member
@@ -683,113 +818,29 @@ function QueueTab({
         </Card>
       ))}
 
-      {createFor && (
-        <CreateMemberDialog
-          pending={createFor}
+      {resolveFor && (
+        <ResolveCheckinDialog
           accessToken={accessToken}
-          defaultSatelliteId={sessionSatelliteId}
-          onClose={() => setCreateFor(null)}
-          onCreated={() => {
-            setCreateFor(null)
-            onResolved()
+          record={resolveFor.record}
+          candidates={resolveFor.candidates}
+          checkedInIds={checkedInIds}
+          onClose={() => setResolveFor(null)}
+          onResolved={finish}
+          onCreateNew={() => {
+            setCreateFor(resolveFor.record)
+            setResolveFor(null)
           }}
         />
       )}
+      {createFor && (
+        <CreateMemberFromCheckinDialog
+          accessToken={accessToken}
+          record={createFor}
+          defaultSatelliteId={sessionSatelliteId}
+          onClose={() => setCreateFor(null)}
+          onDone={finish}
+        />
+      )}
     </div>
-  )
-}
-
-function CreateMemberDialog({
-  pending,
-  accessToken,
-  defaultSatelliteId,
-  onClose,
-  onCreated,
-}: {
-  pending: PendingMatch
-  accessToken: string | undefined
-  defaultSatelliteId: string | null
-  onClose: () => void
-  onCreated: () => void
-}) {
-  const [name, setName] = useState(pending.record.raw_name ?? '')
-  const [phone, setPhone] = useState(pending.record.raw_phone ?? '')
-  const [satelliteId, setSatelliteId] = useState(defaultSatelliteId ?? '')
-  const [satellites, setSatellites] = useState<SatelliteRow[]>([])
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    getSatellites({ data: true }).then(setSatellites).catch(() => setSatellites([]))
-  }, [])
-
-  const submit = async () => {
-    if (!accessToken) return
-    if (name.trim().length < 2) {
-      setError('Name must be at least 2 characters')
-      return
-    }
-    setBusy(true)
-    setError('')
-    try {
-      await createMemberFromCheckin({
-        data: {
-          accessToken,
-          recordId: pending.record.id,
-          name: name.trim(),
-          phone: phone.trim() || null,
-          satelliteId: satelliteId || null,
-        },
-      })
-      onCreated()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create member')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create member from check-in</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div>
-            <Label htmlFor="cm-name">Name</Label>
-            <Input id="cm-name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
-          </div>
-          <div>
-            <Label htmlFor="cm-phone">Mobile <span className="text-gray-400 font-normal">(optional)</span></Label>
-            <Input id="cm-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1" />
-          </div>
-          <div>
-            <Label htmlFor="cm-sat">Satellite <span className="text-gray-400 font-normal">(optional)</span></Label>
-            <select
-              id="cm-sat"
-              value={satelliteId}
-              onChange={(e) => setSatelliteId(e.target.value)}
-              className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#8B1538] outline-none"
-            >
-              <option value="">Unassigned</option>
-              {satellites.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <p className="text-xs text-gray-400">
-            Creates a new visitor member and links this check-in to them.
-          </p>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} disabled={busy} className="bg-[#8B1538] hover:bg-[#6B0F2B]">
-            {busy ? 'Creating…' : 'Create & link'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }

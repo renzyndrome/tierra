@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react'
 import { registerWalkIn, manualCheckIn } from '../server/functions/attendance'
 import { getSatellites } from '../server/functions/satellites'
 import { MAIN_SATELLITE_NAME } from '../lib/constants'
+import { normalizeEmail } from '../lib/nameMatch'
 import type { CheckinMemberOption, SatelliteRow } from '../lib/types'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -41,6 +42,7 @@ export function RegisterWalkInDialog({
 }: RegisterWalkInDialogProps) {
   const [name, setName] = useState(initialName)
   const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
   const [gender, setGender] = useState<'' | 'male' | 'female'>('')
   const [age, setAge] = useState('')
   const [city, setCity] = useState('')
@@ -72,6 +74,10 @@ export function RegisterWalkInDialog({
       setError('Name required. At least 2 characters.')
       return
     }
+    if (email.trim() && normalizeEmail(email) === null) {
+      setError('Email address invalid.')
+      return
+    }
     const ageNum = age.trim() ? Number(age) : null
     if (ageNum !== null && (!Number.isInteger(ageNum) || ageNum < 1 || ageNum > 120)) {
       setError('Age: 1 to 120.')
@@ -86,6 +92,7 @@ export function RegisterWalkInDialog({
           sessionId,
           name: name.trim(),
           phone: phone.trim() || null,
+          email: email.trim() || null,
           gender: gender || null,
           age: ageNum,
           city: city.trim() || null,
@@ -168,6 +175,19 @@ export function RegisterWalkInDialog({
               <div>
                 <Label htmlFor="wi-phone">Mobile <span className="text-gray-400 font-normal">(optional)</span></Label>
                 <Input id="wi-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1" inputMode="tel" />
+              </div>
+              <div>
+                <Label htmlFor="wi-email">Email <span className="text-gray-400 font-normal">(optional)</span></Label>
+                <Input
+                  id="wi-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="off"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1"
+                  maxLength={254}
+                />
               </div>
               <div>
                 <Label htmlFor="wi-city">City <span className="text-gray-400 font-normal">(optional)</span></Label>
