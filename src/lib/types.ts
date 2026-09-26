@@ -1085,6 +1085,7 @@ export interface AttendanceRecord {
   member_id: string | null
   raw_name: string | null
   raw_phone: string | null
+  raw_email: string | null
   invited_by: string | null
   checkin_method: CheckinMethod
   match_status: MatchStatus
@@ -1100,6 +1101,7 @@ export interface AttendanceRecordInsert {
   member_id?: string | null
   raw_name?: string | null
   raw_phone?: string | null
+  raw_email?: string | null
   invited_by?: string | null
   checkin_method?: CheckinMethod
   match_status?: MatchStatus
@@ -1118,13 +1120,19 @@ export interface AttendanceRecordWithMember extends AttendanceRecord {
   member?: { id: string; name: string; satellite_id: string | null } | null
 }
 
-// A candidate member suggestion from the fuzzy matcher (search_members_similar RPC).
+// A candidate member suggestion for a pending check-in: trigram look-alikes
+// (search_members_similar RPC), same-surname members, and email owners.
 export interface MatchCandidate {
   id: string
   name: string
   satellite_id: string | null
   phone: string | null
   sim: number
+  satellite_name?: string | null
+  // The check-in's typed email equals this member's email on file.
+  email_match?: boolean
+  // Jev's probability that this member is the person who checked in.
+  jev_probability?: number | null
 }
 
 // A directory member offered by the staff manual check-in search.
@@ -1140,6 +1148,23 @@ export interface CheckinMemberOption {
 export type WalkInResult =
   | { status: 'registered'; memberId: string; displayName: string }
   | { status: 'possible_duplicate'; matches: CheckinMemberOption[] }
+
+// Result of creating a member from a pending check-in: created and linked, or
+// held back because similar names already exist in the directory.
+export type CreateFromCheckinResult =
+  | { status: 'created'; memberId: string }
+  | { status: 'possible_duplicate'; matches: CheckinMemberOption[] }
+
+// Result of linking a check-in to a member.
+export interface ConfirmMatchResult {
+  success: boolean
+  // The member already had a check-in in this session; this one was marked ignored.
+  alreadyCheckedIn?: boolean
+  // The visitor record created by a mistaken "new member" registration was archived.
+  duplicateVisitorArchived?: boolean
+  // The typed email was saved to the member (only when the member had none).
+  emailSaved?: boolean
+}
 
 // A pending attendance record plus recomputed suggestions for the admin queue.
 export interface PendingMatch {

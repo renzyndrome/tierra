@@ -390,6 +390,16 @@ export const MATCH_SIMILARITY_THRESHOLD = 0.3
 // ("Maria Santos" vs "Maria Cruz" is 0.33).
 export const WALK_IN_SIMILAR_THRESHOLD = 0.5
 
+// Review queue: a suggestion is tagged "Likely match" when Jev gives it at least
+// this probability. Suggest-only; staff still confirm every link. On synthetic
+// cases a clear nickname ("Kat" -> "Katherine") scores above 0.9, while initials
+// that only partly fit ("JC" -> "Justin") score 0.4 to 0.7 and stay untagged,
+// though still ranked first.
+export const JEV_LIKELY_PROBABILITY = 0.7
+
+// Most suggestions shown per pending check-in (trigram + surname + email).
+export const MAX_MATCH_CANDIDATES = 8
+
 // Human labels for attendance enums.
 export const CHECKIN_METHOD_LABELS: Record<string, string> = {
   qr_self: 'QR (self)',

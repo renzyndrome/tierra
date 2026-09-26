@@ -133,6 +133,58 @@ export function findSimilarMembers<T extends NamedRecord>(
 }
 
 /**
+ * Normalize an email for comparison: trimmed and lowercased. Null when empty or
+ * not shaped like an address.
+ */
+export function normalizeEmail(input: string | null | undefined): string | null {
+  const email = (input ?? '').trim().toLowerCase()
+  if (!email || !/^[^\s@]+@[^\s@]+$/.test(email)) return null
+  return email
+}
+
+/**
+ * Directory members whose email on file equals `email` (case-insensitive).
+ * A suggestion signal only: families often share one address, so an email
+ * match never auto-links a check-in by itself.
+ */
+export function findEmailMatches<T extends NamedRecord & { email?: string | null }>(
+  email: string | null | undefined,
+  members: readonly T[],
+): T[] {
+  const target = normalizeEmail(email)
+  if (!target) return []
+  return members.filter((m) => normalizeEmail(m.email) === target)
+}
+
+/**
+ * Directory members sharing the typed name's surname (its last token, 3+
+ * letters). Catches nickname and initials check-ins that trigram similarity
+ * misses, e.g. "JC Eugenio" -> "Justin Eugenio". Members whose first name
+ * starts with the typed first letter rank first, then by token confidence.
+ */
+export function findSurnameCandidates<T extends NamedRecord>(
+  typed: string,
+  members: readonly T[],
+  limit: number = 5,
+): T[] {
+  const tokens = normalizeName(typed).split(' ').filter(Boolean)
+  const surname = tokens[tokens.length - 1] ?? ''
+  if (tokens.length < 2 || surname.length < 3) return []
+  const initial = tokens[0][0]
+  return members
+    .map((m) => ({ m, parts: normalizeName(m.name).split(' ') }))
+    .filter(({ parts }) => parts.includes(surname))
+    .map(({ m, parts }) => ({
+      m,
+      sameInitial: parts[0]?.[0] === initial ? 0 : 1,
+      score: nameMatchConfidence(typed, m.name),
+    }))
+    .sort((a, b) => a.sameInitial - b.sameInitial || b.score - a.score || a.m.name.localeCompare(b.m.name))
+    .slice(0, limit)
+    .map(({ m }) => m)
+}
+
+/**
  * Resolve a typed name/phone to a single directory member for auto-linking.
  * Resolution order:
  *   1. Confident name match (exact or high-confidence subset) — auto-link only
