@@ -97,6 +97,7 @@ function SessionDetail() {
   const { profile, session } = useAuth()
   const accessToken = session?.access_token
   const canWrite = profile ? hasPermission(profile.role, 'registration.write') : false
+  const canEditMembers = profile ? hasPermission(profile.role, 'members.write') : false
 
   const [info, setInfo] = useState<ServiceSessionWithRelations | null>(null)
   const [checkins, setCheckins] = useState<AttendanceRecordWithMember[]>([])
@@ -325,6 +326,7 @@ function SessionDetail() {
               sessionSatelliteId={info.satellite_id}
               candidatesByRecord={candidatesByRecord}
               checkedInIds={checkedInIds}
+              canEditMembers={canEditMembers}
               onResolved={loadAll}
               onDelete={async (recordId) => {
                 if (!accessToken) return
@@ -358,6 +360,7 @@ function SessionDetail() {
                 accessToken={accessToken}
                 sessionSatelliteId={info.satellite_id}
                 checkedInIds={checkedInIds}
+                canEditMembers={canEditMembers}
                 onResolved={loadAll}
               />
             </TabsContent>
@@ -378,6 +381,7 @@ function CheckinsTab({
   sessionSatelliteId,
   candidatesByRecord,
   checkedInIds,
+  canEditMembers,
   onResolved,
   onDelete,
 }: {
@@ -388,6 +392,7 @@ function CheckinsTab({
   // Review-queue suggestions for pending check-ins, by record id.
   candidatesByRecord: ReadonlyMap<string, MatchCandidate[]>
   checkedInIds: ReadonlySet<string>
+  canEditMembers: boolean
   onResolved: () => Promise<void>
   onDelete: (recordId: string) => Promise<void>
 }) {
@@ -463,6 +468,7 @@ function CheckinsTab({
           record={resolveFor}
           candidates={candidatesByRecord.get(resolveFor.id)}
           checkedInIds={checkedInIds}
+          canEditMembers={canEditMembers}
           onClose={() => setResolveFor(null)}
           onResolved={finish}
           onCreateNew={
@@ -643,12 +649,14 @@ function QueueTab({
   accessToken,
   sessionSatelliteId,
   checkedInIds,
+  canEditMembers,
   onResolved,
 }: {
   pending: PendingMatch[]
   accessToken: string | undefined
   sessionSatelliteId: string | null
   checkedInIds: ReadonlySet<string>
+  canEditMembers: boolean
   onResolved: () => Promise<void>
 }) {
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -824,6 +832,7 @@ function QueueTab({
           record={resolveFor.record}
           candidates={resolveFor.candidates}
           checkedInIds={checkedInIds}
+          canEditMembers={canEditMembers}
           onClose={() => setResolveFor(null)}
           onResolved={finish}
           onCreateNew={() => {

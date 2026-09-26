@@ -191,10 +191,13 @@ Every row in the **Check-ins** tab has an action next to **Remove**:
   check-in folds into the existing one and is marked **Ignored**. The count stays right.
 - **Change** on a **New member** row (a walk-in registered as new by mistake): the
   checkbox **Archive duplicate record** is on by default. The visitor record from that
-  registration is archived, not deleted. Kept when it has any other history (other
-  check-ins, groups, an account, giving). Undo: Admin → Members, the member's menu, **Restore**.
-- A check-in with a typed email offers **Save email to member**. Fills the member's
-  email only when empty. Never replaces an existing email.
+  registration is archived, not deleted. Only a record created by that same check-in
+  qualifies. Kept when it has any other history (other check-ins, groups, an account,
+  giving). Undo: Admin → Members, the member's menu, **Restore**.
+- A check-in with a typed email offers **Save email to member** to staff who can edit
+  members (e.g. Admin). Fills the member's email only when empty. Never replaces an
+  existing email. For other staff, the email stays on the check-in.
+- A folded check-in (**Ignored**) loses its old link and shows as unmatched.
 
 > Do this the **same day**, while you still remember who was there. Suggested matches
 > get harder to judge later.

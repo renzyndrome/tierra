@@ -87,21 +87,40 @@ export function applyJevProbabilities(
 export interface DuplicateVisitorFacts {
   membershipStatus: string | null
   isArchived: boolean
+  // The member was created by this check-in's registration (created no earlier
+  // than shortly before the check-in), not an older directory record.
+  createdByCheckin: boolean
   // Rows elsewhere that point at the member, by "table.column". null when the
   // count could not be read.
   referenceCounts: Readonly<Record<string, number | null>>
 }
 
+// A walk-in's member row is inserted a moment before its check-in row.
+const REGISTRATION_TOLERANCE_MS = 60_000
+
 /**
- * True only for a plain visitor record with no footprint anywhere else: not
- * archived, and every reference count read successfully as zero. Anything
- * unknown keeps the record.
+ * Whether a member row was created by the registration behind a check-in:
+ * created no earlier than shortly before the check-in time. Unparseable
+ * timestamps count as not created by it.
+ */
+export function createdByCheckin(memberCreatedAt: string | null, checkedInAt: string | null): boolean {
+  const created = Date.parse(memberCreatedAt ?? '')
+  const checkedIn = Date.parse(checkedInAt ?? '')
+  if (Number.isNaN(created) || Number.isNaN(checkedIn)) return false
+  return created >= checkedIn - REGISTRATION_TOLERANCE_MS
+}
+
+/**
+ * True only for a plain visitor record that this check-in's registration
+ * created and that has no footprint anywhere else: not archived, and every
+ * reference count read successfully as zero. Anything unknown keeps the record.
  */
 export function canArchiveDuplicateVisitor(f: DuplicateVisitorFacts): boolean {
   const counts = Object.values(f.referenceCounts)
   return (
     f.membershipStatus === 'visitor' &&
     !f.isArchived &&
+    f.createdByCheckin &&
     counts.length > 0 &&
     counts.every((n) => n === 0)
   )

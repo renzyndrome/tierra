@@ -11,7 +11,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
-import { getCaller, requirePermission } from './_authGuard'
+import { getCaller, requirePermission, callerHasPermission } from './_authGuard'
 import {
   resolveMemberMatch,
   nameMatchConfidence,
@@ -26,6 +26,7 @@ import {
   mergeMatchCandidates,
   applyJevProbabilities,
   canArchiveDuplicateVisitor,
+  createdByCheckin,
 } from '../../lib/attendanceResolve'
 import { jevMatchProbabilities } from './_jevMatch'
 import {
@@ -931,16 +932,17 @@ const MEMBER_REFERENCES: readonly { schema?: 'discipleship'; table: string; colu
 ]
 
 // Archive the visitor record a mistaken "new member" registration created, once
-// its check-in points at the right member. Only a plain visitor with no other
-// footprint qualifies; any unreadable count keeps it. Returns whether archived.
+// its check-in points at the right member. Only a plain visitor that this
+// check-in's registration created, with no other footprint, qualifies; any
+// unreadable count keeps it. Returns whether archived.
 async function archiveDuplicateVisitor(
   admin: ReturnType<typeof createServerAdminClient>,
   memberId: string,
-  relinkedRecordId: string,
+  relinked: { id: string; checkedInAt: string | null },
 ): Promise<boolean> {
   const { data: member, error } = await admin
     .from('members')
-    .select('id, membership_status, is_archived')
+    .select('id, membership_status, is_archived, created_at')
     .eq('id', memberId)
     .maybeSingle()
   if (error || !member) return false
@@ -953,7 +955,7 @@ async function archiveDuplicateVisitor(
         ? admin.schema(ref.schema as 'public').from(ref.table as never)
         : admin.from(ref.table as never)
       let q = base.select('*', { count: 'exact', head: true }).eq(ref.column, memberId)
-      if (ref.table === 'attendance_records') q = q.neq('id', relinkedRecordId)
+      if (ref.table === 'attendance_records') q = q.neq('id', relinked.id)
       const { count, error: countErr } = await q
       referenceCounts[`${ref.schema ?? 'public'}.${ref.table}.${ref.column}`] = countErr ? null : count ?? null
     }),
@@ -962,6 +964,7 @@ async function archiveDuplicateVisitor(
   const facts = {
     membershipStatus: (member.membership_status as string | null) ?? null,
     isArchived: member.is_archived === true,
+    createdByCheckin: createdByCheckin(member.created_at as string | null, relinked.checkedInAt),
     referenceCounts,
   }
   if (!canArchiveDuplicateVisitor(facts)) return false
@@ -1009,6 +1012,7 @@ const confirmMatchSchema = z.object({
   // registration created, when it has no other footprint.
   archiveDuplicate: z.boolean().optional(),
   // Save the check-in's typed email to the member when the member has none.
+  // Needs members.write as well; skipped without it.
   saveEmail: z.boolean().optional(),
 })
 
@@ -1022,7 +1026,7 @@ export const confirmMatch = createServerFn({ method: 'POST' })
 
     const { data: rec, error: recErr } = await admin
       .from('attendance_records')
-      .select('id, session_id, member_id, match_status, raw_email')
+      .select('id, session_id, member_id, match_status, raw_email, checked_in_at')
       .eq('id', data.recordId)
       .single()
     if (recErr || !rec) throw new Error('Check-in record not found')
@@ -1035,12 +1039,19 @@ export const confirmMatch = createServerFn({ method: 'POST' })
         previousMemberId !== null &&
         previousMemberId !== data.memberId
       const email = normalizeEmail(rec.raw_email as string | null)
+      const saveEmail =
+        data.saveEmail === true && email !== null && (await callerHasPermission(caller, 'members.write'))
       return {
         ...result,
         ...(archive && previousMemberId
-          ? { duplicateVisitorArchived: await archiveDuplicateVisitor(admin, previousMemberId, data.recordId) }
+          ? {
+              duplicateVisitorArchived: await archiveDuplicateVisitor(admin, previousMemberId, {
+                id: data.recordId,
+                checkedInAt: rec.checked_in_at as string | null,
+              }),
+            }
           : {}),
-        ...(data.saveEmail && email ? { emailSaved: await fillMemberEmail(admin, data.memberId, email) } : {}),
+        ...(saveEmail && email ? { emailSaved: await fillMemberEmail(admin, data.memberId, email) } : {}),
       }
     }
 
@@ -1052,10 +1063,17 @@ export const confirmMatch = createServerFn({ method: 'POST' })
       .eq('member_id', data.memberId)
       .maybeSingle()
     if (existing && existing.id !== data.recordId) {
-      // Fold this duplicate into the existing record: mark it ignored.
+      // Fold this duplicate into the existing record: mark it ignored and drop
+      // its old link. A kept link would still block that member from this
+      // session (unique session + member index).
       const { error: foldErr } = await admin
         .from('attendance_records')
-        .update({ match_status: 'ignored', note: 'Duplicate of an existing check-in', matched_by: caller.userId })
+        .update({
+          match_status: 'ignored',
+          member_id: null,
+          note: 'Duplicate of an existing check-in',
+          matched_by: caller.userId,
+        })
         .eq('id', data.recordId)
       if (foldErr) {
         console.error('Error folding duplicate check-in:', foldErr)
@@ -1146,8 +1164,15 @@ export const createMemberFromCheckin = createServerFn({ method: 'POST' })
       .is('member_id', null)
       .select('id')
     if (updErr || (linked ?? []).length !== 1) {
-      console.error('Error linking new member to check-in:', updErr)
-      throw new Error('Member created. Check-in not linked: use Link member on the check-in.')
+      // Another staff member linked this check-in first. Remove the member row
+      // this request just inserted; nothing else references it yet.
+      if (updErr) console.error('Error linking new member to check-in:', updErr)
+      const { error: undoErr } = await admin.from('members').delete().eq('id', memberId)
+      if (undoErr) {
+        console.error('Error removing unlinked new member:', undoErr)
+        throw new Error('Member created. Check-in not linked: use Link member on the check-in.')
+      }
+      throw new Error('Check-in already linked. Reload the page.')
     }
     return { status: 'created', memberId }
   })

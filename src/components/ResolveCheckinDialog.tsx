@@ -18,6 +18,8 @@ interface ResolveCheckinDialogProps {
   candidates?: readonly MatchCandidate[]
   // Members already counted in this session.
   checkedInIds: ReadonlySet<string>
+  // Staff may edit member records (members.write): offers saving the email.
+  canEditMembers: boolean
   onClose: () => void
   // Called after a link, with a notice for the staff.
   onResolved: (notice: string) => void
@@ -71,6 +73,7 @@ export function ResolveCheckinDialog({
   record,
   candidates = [],
   checkedInIds,
+  canEditMembers,
   onClose,
   onResolved,
   onCreateNew,
@@ -86,6 +89,7 @@ export function ResolveCheckinDialog({
 
   const currentMemberId = record.member?.id ?? null
   const offerArchive = record.match_status === 'new_member' && Boolean(record.member_id)
+  const offerSaveEmail = canEditMembers && Boolean(record.raw_email)
   const typedName = record.raw_name ?? record.member?.name ?? 'Unnamed'
 
   useEffect(() => {
@@ -128,7 +132,7 @@ export function ResolveCheckinDialog({
           recordId: record.id,
           memberId,
           archiveDuplicate: offerArchive ? archiveDuplicate : undefined,
-          saveEmail: record.raw_email ? saveEmail : undefined,
+          saveEmail: offerSaveEmail ? saveEmail : undefined,
         },
       })
       const parts = [
@@ -217,7 +221,7 @@ export function ResolveCheckinDialog({
           ))}
         </div>
 
-        {(offerArchive || record.raw_email) && (
+        {(offerArchive || offerSaveEmail) && (
           <div className="space-y-2 border-t border-gray-100 pt-3">
             {offerArchive && (
               <label className="flex items-start gap-2 text-sm text-gray-700">
@@ -235,7 +239,7 @@ export function ResolveCheckinDialog({
                 </span>
               </label>
             )}
-            {record.raw_email && (
+            {offerSaveEmail && (
               <label className="flex items-start gap-2 text-sm text-gray-700">
                 <input
                   type="checkbox"

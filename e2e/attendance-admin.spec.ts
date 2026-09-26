@@ -488,6 +488,9 @@ test.describe('Admin — Service Attendance', () => {
         timeout: 15_000,
       })
       await expect(card(dupName).getByText(/^ignored$/i)).toBeVisible()
+      // The folded check-in drops its old link (the archived duplicate).
+      await expect(card(dupName).getByText('(unmatched)')).toBeVisible()
+      await expect(card(dupName).getByRole('button', { name: /^link member$/i })).toBeVisible()
       await expect(page.getByRole('tab', { name: /check-ins \(1\)/i })).toBeVisible()
     } finally {
       await deleteSessionAt(page, sessionUrl)

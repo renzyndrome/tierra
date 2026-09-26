@@ -6,6 +6,7 @@ import {
   mergeMatchCandidates,
   applyJevProbabilities,
   canArchiveDuplicateVisitor,
+  createdByCheckin,
   type DuplicateVisitorFacts,
 } from '../../lib/attendanceResolve'
 import type { MatchCandidate } from '../../lib/types'
@@ -85,6 +86,7 @@ describe('canArchiveDuplicateVisitor', () => {
   const clean: DuplicateVisitorFacts = {
     membershipStatus: 'visitor',
     isArchived: false,
+    createdByCheckin: true,
     referenceCounts: {
       'public.attendance_records.member_id': 0,
       'public.user_profiles.member_id': 0,
@@ -99,6 +101,10 @@ describe('canArchiveDuplicateVisitor', () => {
   it('keeps a record that is not a visitor', () => {
     expect(canArchiveDuplicateVisitor({ ...clean, membershipStatus: 'regular' })).toBe(false)
     expect(canArchiveDuplicateVisitor({ ...clean, membershipStatus: null })).toBe(false)
+  })
+
+  it('keeps an older directory record not created by this check-in', () => {
+    expect(canArchiveDuplicateVisitor({ ...clean, createdByCheckin: false })).toBe(false)
   })
 
   it('keeps a record that is already archived', () => {
@@ -119,5 +125,25 @@ describe('canArchiveDuplicateVisitor', () => {
 
   it('keeps a record when no reference was checked at all', () => {
     expect(canArchiveDuplicateVisitor({ ...clean, referenceCounts: {} })).toBe(false)
+  })
+})
+
+describe('createdByCheckin', () => {
+  const checkedIn = '2026-09-25T11:18:00.000Z'
+
+  it('accepts a member created just before the check-in (walk-in) or after it (queue)', () => {
+    expect(createdByCheckin('2026-09-25T11:17:59.950Z', checkedIn)).toBe(true)
+    expect(createdByCheckin('2026-09-27T02:00:00.000Z', checkedIn)).toBe(true)
+  })
+
+  it('rejects a member created well before the check-in', () => {
+    expect(createdByCheckin('2026-09-25T11:10:00.000Z', checkedIn)).toBe(false)
+    expect(createdByCheckin('2026-02-18T10:45:29.410Z', checkedIn)).toBe(false)
+  })
+
+  it('rejects missing or unparseable timestamps', () => {
+    expect(createdByCheckin(null, checkedIn)).toBe(false)
+    expect(createdByCheckin('2026-09-25T11:18:00Z', null)).toBe(false)
+    expect(createdByCheckin('not a date', checkedIn)).toBe(false)
   })
 })
