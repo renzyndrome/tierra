@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, devices, type Page, type Locator } from '@playwright/test'
 
 // End-to-end coverage for the admin Service Attendance flows:
 //   1. Create a session and see it in the list
@@ -10,6 +10,7 @@ import { test, expect, type Page } from '@playwright/test'
 //   7. Walk-in registration at the booth (similar-name warning)
 //   8. Linking check-ins: a nickname QR guest with an email, and a walk-in
 //      wrongly registered as new (re-link + duplicate archive)
+//   9. Phone screens: the QR form and the booth registration form
 //
 // Every test that creates a session deletes it again (the e2e target is often
 // the live database; deleting a session cascades its check-ins).
@@ -91,6 +92,34 @@ async function submitWalkIn(page: Page, name: string) {
   await expect(notice.or(anyway)).toBeVisible({ timeout: 15_000 })
   if (await anyway.isVisible()) await anyway.click()
   await expect(notice).toBeVisible({ timeout: 15_000 })
+}
+
+// A mid-size phone, short enough that the booth registration form must scroll.
+const PHONE = {
+  viewport: { width: 390, height: 700 },
+  deviceScaleFactor: 3,
+  isMobile: true,
+  hasTouch: true,
+  userAgent: devices['iPhone 13'].userAgent,
+}
+
+// No sideways scrolling, and every visible field has 16px+ text (smaller text
+// makes iOS Safari zoom on focus) and a 44px+ tap target.
+async function expectPhoneFriendly(page: Page, scope: Locator) {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+  const fields = await scope.locator('input:visible, select:visible').all()
+  expect(fields.length).toBeGreaterThan(0)
+  for (const field of fields) {
+    const { id, size, height } = await field.evaluate((el) => ({
+      id: el.id,
+      size: parseFloat(getComputedStyle(el).fontSize),
+      // Layout height: ignores the dialog's zoom-in animation transform.
+      height: (el as HTMLElement).offsetHeight,
+    }))
+    expect(size, `font size of #${id}`).toBeGreaterThanOrEqual(16)
+    expect(height, `height of #${id}`).toBeGreaterThanOrEqual(44)
+  }
 }
 
 async function loginAsAdmin(page: Page) {
@@ -526,6 +555,60 @@ test.describe('Admin — Service Attendance', () => {
       await row.getByRole('button', { name: /^check in$/i }).click()
       await expect(page.getByText(`${memberName} checked in ✓`)).toBeVisible({ timeout: 15_000 })
       await expect(row.getByRole('button', { name: /^checked in$/i })).toBeDisabled()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
+  })
+
+  test('phone: QR form and booth registration fit a phone screen', async ({ page, browser, baseURL }) => {
+    test.setTimeout(150_000)
+    await loginAsAdmin(page)
+    const sessionUrl = await createSession(page, `E2E PHONE ${Date.now()}`)
+
+    try {
+      const token = await readQrToken(page)
+
+      // 1. A guest on a phone.
+      const guestCtx = await browser.newContext({ ...PHONE, baseURL })
+      const guest = await guestCtx.newPage()
+      await guest.goto(`/checkin/${token}`)
+      const nameField = guest.getByLabel(/your name/i)
+      await expect(nameField).toBeVisible({ timeout: 15_000 })
+      await expectPhoneFriendly(guest, guest.locator('form'))
+      await expect(guest.getByText('For a church account setup soon.')).toBeVisible()
+      // The keyboard's next key moves on instead of sending a half-filled form.
+      await nameField.fill('E2E Phone Guest')
+      await nameField.press('Enter')
+      await expect(guest.getByLabel(/^email/i)).toBeFocused()
+      await guest.getByLabel(/^email/i).press('Enter')
+      await expect(guest.getByLabel(/who invited you/i)).toBeFocused()
+      await expect(guest.getByRole('heading', { name: /you're checked in/i })).toHaveCount(0)
+      await guest.screenshot({ path: test.info().outputPath('phone-checkin.png'), fullPage: true })
+      await guestCtx.close()
+
+      // 2. Booth staff on a phone: the registration form scrolls inside the
+      //    dialog, so its buttons stay reachable. Nothing is saved.
+      const staffCtx = await browser.newContext({ ...PHONE, baseURL })
+      const staff = await staffCtx.newPage()
+      await loginAsAdmin(staff)
+      await staff.waitForLoadState('networkidle')
+      await staff.goto(sessionUrl)
+      await staff.getByRole('tab', { name: /manual check-in/i }).click()
+      const search = staff.getByPlaceholder(/search members/i)
+      await expectPhoneFriendly(staff, staff.locator('[role="tabpanel"]'))
+      await search.fill(`E2E Phone ${Date.now()}`)
+      await staff.getByRole('button', { name: /register new member/i }).click()
+      const dialog = staff.getByRole('dialog')
+      await expect(dialog.getByLabel(/^name/i)).toBeVisible()
+      await expectPhoneFriendly(staff, dialog)
+      await staff.screenshot({ path: test.info().outputPath('phone-register-top.png') })
+      const submit = dialog.getByRole('button', { name: /register & check in/i })
+      await submit.scrollIntoViewIfNeeded()
+      await expect(submit).toBeInViewport()
+      await staff.screenshot({ path: test.info().outputPath('phone-register-bottom.png') })
+      await dialog.getByRole('button', { name: /^cancel$/i }).click()
+      await expect(dialog).toBeHidden()
+      await staffCtx.close()
     } finally {
       await deleteSessionAt(page, sessionUrl)
     }

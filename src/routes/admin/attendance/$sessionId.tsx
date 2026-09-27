@@ -623,6 +623,10 @@ function ManualCheckinTab({
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search members by name…"
         autoFocus
+        className="h-11 sm:h-9"
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
       />
       {notice && <p className="mt-2 text-sm text-[#8B1538]">{notice}</p>}
       {searchError && <p className="mt-2 text-sm text-red-600">{searchError}</p>}

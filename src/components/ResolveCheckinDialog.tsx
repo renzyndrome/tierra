@@ -9,6 +9,7 @@ import { JEV_LIKELY_PROBABILITY } from '../lib/constants'
 import { useMemberSuggestions } from '../lib/useMemberSuggestions'
 import type { AttendanceRecordWithMember, CheckinMemberOption, MatchCandidate } from '../lib/types'
 import { MemberSuggestionTags } from './MemberSuggestionTags'
+import { SCROLLING_DIALOG_CLASS } from './formClasses'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog'
@@ -172,7 +173,7 @@ export function ResolveCheckinDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent className={SCROLLING_DIALOG_CLASS}>
         <DialogHeader>
           <DialogTitle>Link check-in</DialogTitle>
         </DialogHeader>
@@ -210,6 +211,10 @@ export function ResolveCheckinDialog({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search members by name…"
             autoFocus={candidates.length === 0}
+            className="h-11 sm:h-9"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
           />
           {searchError && <p className="text-sm text-red-600">{searchError}</p>}
           {searching && <p className="text-sm text-gray-400">Searching…</p>}

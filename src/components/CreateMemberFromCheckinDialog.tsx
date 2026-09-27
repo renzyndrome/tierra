@@ -8,6 +8,7 @@ import { createMemberFromCheckin, confirmMatch } from '../server/functions/atten
 import { getSatellites } from '../server/functions/satellites'
 import { MAIN_SATELLITE_NAME } from '../lib/constants'
 import { normalizeEmail } from '../lib/nameMatch'
+import { FIELD_CLASS, SELECT_CLASS, SCROLLING_DIALOG_CLASS } from './formClasses'
 import type { AttendanceRecordWithMember, CheckinMemberOption, SatelliteRow } from '../lib/types'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -111,7 +112,7 @@ export function CreateMemberFromCheckinDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent>
+      <DialogContent className={SCROLLING_DIALOG_CLASS}>
         <DialogHeader>
           <DialogTitle>Create member from check-in</DialogTitle>
         </DialogHeader>
@@ -147,7 +148,16 @@ export function CreateMemberFromCheckinDialog({
           <div className="space-y-4 py-2">
             <div>
               <Label htmlFor="cm-name">Name</Label>
-              <Input id="cm-name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
+              <Input
+                id="cm-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={FIELD_CLASS}
+                autoComplete="off"
+                autoCapitalize="words"
+                autoCorrect="off"
+                spellCheck={false}
+              />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -156,10 +166,12 @@ export function CreateMemberFromCheckinDialog({
                 </Label>
                 <Input
                   id="cm-phone"
+                  type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="mt-1"
+                  className={FIELD_CLASS}
                   inputMode="tel"
+                  autoComplete="off"
                 />
               </div>
               <div>
@@ -171,9 +183,12 @@ export function CreateMemberFromCheckinDialog({
                   type="email"
                   inputMode="email"
                   autoComplete="off"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1"
+                  className={FIELD_CLASS}
                   maxLength={254}
                 />
               </div>
@@ -188,7 +203,7 @@ export function CreateMemberFromCheckinDialog({
                   satelliteTouched.current = true
                   setSatelliteId(e.target.value)
                 }}
-                className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#8B1538] outline-none"
+                className={SELECT_CLASS}
               >
                 <option value="">Unassigned</option>
                 {satellites.map((s) => (

@@ -86,7 +86,7 @@ When someone scans the QR, they see the service name and date, then:
 - **Guests / anyone not signed in** get a short form:
   - **Full name**: hint on the form, "First and last name. No nicknames or initials."
   - **Email** *(optional)*: kept on the check-in. Used to suggest the right member
-    and for a church account invite later.
+    and for a church account setup soon.
   - **Name of the person who invited you**
 
   These need to be matched to a member record afterwards — see the Review queue below.
