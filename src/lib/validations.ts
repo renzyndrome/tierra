@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeEmail } from './nameMatch'
 
 // Financial transaction validation
 export const financialTransactionSchema = z.object({
@@ -30,6 +31,13 @@ export const checkinFormSchema = z.object({
     .string()
     .max(100, 'Name is too long')
     .transform((val) => val.trim())
+    .optional()
+    .or(z.literal('')),
+  email: z
+    .string()
+    .trim()
+    .max(254, 'Email too long.')
+    .refine((val) => !val || normalizeEmail(val) !== null, 'Email address invalid.')
     .optional()
     .or(z.literal('')),
 })

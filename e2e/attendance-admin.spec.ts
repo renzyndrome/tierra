@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, devices, type Page, type Locator } from '@playwright/test'
 
 // End-to-end coverage for the admin Service Attendance flows:
 //   1. Create a session and see it in the list
@@ -7,6 +7,10 @@ import { test, expect, type Page } from '@playwright/test'
 //   4. Analytics page renders
 //   5. Full workflow: guest QR check-in -> manual check-in -> review -> close
 //   6. Overdue sessions (dated before today) are flagged and refuse QR check-in
+//   7. Walk-in registration at the booth (similar-name warning)
+//   8. Linking check-ins: a nickname QR guest with an email, and a walk-in
+//      wrongly registered as new (re-link + duplicate archive)
+//   9. Phone screens: the QR form and the booth registration form
 //
 // Every test that creates a session deletes it again (the e2e target is often
 // the live database; deleting a session cascades its check-ins).
@@ -23,9 +27,12 @@ const QUEUE_SESSION_ID = process.env.E2E_QUEUE_SESSION_ID || ''
 // A name fragment that matches at least one directory member (manual check-in).
 const MEMBER_QUERY = process.env.E2E_MEMBER_QUERY || 'an'
 // Registering a walk-in creates a real member record that the session delete
-// does not remove. Only run that step when the target database may receive it
-// (delete the 'E2E Walkin%' members afterwards).
+// does not remove. Only run those steps when the target database may receive
+// them (delete the 'E2E Walkin%', 'E2E Resolve%' and '%E2eqzv%' members
+// afterwards).
 const ALLOW_MEMBER_WRITES = process.env.E2E_ALLOW_MEMBER_WRITES === '1'
+// The app server runs with TYPESAFE_API_KEY, so Jev tags likely matches.
+const EXPECT_JEV = process.env.E2E_EXPECT_JEV === '1'
 
 // YYYY-MM-DD in the church's time zone, offset by whole days.
 function manilaDate(offsetDays = 0): string {
@@ -72,6 +79,47 @@ async function readQrToken(page: Page): Promise<string> {
   await popup.close()
   expect(token).not.toBe('')
   return token
+}
+
+// Submit the walk-in dialog and wait for the registration notice. Test members
+// left by an earlier run count as similar names, so the warning is confirmed
+// with "Register anyway" when it appears.
+async function submitWalkIn(page: Page, name: string) {
+  const dialog = page.getByRole('dialog')
+  const notice = page.getByText(`${name} registered and checked in ✓`)
+  const anyway = dialog.getByRole('button', { name: /register anyway/i })
+  await dialog.getByRole('button', { name: /register & check in/i }).click()
+  await expect(notice.or(anyway)).toBeVisible({ timeout: 15_000 })
+  if (await anyway.isVisible()) await anyway.click()
+  await expect(notice).toBeVisible({ timeout: 15_000 })
+}
+
+// A mid-size phone, short enough that the booth registration form must scroll.
+const PHONE = {
+  viewport: { width: 390, height: 700 },
+  deviceScaleFactor: 3,
+  isMobile: true,
+  hasTouch: true,
+  userAgent: devices['iPhone 13'].userAgent,
+}
+
+// No sideways scrolling, and every visible field has 16px+ text (smaller text
+// makes iOS Safari zoom on focus) and a 44px+ tap target.
+async function expectPhoneFriendly(page: Page, scope: Locator) {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
+  const fields = await scope.locator('input:visible, select:visible').all()
+  expect(fields.length).toBeGreaterThan(0)
+  for (const field of fields) {
+    const { id, size, height } = await field.evaluate((el) => ({
+      id: el.id,
+      size: parseFloat(getComputedStyle(el).fontSize),
+      // Layout height: ignores the dialog's zoom-in animation transform.
+      height: (el as HTMLElement).offsetHeight,
+    }))
+    expect(size, `font size of #${id}`).toBeGreaterThanOrEqual(16)
+    expect(height, `height of #${id}`).toBeGreaterThanOrEqual(44)
+  }
 }
 
 async function loginAsAdmin(page: Page) {
@@ -368,11 +416,235 @@ test.describe('Admin — Service Attendance', () => {
       await dialog.getByLabel(/^city/i).fill('Santa Rosa')
       await dialog.locator('#wi-gender').selectOption('female')
       await dialog.getByLabel(/^age/i).fill('72')
-      await dialog.getByRole('button', { name: /register & check in/i }).click()
-      await expect(page.getByText(`${walkIn} registered and checked in ✓`)).toBeVisible({ timeout: 15_000 })
+      await submitWalkIn(page, walkIn)
       await expect(page.getByRole('tab', { name: /check-ins \(1\)/i })).toBeVisible()
       await page.getByRole('tab', { name: /check-ins/i }).click()
       await expect(page.getByText(walkIn)).toBeVisible()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
+  })
+
+  test('link check-ins: nickname QR guest with email, and a duplicate walk-in', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    test.skip(!ALLOW_MEMBER_WRITES, 'Set E2E_ALLOW_MEMBER_WRITES=1 to create (and later delete) test members')
+    test.setTimeout(180_000)
+    await loginAsAdmin(page)
+    const ts = Date.now()
+    const memberName = `E2E Resolve Target ${ts}`
+    const dupName = `${memberName} Dup`
+    const email = `e2e-resolve-${ts}@example.com`
+    const nickname = `Targ ${ts}`
+    const sessionUrl = await createSession(page, `E2E RESOLVE ${ts}`)
+    const card = (text: string) => page.locator('[data-slot="card"]', { hasText: text })
+    const dialog = page.getByRole('dialog')
+
+    try {
+      // 1. Booth registers member A (with email), then that check-in is
+      //    removed so A is in the directory but not checked in.
+      await page.getByRole('tab', { name: /manual check-in/i }).click()
+      await page.getByPlaceholder(/search members/i).fill(memberName)
+      await expect(page.getByText(/no members found/i)).toBeVisible({ timeout: 15_000 })
+      await page.getByRole('button', { name: /register new member/i }).click()
+      await dialog.getByLabel(/^email/i).fill(email)
+      await submitWalkIn(page, memberName)
+      await page.getByRole('tab', { name: /check-ins/i }).click()
+      await card(memberName).getByRole('button', { name: /^remove$/i }).click()
+      await expect(page.getByText(/no check-ins yet/i)).toBeVisible({ timeout: 15_000 })
+
+      // 2. A guest checks in by QR with a nickname and A's email. An invalid
+      //    email is refused first.
+      const token = await readQrToken(page)
+      const guestCtx = await browser.newContext({ baseURL })
+      const guest = await guestCtx.newPage()
+      await guest.goto(`/checkin/${token}`)
+      await guest.getByLabel(/your name/i).fill(nickname)
+      await guest.getByLabel(/^email/i).fill('not-an-email')
+      await guest.getByRole('button', { name: /^check in$/i }).click()
+      await expect(guest.getByText(/email address invalid/i)).toBeVisible()
+      await guest.getByLabel(/^email/i).fill(email.toUpperCase())
+      await guest.getByRole('button', { name: /^check in$/i }).click()
+      await expect(guest.getByRole('heading', { name: /you're checked in/i })).toBeVisible({ timeout: 15_000 })
+      await guestCtx.close()
+
+      // 3. The nickname stays unmatched (no auto-link by email alone).
+      await page.reload()
+      await expect(card(nickname).getByText('(unmatched)')).toBeVisible({ timeout: 15_000 })
+
+      // 4. "New member" from that check-in warns: A already holds the email.
+      await card(nickname).getByRole('button', { name: /^link member$/i }).click()
+      await expect(dialog.getByRole('heading', { name: /link check-in/i })).toBeVisible()
+      await expect(dialog.getByText(/email match/i)).toBeVisible()
+      await dialog.getByRole('button', { name: /^new member$/i }).click()
+      await expect(dialog.getByRole('heading', { name: /create member from check-in/i })).toBeVisible()
+      await expect(dialog.locator('#cm-email')).toHaveValue(email)
+      await dialog.getByRole('button', { name: /create & link/i }).click()
+      await expect(dialog.getByText(/similar names in the directory/i)).toBeVisible({ timeout: 15_000 })
+      await expect(dialog.getByText(memberName, { exact: true })).toBeVisible()
+      await dialog.getByRole('button', { name: /^cancel$/i }).click()
+      await expect(dialog).toBeHidden()
+
+      // 5. Link the guest to A from the directory search.
+      await card(nickname).getByRole('button', { name: /^link member$/i }).click()
+      await dialog.getByPlaceholder(/search members/i).fill(memberName)
+      const resultRow = dialog.locator('div.rounded-lg', { has: page.getByText(memberName, { exact: true }) }).last()
+      await resultRow.getByRole('button', { name: /^link$/i }).click()
+      await expect(page.getByText(`Linked to ${memberName} ✓`)).toBeVisible({ timeout: 15_000 })
+      const linkedRow = card(`Typed: ${nickname}`)
+      await expect(linkedRow.getByText(/^confirmed$/i)).toBeVisible()
+      await expect(linkedRow.getByRole('button', { name: /^change$/i })).toBeVisible()
+
+      // 6. A walk-in for the same person is registered as new anyway (B).
+      await page.getByRole('tab', { name: /manual check-in/i }).click()
+      await page.getByPlaceholder(/search members/i).fill(dupName)
+      await page.getByRole('button', { name: /register new member/i }).click()
+      await dialog.getByRole('button', { name: /register & check in/i }).click()
+      await expect(dialog.getByText(/similar names in the directory/i)).toBeVisible({ timeout: 15_000 })
+      await dialog.getByRole('button', { name: /register anyway/i }).click()
+      await expect(page.getByText(`${dupName} registered and checked in ✓`)).toBeVisible({ timeout: 15_000 })
+
+      // 7. Staff corrects B's check-in to A: A is already checked in, so the
+      //    check-in folds (ignored) and B's visitor record is archived.
+      await page.getByRole('tab', { name: /check-ins/i }).click()
+      await card(dupName).getByRole('button', { name: /^change$/i }).click()
+      await expect(dialog.getByLabel(/archive duplicate record/i)).toBeChecked()
+      await dialog.getByPlaceholder(/search members/i).fill(memberName)
+      const targetRow = dialog.locator('div.rounded-lg', { has: page.getByText(memberName, { exact: true }) }).last()
+      await targetRow.getByRole('button', { name: /^link$/i }).click()
+      await expect(page.getByText(/already checked in\. This check-in marked ignored\. Duplicate record archived\./)).toBeVisible({
+        timeout: 15_000,
+      })
+      await expect(card(dupName).getByText(/^ignored$/i)).toBeVisible()
+      // The folded check-in drops its old link (the archived duplicate).
+      await expect(card(dupName).getByText('(unmatched)')).toBeVisible()
+      await expect(card(dupName).getByRole('button', { name: /^link member$/i })).toBeVisible()
+      await expect(page.getByRole('tab', { name: /check-ins \(1\)/i })).toBeVisible()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
+  })
+  test('manual check-in suggests a member for initials plus surname', async ({ page }) => {
+    test.skip(!ALLOW_MEMBER_WRITES, 'Set E2E_ALLOW_MEMBER_WRITES=1 to create (and later delete) a test member')
+    test.setTimeout(120_000)
+    await loginAsAdmin(page)
+    // A made-up surname keeps real members out of the suggestions.
+    const surname = `E2eqzv${String(Date.now()).slice(-5).replace(/\d/g, (d) => 'abcdefghij'[Number(d)])}`
+    const memberName = `Juan Carlos ${surname}`
+    const sessionUrl = await createSession(page, `E2E SUGGEST ${Date.now()}`)
+
+    try {
+      await page.getByRole('tab', { name: /manual check-in/i }).click()
+      await page.getByPlaceholder(/search members/i).fill(memberName)
+      await expect(page.getByText(/no members found/i)).toBeVisible({ timeout: 15_000 })
+      await page.getByRole('button', { name: /register new member/i }).click()
+      await submitWalkIn(page, memberName)
+      await page.getByRole('tab', { name: /check-ins/i }).click()
+      await page.locator('[data-slot="card"]', { hasText: memberName }).getByRole('button', { name: /^remove$/i }).click()
+      await expect(page.getByText(/no check-ins yet/i)).toBeVisible({ timeout: 15_000 })
+
+      // "JC <surname>" matches no name directly, so the member is suggested.
+      await page.getByRole('tab', { name: /manual check-in/i }).click()
+      await page.getByPlaceholder(/search members/i).fill(`JC ${surname}`)
+      await expect(page.getByText(/no exact name match/i)).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByText(/suggested members/i)).toBeVisible()
+      const row = page.locator('[data-slot="card"]', { hasText: memberName })
+      await expect(row.getByText(/same initials/i)).toBeVisible()
+      await row.getByRole('button', { name: /^check in$/i }).click()
+      await expect(page.getByText(`${memberName} checked in ✓`)).toBeVisible({ timeout: 15_000 })
+      await expect(row.getByRole('button', { name: /^checked in$/i })).toBeDisabled()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
+  })
+
+  test('phone: QR form and booth registration fit a phone screen', async ({ page, browser, baseURL }) => {
+    test.setTimeout(150_000)
+    await loginAsAdmin(page)
+    const sessionUrl = await createSession(page, `E2E PHONE ${Date.now()}`)
+
+    try {
+      const token = await readQrToken(page)
+
+      // 1. A guest on a phone.
+      const guestCtx = await browser.newContext({ ...PHONE, baseURL })
+      const guest = await guestCtx.newPage()
+      await guest.goto(`/checkin/${token}`)
+      const nameField = guest.getByLabel(/your name/i)
+      await expect(nameField).toBeVisible({ timeout: 15_000 })
+      await expectPhoneFriendly(guest, guest.locator('form'))
+      await expect(guest.getByText('For a church account setup soon.')).toBeVisible()
+      // The keyboard's next key moves on instead of sending a half-filled form.
+      await nameField.fill('E2E Phone Guest')
+      await nameField.press('Enter')
+      await expect(guest.getByLabel(/^email/i)).toBeFocused()
+      await guest.getByLabel(/^email/i).press('Enter')
+      await expect(guest.getByLabel(/who invited you/i)).toBeFocused()
+      await expect(guest.getByRole('heading', { name: /you're checked in/i })).toHaveCount(0)
+      await guest.screenshot({ path: test.info().outputPath('phone-checkin.png'), fullPage: true })
+      await guestCtx.close()
+
+      // 2. Booth staff on a phone: the registration form scrolls inside the
+      //    dialog, so its buttons stay reachable. Nothing is saved.
+      const staffCtx = await browser.newContext({ ...PHONE, baseURL })
+      const staff = await staffCtx.newPage()
+      await loginAsAdmin(staff)
+      await staff.waitForLoadState('networkidle')
+      await staff.goto(sessionUrl)
+      await staff.getByRole('tab', { name: /manual check-in/i }).click()
+      const search = staff.getByPlaceholder(/search members/i)
+      await expectPhoneFriendly(staff, staff.locator('[role="tabpanel"]'))
+      await search.fill(`E2E Phone ${Date.now()}`)
+      await staff.getByRole('button', { name: /register new member/i }).click()
+      const dialog = staff.getByRole('dialog')
+      await expect(dialog.getByLabel(/^name/i)).toBeVisible()
+      await expectPhoneFriendly(staff, dialog)
+      await staff.screenshot({ path: test.info().outputPath('phone-register-top.png') })
+      const submit = dialog.getByRole('button', { name: /register & check in/i })
+      await submit.scrollIntoViewIfNeeded()
+      await expect(submit).toBeInViewport()
+      await staff.screenshot({ path: test.info().outputPath('phone-register-bottom.png') })
+      await dialog.getByRole('button', { name: /^cancel$/i }).click()
+      await expect(dialog).toBeHidden()
+      await staffCtx.close()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
+  })
+
+  test('Jev tags the likely member for a nickname check-in', async ({ page, browser, baseURL }) => {
+    test.skip(!ALLOW_MEMBER_WRITES || !EXPECT_JEV, 'Set E2E_ALLOW_MEMBER_WRITES=1 and E2E_EXPECT_JEV=1')
+    test.setTimeout(120_000)
+    await loginAsAdmin(page)
+    // A made-up surname: only these test names reach Jev.
+    const surname = `Xylofrent${String(Date.now()).slice(-4).replace(/\d/g, (d) => 'abcdefghij'[Number(d)])}`
+    const memberName = `Katherine ${surname}`
+    const sessionUrl = await createSession(page, `E2E JEV ${Date.now()}`)
+
+    try {
+      await page.getByRole('tab', { name: /manual check-in/i }).click()
+      await page.getByPlaceholder(/search members/i).fill(memberName)
+      await page.getByRole('button', { name: /register new member/i }).click()
+      await submitWalkIn(page, memberName)
+      await page.getByRole('tab', { name: /check-ins/i }).click()
+      await page.locator('[data-slot="card"]', { hasText: memberName }).getByRole('button', { name: /^remove$/i }).click()
+      await expect(page.getByText(/no check-ins yet/i)).toBeVisible({ timeout: 15_000 })
+
+      const token = await readQrToken(page)
+      const guestCtx = await browser.newContext({ baseURL })
+      const guest = await guestCtx.newPage()
+      await guest.goto(`/checkin/${token}`)
+      await guest.getByLabel(/your name/i).fill(`Kat ${surname}`)
+      await guest.getByRole('button', { name: /^check in$/i }).click()
+      await expect(guest.getByRole('heading', { name: /you're checked in/i })).toBeVisible({ timeout: 15_000 })
+      await guestCtx.close()
+
+      await page.reload()
+      await page.getByRole('tab', { name: /review queue/i }).click()
+      const suggestion = page.locator('div.rounded-lg', { has: page.getByText(memberName, { exact: true }) }).last()
+      await expect(suggestion.getByText(/likely match/i)).toBeVisible({ timeout: 20_000 })
     } finally {
       await deleteSessionAt(page, sessionUrl)
     }

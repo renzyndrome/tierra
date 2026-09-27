@@ -133,6 +133,115 @@ export function findSimilarMembers<T extends NamedRecord>(
 }
 
 /**
+ * Normalize an email for comparison: trimmed and lowercased. Null when empty or
+ * not shaped like an address.
+ */
+export function normalizeEmail(input: string | null | undefined): string | null {
+  const email = (input ?? '').trim().toLowerCase()
+  if (!email || !/^[^\s@]+@[^\s@]+$/.test(email)) return null
+  return email
+}
+
+/**
+ * Directory members whose email on file equals `email` (case-insensitive).
+ * A suggestion signal only: families often share one address, so an email
+ * match never auto-links a check-in by itself.
+ */
+export function findEmailMatches<T extends NamedRecord & { email?: string | null }>(
+  email: string | null | undefined,
+  members: readonly T[],
+): T[] {
+  const target = normalizeEmail(email)
+  if (!target) return []
+  return members.filter((m) => normalizeEmail(m.email) === target)
+}
+
+/**
+ * Directory members sharing the typed name's surname (its last token, 3+
+ * letters). Catches nickname and initials check-ins that trigram similarity
+ * misses, e.g. "JC Eugenio" -> "Justin Eugenio". Members whose first name
+ * starts with the typed first letter rank first, then by token confidence.
+ */
+export function findSurnameCandidates<T extends NamedRecord>(
+  typed: string,
+  members: readonly T[],
+  limit: number = 5,
+): T[] {
+  const tokens = normalizeName(typed).split(' ').filter(Boolean)
+  const surname = tokens[tokens.length - 1] ?? ''
+  if (tokens.length < 2 || surname.length < 3) return []
+  const initial = tokens[0][0]
+  return members
+    .map((m) => ({ m, parts: normalizeName(m.name).split(' ') }))
+    .filter(({ parts }) => parts.includes(surname))
+    .map(({ m, parts }) => ({
+      m,
+      sameInitial: parts[0]?.[0] === initial ? 0 : 1,
+      score: nameMatchConfidence(typed, m.name),
+    }))
+    .sort((a, b) => a.sameInitial - b.sameInitial || b.score - a.score || a.m.name.localeCompare(b.m.name))
+    .slice(0, limit)
+    .map(({ m }) => m)
+}
+
+/**
+ * Split a typed name into leading initials and the remaining name tokens.
+ * Initials are a first token of 2 letters ("JC"), 3 letters without vowels
+ * ("MJC"), or 2-3 single letters ("J.C." normalizes to "j c"). Anything else
+ * has no initials.
+ */
+export function splitInitials(typed: string): { initials: string; rest: string[] } | null {
+  const tokens = normalizeName(typed).split(' ').filter(Boolean)
+  const first = tokens[0] ?? ''
+  if (/^[a-z]{2}$/.test(first) || /^[b-df-hj-np-tv-z]{3}$/.test(first)) {
+    return { initials: first, rest: tokens.slice(1) }
+  }
+  let n = 0
+  while (n < tokens.length && n < 3 && /^[a-z]$/.test(tokens[n])) n++
+  if (n >= 2) return { initials: tokens.slice(0, n).join(''), rest: tokens.slice(n) }
+  return null
+}
+
+/**
+ * Directory members whose leading name parts start with the typed initials,
+ * and whose name contains every other typed token: "JC" and "J.C. Cruz" find
+ * "Juan Carlos Cruz"; "SJ Romero" finds "Sarah Jane Romero". Alphabetical.
+ */
+export function findInitialsMatches<T extends NamedRecord>(
+  typed: string,
+  members: readonly T[],
+  limit: number = 8,
+): T[] {
+  const split = splitInitials(typed)
+  if (!split) return []
+  const letters = [...split.initials]
+  return members
+    .map((m) => ({ m, parts: normalizeName(m.name).split(' ') }))
+    .filter(
+      ({ parts }) =>
+        parts.length >= letters.length + (split.rest.length > 0 ? 1 : 0) &&
+        letters.every((l, i) => parts[i]?.[0] === l) &&
+        split.rest.every((t) => parts.slice(letters.length).includes(t)),
+    )
+    .sort((a, b) => a.m.name.localeCompare(b.m.name))
+    .slice(0, limit)
+    .map(({ m }) => m)
+}
+
+/**
+ * Directory members whose phone equals the typed number (7+ digits, local or
+ * +63 form). Null-safe; no partial matches.
+ */
+export function findPhoneMatches<T extends NamedRecord & { phone?: string | null }>(
+  typed: string,
+  members: readonly T[],
+): T[] {
+  const target = normalizePhone(typed)
+  if (!target || target.length < 7 || /[a-z]/i.test(typed)) return []
+  return members.filter((m) => normalizePhone(m.phone) === target)
+}
+
+/**
  * Resolve a typed name/phone to a single directory member for auto-linking.
  * Resolution order:
  *   1. Confident name match (exact or high-confidence subset) — auto-link only

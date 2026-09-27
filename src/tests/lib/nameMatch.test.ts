@@ -9,6 +9,12 @@ import {
   nameMatchConfidence,
   searchDirectoryByName,
   findSimilarMembers,
+  normalizeEmail,
+  findEmailMatches,
+  findSurnameCandidates,
+  splitInitials,
+  findInitialsMatches,
+  findPhoneMatches,
   AUTO_MATCH_CONFIDENCE,
   type DirectoryMember,
 } from '../../lib/nameMatch'
@@ -235,5 +241,124 @@ describe('findSimilarMembers (walk-in duplicate check)', () => {
 
   it('respects the limit', () => {
     expect(findSimilarMembers('Laurence Rebadulla', dir, 1)).toHaveLength(1)
+  })
+})
+
+describe('normalizeEmail', () => {
+  it('trims and lowercases an address', () => {
+    expect(normalizeEmail('  Justin.E@Example.COM ')).toBe('justin.e@example.com')
+  })
+
+  it('returns null for empty or non-address input', () => {
+    expect(normalizeEmail('')).toBeNull()
+    expect(normalizeEmail('   ')).toBeNull()
+    expect(normalizeEmail(null)).toBeNull()
+    expect(normalizeEmail('not an email')).toBeNull()
+    expect(normalizeEmail('two@@signs')).toBeNull()
+  })
+})
+
+describe('findEmailMatches (check-in email suggestion)', () => {
+  const members = [
+    { id: '1', name: 'Justin Eugenio', email: 'Justin@Example.com' },
+    { id: '2', name: 'Maria Eugenio', email: null },
+    { id: '3', name: 'Ramon Cruz', email: 'family@example.com' },
+    { id: '4', name: 'Liza Cruz', email: 'FAMILY@example.com ' },
+  ]
+
+  it('matches case- and whitespace-insensitively', () => {
+    expect(findEmailMatches(' justin@example.COM', members).map((m) => m.id)).toEqual(['1'])
+  })
+
+  it('returns every owner of a shared family address', () => {
+    expect(findEmailMatches('family@example.com', members).map((m) => m.id)).toEqual(['3', '4'])
+  })
+
+  it('returns nothing for a missing or invalid email', () => {
+    expect(findEmailMatches(null, members)).toEqual([])
+    expect(findEmailMatches('nope', members)).toEqual([])
+    expect(findEmailMatches('other@example.com', members)).toEqual([])
+  })
+})
+
+describe('findSurnameCandidates (nickname and initials check-ins)', () => {
+  const members = [
+    { id: '1', name: 'Maria Eugenio' },
+    { id: '2', name: 'Justin Eugenio' },
+    { id: '3', name: 'Jose Castro' },
+    { id: '4', name: 'Juan Carlos Eugenio' },
+  ]
+
+  it('finds members sharing the surname, same first initial first', () => {
+    const ids = findSurnameCandidates('JC Eugenio', members).map((m) => m.id)
+    expect(ids).toHaveLength(3)
+    expect(ids.slice(0, 2).sort()).toEqual(['2', '4'])
+    expect(ids[2]).toBe('1')
+  })
+
+  it('needs a first name and a surname of 3+ letters', () => {
+    expect(findSurnameCandidates('Eugenio', members)).toEqual([])
+    expect(findSurnameCandidates('Jo Li', [{ id: '9', name: 'Ana Li' }])).toEqual([])
+  })
+
+  it('respects the limit', () => {
+    expect(findSurnameCandidates('JC Eugenio', members, 1)).toHaveLength(1)
+  })
+})
+
+describe('splitInitials', () => {
+  it('reads a 2-letter first token as initials', () => {
+    expect(splitInitials('JC')).toEqual({ initials: 'jc', rest: [] })
+    expect(splitInitials('SJ Romero')).toEqual({ initials: 'sj', rest: ['romero'] })
+  })
+
+  it('reads dotted single letters and 3 consonants', () => {
+    expect(splitInitials('J.C. Cruz')).toEqual({ initials: 'jc', rest: ['cruz'] })
+    expect(splitInitials('MJC')).toEqual({ initials: 'mjc', rest: [] })
+  })
+
+  it('ignores ordinary first names', () => {
+    expect(splitInitials('Justin Eugenio')).toBeNull()
+    expect(splitInitials('Jan Reyes')).toBeNull()
+    expect(splitInitials('J')).toBeNull()
+  })
+})
+
+describe('findInitialsMatches (staff search suggestions)', () => {
+  const members = [
+    { id: '1', name: 'Juan Carlos Cruz' },
+    { id: '2', name: 'John Cruz' },
+    { id: '3', name: 'Justin Eugenio' },
+    { id: '4', name: 'Sarah Jane Romero' },
+    { id: '5', name: 'Jose Carlo Reyes' },
+  ]
+
+  it('finds members whose leading names start with the initials', () => {
+    expect(findInitialsMatches('JC', members).map((m) => m.id)).toEqual(['2', '5', '1'])
+  })
+
+  it('also requires the other typed tokens in the name', () => {
+    expect(findInitialsMatches('JC Cruz', members).map((m) => m.id)).toEqual(['1'])
+    expect(findInitialsMatches('SJ Romero', members).map((m) => m.id)).toEqual(['4'])
+  })
+
+  it('returns nothing without initials', () => {
+    expect(findInitialsMatches('Justin', members)).toEqual([])
+  })
+})
+
+describe('findPhoneMatches', () => {
+  const members = [
+    { id: '1', name: 'A', phone: '+63 917 123 4567' },
+    { id: '2', name: 'B', phone: null },
+  ]
+
+  it('matches local and +63 forms of the same number', () => {
+    expect(findPhoneMatches('09171234567', members).map((m) => m.id)).toEqual(['1'])
+  })
+
+  it('ignores short numbers and names', () => {
+    expect(findPhoneMatches('0917', members)).toEqual([])
+    expect(findPhoneMatches('JC 0917 123 4567', members)).toEqual([])
   })
 })

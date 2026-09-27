@@ -83,6 +83,16 @@ export async function requirePermission(
 }
 
 /**
+ * Whether an already-verified caller holds a permission. For optional side
+ * effects that need more than the permission guarding the call itself.
+ */
+export async function callerHasPermission(caller: CallerContext, permission: Permission): Promise<boolean> {
+  if (caller.role === 'admin') return true
+  const matrix = await getPermissionMatrix(createServerAdminClient())
+  return permissionMatches(permissionsForRole(caller.role, matrix), permission)
+}
+
+/**
  * Resolve the caller's own linked member record id, or null when the account
  * has not been linked yet. Never accept a member id from client input for
  * self-service reads — resolve it from the token with this.

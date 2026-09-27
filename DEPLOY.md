@@ -43,6 +43,7 @@ below in the Dokploy **Environment** section only. (The client gets its public c
 | `APP_URL`                    |     ✅      | Base URL for invite/confirm links, e.g. `https://admin.questlaguna.org` (see §6) |
 | `RESEND_API_KEY`             |  optional   | **Secret.** If set, invites are sent via Resend (branded email); else Supabase's built-in email (see §6) |
 | `RESEND_FROM`                |  optional   | Verified sender, e.g. `Quest Laguna <noreply@questlaguna.org>` (Resend requires a verified domain) |
+| `TYPESAFE_API_KEY`           |  optional   | **Secret.** Jev "Likely match" tags in the attendance review queue (names only sent; suggest-only). Unset: no tags, queue unchanged |
 | `NODE_ENV`                   |     ✅      | `production` (already set by the Dockerfile)                |
 | `HOST`                       |     ✅      | `0.0.0.0` (already set by the Dockerfile)                   |
 | `PORT`                       |     ✅      | `3002` (already set by the Dockerfile)                      |

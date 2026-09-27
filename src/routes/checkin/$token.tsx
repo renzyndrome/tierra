@@ -1,10 +1,12 @@
 // Public service check-in page — the QR target: /checkin/<qr_token>
 // Mobile-first, neutral church branding (no admin chrome). Two flows:
 //   * Signed-in user with a linked member profile -> one-tap self check-in.
-//   * Guest -> types name (+ optional "who invited you?"); matching is invisible.
+//   * Guest -> types name (+ optional email and "who invited you?"); matching is
+//     invisible. The email is a matching hint for staff and the address for a
+//     later account invite.
 
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../../components/AuthProvider'
 import { getCheckinSession, publicCheckIn } from '../../server/functions/attendance'
 import { checkinFormSchema } from '../../lib/validations'
@@ -47,6 +49,7 @@ function CheckinPage() {
   const [info, setInfo] = useState<SessionInfo | null>(null)
   const [name, setName] = useState('')
   const [invitedBy, setInvitedBy] = useState('')
+  const [email, setEmail] = useState('')
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<CheckinResult | null>(null)
@@ -69,7 +72,7 @@ function CheckinPage() {
 
   const submitGuest = async () => {
     setFormError('')
-    const parsed = checkinFormSchema.safeParse({ name, invitedBy })
+    const parsed = checkinFormSchema.safeParse({ name, invitedBy, email })
     if (!parsed.success) {
       setFormError(parsed.error.issues[0]?.message ?? 'Please check your details')
       return
@@ -77,7 +80,12 @@ function CheckinPage() {
     setSubmitting(true)
     try {
       const res = await publicCheckIn({
-        data: { qrToken: token, name: parsed.data.name, invitedBy: parsed.data.invitedBy || null },
+        data: {
+          qrToken: token,
+          name: parsed.data.name,
+          email: parsed.data.email || null,
+          invitedBy: parsed.data.invitedBy || null,
+        },
       })
       setResult(res)
     } catch (err) {
@@ -158,8 +166,10 @@ function CheckinPage() {
                   <GuestForm
                     name={name}
                     invitedBy={invitedBy}
+                    email={email}
                     setName={setName}
                     setInvitedBy={setInvitedBy}
+                    setEmail={setEmail}
                     onSubmit={submitGuest}
                     submitting={submitting}
                   />
@@ -168,14 +178,20 @@ function CheckinPage() {
                 <GuestForm
                   name={name}
                   invitedBy={invitedBy}
+                  email={email}
                   setName={setName}
                   setInvitedBy={setInvitedBy}
+                  setEmail={setEmail}
                   onSubmit={submitGuest}
                   submitting={submitting}
                 />
               )}
 
-              {formError && <p className="mt-4 text-center text-sm text-red-600">{formError}</p>}
+              {formError && (
+                <p role="alert" className="mt-4 text-center text-sm text-red-600">
+                  {formError}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -189,15 +205,38 @@ function CheckinPage() {
 interface GuestFormProps {
   name: string
   invitedBy: string
+  email: string
   setName: (v: string) => void
   setInvitedBy: (v: string) => void
+  setEmail: (v: string) => void
   onSubmit: () => void
   submitting: boolean
 }
 
-function GuestForm({ name, invitedBy, setName, setInvitedBy, onSubmit, submitting }: GuestFormProps) {
+function GuestForm({
+  name,
+  invitedBy,
+  email,
+  setName,
+  setInvitedBy,
+  setEmail,
+  onSubmit,
+  submitting,
+}: GuestFormProps) {
+  const emailRef = useRef<HTMLInputElement>(null)
+  const invitedRef = useRef<HTMLInputElement>(null)
+  // The phone keyboard's "next" key moves to the next field instead of sending
+  // the form half filled (iOS submits a form on return).
+  const nextOnEnter = (next: React.RefObject<HTMLInputElement | null>) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+    e.preventDefault()
+    next.current?.focus()
+  }
+  const field =
+    'w-full px-4 py-3 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none'
   return (
     <form
+      noValidate
       onSubmit={(e) => {
         e.preventDefault()
         onSubmit()
@@ -215,20 +254,56 @@ function GuestForm({ name, invitedBy, setName, setInvitedBy, onSubmit, submittin
           onChange={(e) => setName(e.target.value)}
           placeholder="Full name"
           autoComplete="name"
-          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none"
+          autoCapitalize="words"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="next"
+          onKeyDown={nextOnEnter(emailRef)}
+          aria-describedby="checkin-name-hint"
+          className={field}
         />
+        <p id="checkin-name-hint" className="mt-1 text-xs text-gray-400">First and last name. No nicknames or initials.</p>
+      </div>
+      <div>
+        <label htmlFor="checkin-email" className="block text-sm font-medium text-gray-700 mb-1">
+          Email <span className="text-gray-400 font-normal">(optional)</span>
+        </label>
+        <input
+          ref={emailRef}
+          id="checkin-email"
+          type="email"
+          inputMode="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="name@example.com"
+          autoComplete="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="next"
+          onKeyDown={nextOnEnter(invitedRef)}
+          aria-describedby="checkin-email-hint"
+          className={field}
+        />
+        <p id="checkin-email-hint" className="mt-1 text-xs text-gray-400">For a church account setup soon.</p>
       </div>
       <div>
         <label htmlFor="checkin-invited-by" className="block text-sm font-medium text-gray-700 mb-1">
           Who invited you? <span className="text-gray-400 font-normal">(optional)</span>
         </label>
         <input
+          ref={invitedRef}
           id="checkin-invited-by"
           type="text"
           value={invitedBy}
           onChange={(e) => setInvitedBy(e.target.value)}
           placeholder="Name of the person who invited you"
-          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none"
+          autoComplete="off"
+          autoCapitalize="words"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="go"
+          className={field}
         />
       </div>
       <button
