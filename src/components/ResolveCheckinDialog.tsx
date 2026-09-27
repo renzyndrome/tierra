@@ -6,7 +6,9 @@
 import { useState, useEffect } from 'react'
 import { confirmMatch, searchMembersForCheckin } from '../server/functions/attendance'
 import { JEV_LIKELY_PROBABILITY } from '../lib/constants'
+import { useMemberSuggestions } from '../lib/useMemberSuggestions'
 import type { AttendanceRecordWithMember, CheckinMemberOption, MatchCandidate } from '../lib/types'
+import { MemberSuggestionTags } from './MemberSuggestionTags'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog'
@@ -31,13 +33,15 @@ interface MemberRowProps {
   name: string
   detail: string
   tags: string[]
+  // Why a searched member is suggested (search suggestions only).
+  extra?: React.ReactNode
   hint: string | null
   isCurrent: boolean
   busy: boolean
   onLink: () => void
 }
 
-function MemberRow({ name, detail, tags, hint, isCurrent, busy, onLink }: MemberRowProps) {
+function MemberRow({ name, detail, tags, extra, hint, isCurrent, busy, onLink }: MemberRowProps) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
       <div className="min-w-0">
@@ -52,6 +56,7 @@ function MemberRow({ name, detail, tags, hint, isCurrent, busy, onLink }: Member
             </span>
           ))}
         </p>
+        {extra && <div className="-ml-1">{extra}</div>}
         {detail && <p className="text-xs text-gray-400">{detail}</p>}
         {hint && <p className="text-xs text-amber-700">{hint}</p>}
       </div>
@@ -86,6 +91,10 @@ export function ResolveCheckinDialog({
   const [error, setError] = useState('')
   const [archiveDuplicate, setArchiveDuplicate] = useState(true)
   const [saveEmail, setSaveEmail] = useState(true)
+  const { suggestions } = useMemberSuggestions(accessToken, query)
+  // Suggested matches from the queue are already listed above the search.
+  const listedIds = new Set(candidates.map((c) => c.id))
+  const searchSuggestions = suggestions.filter((m) => !listedIds.has(m.id))
 
   const currentMemberId = record.member?.id ?? null
   const offerArchive = record.match_status === 'new_member' && Boolean(record.member_id)
@@ -205,7 +214,9 @@ export function ResolveCheckinDialog({
           {searchError && <p className="text-sm text-red-600">{searchError}</p>}
           {searching && <p className="text-sm text-gray-400">Searching…</p>}
           {!searching && !searchError && query.trim().length >= 2 && results.length === 0 && (
-            <p className="text-sm text-gray-400">No members found.</p>
+            <p className="text-sm text-gray-400">
+              {searchSuggestions.length > 0 ? 'No exact name match.' : 'No members found.'}
+            </p>
           )}
           {results.map((m) => (
             <MemberRow
@@ -213,6 +224,22 @@ export function ResolveCheckinDialog({
               name={m.name}
               detail={[m.satellite_name, m.phone].filter(Boolean).join(' · ')}
               tags={[]}
+              hint={alreadyHint(m.id)}
+              isCurrent={m.id === currentMemberId}
+              busy={busy}
+              onLink={() => link(m.id, m.name)}
+            />
+          ))}
+          {searchSuggestions.length > 0 && (
+            <p className="pt-1 text-xs text-gray-500 uppercase tracking-wide">Suggested members</p>
+          )}
+          {searchSuggestions.map((m) => (
+            <MemberRow
+              key={m.id}
+              name={m.name}
+              detail={[m.satellite_name, m.phone].filter(Boolean).join(' · ')}
+              tags={[]}
+              extra={<MemberSuggestionTags suggestion={m} />}
               hint={alreadyHint(m.id)}
               isCurrent={m.id === currentMemberId}
               busy={busy}

@@ -400,6 +400,10 @@ export const JEV_LIKELY_PROBABILITY = 0.7
 // Most suggestions shown per pending check-in (trigram + surname + email).
 export const MAX_MATCH_CANDIDATES = 8
 
+// Staff name search: suggestions (initials, surname, similar spelling, email,
+// phone) appear only when the plain name search finds fewer members than this.
+export const SUGGEST_BELOW_SEARCH_HITS = 3
+
 // Human labels for attendance enums.
 export const CHECKIN_METHOD_LABELS: Record<string, string> = {
   qr_self: 'QR (self)',

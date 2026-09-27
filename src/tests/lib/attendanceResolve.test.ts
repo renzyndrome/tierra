@@ -7,6 +7,7 @@ import {
   applyJevProbabilities,
   canArchiveDuplicateVisitor,
   createdByCheckin,
+  buildMemberSuggestions,
   type DuplicateVisitorFacts,
 } from '../../lib/attendanceResolve'
 import type { MatchCandidate } from '../../lib/types'
@@ -145,5 +146,42 @@ describe('createdByCheckin', () => {
     expect(createdByCheckin(null, checkedIn)).toBe(false)
     expect(createdByCheckin('2026-09-25T11:18:00Z', null)).toBe(false)
     expect(createdByCheckin('not a date', checkedIn)).toBe(false)
+  })
+})
+
+describe('buildMemberSuggestions', () => {
+  const dir = [
+    { ...person('1', 'Juan Carlos Eugenio'), email: null },
+    { ...person('2', 'Justin Eugenio'), email: 'justin@example.com' },
+    { ...person('3', 'Maria Eugenio'), email: null },
+    { ...person('4', 'Pedro Santos'), email: null },
+  ]
+
+  it('combines initials and surname evidence, same initial first', () => {
+    const out = buildMemberSuggestions('JC Eugenio', dir, [], new Set(), 8)
+    expect(out.map((c) => c.person.id)).toEqual(['1', '2', '3'])
+    expect(out[0].reasons).toEqual(['initials', 'surname'])
+    expect(out[1].reasons).toEqual(['surname'])
+  })
+
+  it('puts an exact email owner first', () => {
+    const out = buildMemberSuggestions('justin@example.com', dir, [], new Set(), 8)
+    expect(out.map((c) => c.person.id)).toEqual(['2'])
+    expect(out[0].reasons).toEqual(['email'])
+  })
+
+  it('adds trigram look-alikes and skips members already shown', () => {
+    const out = buildMemberSuggestions('Pedro Santo', dir, [{ id: '4', sim: 0.8 }], new Set(), 8)
+    expect(out.map((c) => c.person.id)).toEqual(['4'])
+    expect(out[0].reasons).toEqual(['similar'])
+    expect(buildMemberSuggestions('Pedro Santo', dir, [{ id: '4', sim: 0.8 }], new Set(['4']), 8)).toEqual([])
+  })
+
+  it('ignores trigram ids missing from the directory (archived)', () => {
+    expect(buildMemberSuggestions('Zed', dir, [{ id: 'gone', sim: 0.9 }], new Set(), 8)).toEqual([])
+  })
+
+  it('caps the list at the limit', () => {
+    expect(buildMemberSuggestions('JC Eugenio', dir, [], new Set(), 2)).toHaveLength(2)
   })
 })

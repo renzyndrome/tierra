@@ -185,6 +185,63 @@ export function findSurnameCandidates<T extends NamedRecord>(
 }
 
 /**
+ * Split a typed name into leading initials and the remaining name tokens.
+ * Initials are a first token of 2 letters ("JC"), 3 letters without vowels
+ * ("MJC"), or 2-3 single letters ("J.C." normalizes to "j c"). Anything else
+ * has no initials.
+ */
+export function splitInitials(typed: string): { initials: string; rest: string[] } | null {
+  const tokens = normalizeName(typed).split(' ').filter(Boolean)
+  const first = tokens[0] ?? ''
+  if (/^[a-z]{2}$/.test(first) || /^[b-df-hj-np-tv-z]{3}$/.test(first)) {
+    return { initials: first, rest: tokens.slice(1) }
+  }
+  let n = 0
+  while (n < tokens.length && n < 3 && /^[a-z]$/.test(tokens[n])) n++
+  if (n >= 2) return { initials: tokens.slice(0, n).join(''), rest: tokens.slice(n) }
+  return null
+}
+
+/**
+ * Directory members whose leading name parts start with the typed initials,
+ * and whose name contains every other typed token: "JC" and "J.C. Cruz" find
+ * "Juan Carlos Cruz"; "SJ Romero" finds "Sarah Jane Romero". Alphabetical.
+ */
+export function findInitialsMatches<T extends NamedRecord>(
+  typed: string,
+  members: readonly T[],
+  limit: number = 8,
+): T[] {
+  const split = splitInitials(typed)
+  if (!split) return []
+  const letters = [...split.initials]
+  return members
+    .map((m) => ({ m, parts: normalizeName(m.name).split(' ') }))
+    .filter(
+      ({ parts }) =>
+        parts.length >= letters.length + (split.rest.length > 0 ? 1 : 0) &&
+        letters.every((l, i) => parts[i]?.[0] === l) &&
+        split.rest.every((t) => parts.slice(letters.length).includes(t)),
+    )
+    .sort((a, b) => a.m.name.localeCompare(b.m.name))
+    .slice(0, limit)
+    .map(({ m }) => m)
+}
+
+/**
+ * Directory members whose phone equals the typed number (7+ digits, local or
+ * +63 form). Null-safe; no partial matches.
+ */
+export function findPhoneMatches<T extends NamedRecord & { phone?: string | null }>(
+  typed: string,
+  members: readonly T[],
+): T[] {
+  const target = normalizePhone(typed)
+  if (!target || target.length < 7 || /[a-z]/i.test(typed)) return []
+  return members.filter((m) => normalizePhone(m.phone) === target)
+}
+
+/**
  * Resolve a typed name/phone to a single directory member for auto-linking.
  * Resolution order:
  *   1. Confident name match (exact or high-confidence subset) — auto-link only

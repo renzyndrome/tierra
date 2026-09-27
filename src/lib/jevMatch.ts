@@ -15,7 +15,7 @@ const NONE = 'none'
 
 function instructions(index: number): string {
   return (
-    `A person typed \`checkins[${index}].typed_name\` on a church service check-in form. ` +
+    `A person gave the name \`checkins[${index}].typed_name\` at a church service check-in. ` +
     'Which listed church member is that same person? Filipino guests often type nicknames, ' +
     'initials or a shortened first name (e.g. "JC" for "Juan Carlos", "Bong" for "Ramon", ' +
     '"Kat" for "Katherine"). A shared surname alone is not enough: relatives share surnames. ' +

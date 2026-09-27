@@ -119,6 +119,23 @@ they will **not** land in the review queue.
 - Members already in the session: **Checked in** (disabled).
 - Past sessions: reopen, then use manual check-in to enter a paper list.
 
+**Suggested members:** when the search finds fewer than 3 names, a
+**Suggested members** list appears below the results. It finds:
+
+| Tag | Example search | Finds |
+|---|---|---|
+| **Same initials** | "JC", "JC Eugenio", "J.C. Cruz" | Juan Carlos Eugenio, John Carlo Cruz |
+| **Same surname** | "Bong Dela Cruz" | every Dela Cruz, same first letter first |
+| **Similar name** | "Jhon Smit" | John Smith (spelling mistakes) |
+| **Email match** | an email address | the member with that email |
+| **Phone match** | 0917 123 4567 | the member with that number |
+| **Likely match** | any of the above | Jev's pick (AI name judgment), when configured |
+
+Suggestions are hints. **Check in** beside the right person. Nobody fits:
+**Register new member**. Tip: initials alone ("JC") match many people; add the
+surname ("JC Eugenio") for a short list. The same suggestions appear in the
+**Link member** / **Find member** search.
+
 ### Walk-ins not in the directory (register at the booth)
 
 For someone new, e.g. a senior guest with no phone.

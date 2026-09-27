@@ -12,6 +12,9 @@ import {
   normalizeEmail,
   findEmailMatches,
   findSurnameCandidates,
+  splitInitials,
+  findInitialsMatches,
+  findPhoneMatches,
   AUTO_MATCH_CONFIDENCE,
   type DirectoryMember,
 } from '../../lib/nameMatch'
@@ -300,5 +303,62 @@ describe('findSurnameCandidates (nickname and initials check-ins)', () => {
 
   it('respects the limit', () => {
     expect(findSurnameCandidates('JC Eugenio', members, 1)).toHaveLength(1)
+  })
+})
+
+describe('splitInitials', () => {
+  it('reads a 2-letter first token as initials', () => {
+    expect(splitInitials('JC')).toEqual({ initials: 'jc', rest: [] })
+    expect(splitInitials('SJ Romero')).toEqual({ initials: 'sj', rest: ['romero'] })
+  })
+
+  it('reads dotted single letters and 3 consonants', () => {
+    expect(splitInitials('J.C. Cruz')).toEqual({ initials: 'jc', rest: ['cruz'] })
+    expect(splitInitials('MJC')).toEqual({ initials: 'mjc', rest: [] })
+  })
+
+  it('ignores ordinary first names', () => {
+    expect(splitInitials('Justin Eugenio')).toBeNull()
+    expect(splitInitials('Jan Reyes')).toBeNull()
+    expect(splitInitials('J')).toBeNull()
+  })
+})
+
+describe('findInitialsMatches (staff search suggestions)', () => {
+  const members = [
+    { id: '1', name: 'Juan Carlos Cruz' },
+    { id: '2', name: 'John Cruz' },
+    { id: '3', name: 'Justin Eugenio' },
+    { id: '4', name: 'Sarah Jane Romero' },
+    { id: '5', name: 'Jose Carlo Reyes' },
+  ]
+
+  it('finds members whose leading names start with the initials', () => {
+    expect(findInitialsMatches('JC', members).map((m) => m.id)).toEqual(['2', '5', '1'])
+  })
+
+  it('also requires the other typed tokens in the name', () => {
+    expect(findInitialsMatches('JC Cruz', members).map((m) => m.id)).toEqual(['1'])
+    expect(findInitialsMatches('SJ Romero', members).map((m) => m.id)).toEqual(['4'])
+  })
+
+  it('returns nothing without initials', () => {
+    expect(findInitialsMatches('Justin', members)).toEqual([])
+  })
+})
+
+describe('findPhoneMatches', () => {
+  const members = [
+    { id: '1', name: 'A', phone: '+63 917 123 4567' },
+    { id: '2', name: 'B', phone: null },
+  ]
+
+  it('matches local and +63 forms of the same number', () => {
+    expect(findPhoneMatches('09171234567', members).map((m) => m.id)).toEqual(['1'])
+  })
+
+  it('ignores short numbers and names', () => {
+    expect(findPhoneMatches('0917', members)).toEqual([])
+    expect(findPhoneMatches('JC 0917 123 4567', members)).toEqual([])
   })
 })

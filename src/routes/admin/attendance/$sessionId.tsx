@@ -10,6 +10,8 @@ import { AdminRoute } from '../../../components/ProtectedRoute'
 import { RegisterWalkInDialog } from '../../../components/RegisterWalkInDialog'
 import { ResolveCheckinDialog } from '../../../components/ResolveCheckinDialog'
 import { CreateMemberFromCheckinDialog } from '../../../components/CreateMemberFromCheckinDialog'
+import { MemberSuggestionTags } from '../../../components/MemberSuggestionTags'
+import { useMemberSuggestions } from '../../../lib/useMemberSuggestions'
 import {
   getSessionDetail,
   getSessionCheckins,
@@ -27,6 +29,7 @@ import {
   CHECKIN_METHOD_LABELS,
   MATCH_STATUS_LABELS,
   JEV_LIKELY_PROBABILITY,
+  SUGGEST_BELOW_SEARCH_HITS,
 } from '../../../lib/constants'
 import type {
   ServiceSessionWithRelations,
@@ -34,6 +37,7 @@ import type {
   PendingMatch,
   CheckinMemberOption,
   MatchCandidate,
+  MemberSuggestion,
 } from '../../../lib/types'
 import { Card, CardContent } from '../../../components/ui/card'
 import { Button } from '../../../components/ui/button'
@@ -497,6 +501,50 @@ function CheckinsTab({
 // ----------------------------------------------------------------------------
 // Manual check-in tab
 // ----------------------------------------------------------------------------
+function MemberCheckinRow({
+  member,
+  suggestion,
+  already,
+  busy,
+  onCheckIn,
+}: {
+  member: CheckinMemberOption
+  // Present for a suggested member: shows why it is suggested.
+  suggestion?: MemberSuggestion
+  already: boolean
+  busy: boolean
+  onCheckIn: () => void
+}) {
+  return (
+    <Card>
+      <CardContent className="p-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-medium text-gray-900">{member.name}</p>
+          {suggestion && (
+            <div className="-ml-1">
+              <MemberSuggestionTags suggestion={suggestion} />
+            </div>
+          )}
+          {(member.satellite_name || member.phone) && (
+            <p className="text-xs text-gray-400">
+              {[member.satellite_name, member.phone].filter(Boolean).join(' · ')}
+            </p>
+          )}
+        </div>
+        {already ? (
+          <Button size="sm" variant="outline" disabled>
+            Checked in
+          </Button>
+        ) : (
+          <Button size="sm" disabled={busy} onClick={onCheckIn} className="bg-[#8B1538] hover:bg-[#6B0F2B]">
+            {busy ? '…' : 'Check in'}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function ManualCheckinTab({
   accessToken,
   sessionId,
@@ -518,6 +566,7 @@ function ManualCheckinTab({
   const [searching, setSearching] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
+  const { suggestions, suggesting } = useMemberSuggestions(accessToken, query)
 
   useEffect(() => {
     if (!accessToken) return
@@ -580,40 +629,38 @@ function ManualCheckinTab({
       <div className="mt-3 grid gap-2">
         {searching && <p className="text-sm text-gray-400">Searching…</p>}
         {!searching && !searchError && query.trim().length >= 2 && results.length === 0 && (
-          <p className="text-sm text-gray-400">No members found.</p>
+          <p className="text-sm text-gray-400">
+            {suggestions.length > 0 ? 'No exact name match.' : 'No members found.'}
+          </p>
         )}
-        {results.map((m) => {
-          const already = checkedInIds.has(m.id)
-          return (
-            <Card key={m.id}>
-              <CardContent className="p-3 flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900">{m.name}</p>
-                  {(m.satellite_name || m.phone) && (
-                    <p className="text-xs text-gray-400">
-                      {[m.satellite_name, m.phone].filter(Boolean).join(' · ')}
-                    </p>
-                  )}
-                </div>
-                {already ? (
-                  <Button size="sm" variant="outline" disabled>
-                    Checked in
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    disabled={busyId === m.id}
-                    onClick={() => checkIn(m)}
-                    className="bg-[#8B1538] hover:bg-[#6B0F2B]"
-                  >
-                    {busyId === m.id ? '…' : 'Check in'}
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
+        {results.map((m) => (
+          <MemberCheckinRow
+            key={m.id}
+            member={m}
+            already={checkedInIds.has(m.id)}
+            busy={busyId === m.id}
+            onCheckIn={() => checkIn(m)}
+          />
+        ))}
       </div>
+      {suggestions.length > 0 && (
+        <div className="mt-4 grid gap-2">
+          <p className="text-xs text-gray-500 uppercase tracking-wide">Suggested members</p>
+          {suggestions.map((m) => (
+            <MemberCheckinRow
+              key={m.id}
+              member={m}
+              suggestion={m}
+              already={checkedInIds.has(m.id)}
+              busy={busyId === m.id}
+              onCheckIn={() => checkIn(m)}
+            />
+          ))}
+        </div>
+      )}
+      {suggesting && !searching && query.trim().length >= 2 && results.length < SUGGEST_BELOW_SEARCH_HITS && (
+        <p className="mt-2 text-xs text-gray-400">Looking for similar names…</p>
+      )}
       {!searching && query.trim().length >= 2 && (
         <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-dashed border-gray-300 px-3 py-2">
           <p className="text-sm text-gray-500">Not listed.</p>

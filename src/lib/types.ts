@@ -1143,6 +1143,17 @@ export interface CheckinMemberOption {
   satellite_name: string | null
 }
 
+// Why a member is suggested for a staff name search that found no exact match.
+export type SuggestionReason = 'email' | 'phone' | 'initials' | 'surname' | 'similar'
+
+// A suggested member for staff check-in search (manual check-in, link dialog).
+export interface MemberSuggestion extends CheckinMemberOption {
+  reasons: SuggestionReason[]
+  // Jev's probability that this member is the person searched for; null when
+  // Jev is off or failed.
+  jev_probability: number | null
+}
+
 // Result of registering a walk-in at the booth: either registered and checked
 // in, or held back because similar names already exist in the directory.
 export type WalkInResult =

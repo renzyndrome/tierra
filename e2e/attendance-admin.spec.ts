@@ -27,7 +27,8 @@ const QUEUE_SESSION_ID = process.env.E2E_QUEUE_SESSION_ID || ''
 const MEMBER_QUERY = process.env.E2E_MEMBER_QUERY || 'an'
 // Registering a walk-in creates a real member record that the session delete
 // does not remove. Only run those steps when the target database may receive
-// them (delete the 'E2E Walkin%' and 'E2E Resolve%' members afterwards).
+// them (delete the 'E2E Walkin%', 'E2E Resolve%' and '%E2eqzv%' members
+// afterwards).
 const ALLOW_MEMBER_WRITES = process.env.E2E_ALLOW_MEMBER_WRITES === '1'
 // The app server runs with TYPESAFE_API_KEY, so Jev tags likely matches.
 const EXPECT_JEV = process.env.E2E_EXPECT_JEV === '1'
@@ -496,6 +497,40 @@ test.describe('Admin — Service Attendance', () => {
       await deleteSessionAt(page, sessionUrl)
     }
   })
+  test('manual check-in suggests a member for initials plus surname', async ({ page }) => {
+    test.skip(!ALLOW_MEMBER_WRITES, 'Set E2E_ALLOW_MEMBER_WRITES=1 to create (and later delete) a test member')
+    test.setTimeout(120_000)
+    await loginAsAdmin(page)
+    // A made-up surname keeps real members out of the suggestions.
+    const surname = `E2eqzv${String(Date.now()).slice(-5).replace(/\d/g, (d) => 'abcdefghij'[Number(d)])}`
+    const memberName = `Juan Carlos ${surname}`
+    const sessionUrl = await createSession(page, `E2E SUGGEST ${Date.now()}`)
+
+    try {
+      await page.getByRole('tab', { name: /manual check-in/i }).click()
+      await page.getByPlaceholder(/search members/i).fill(memberName)
+      await expect(page.getByText(/no members found/i)).toBeVisible({ timeout: 15_000 })
+      await page.getByRole('button', { name: /register new member/i }).click()
+      await submitWalkIn(page, memberName)
+      await page.getByRole('tab', { name: /check-ins/i }).click()
+      await page.locator('[data-slot="card"]', { hasText: memberName }).getByRole('button', { name: /^remove$/i }).click()
+      await expect(page.getByText(/no check-ins yet/i)).toBeVisible({ timeout: 15_000 })
+
+      // "JC <surname>" matches no name directly, so the member is suggested.
+      await page.getByRole('tab', { name: /manual check-in/i }).click()
+      await page.getByPlaceholder(/search members/i).fill(`JC ${surname}`)
+      await expect(page.getByText(/no exact name match/i)).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByText(/suggested members/i)).toBeVisible()
+      const row = page.locator('[data-slot="card"]', { hasText: memberName })
+      await expect(row.getByText(/same initials/i)).toBeVisible()
+      await row.getByRole('button', { name: /^check in$/i }).click()
+      await expect(page.getByText(`${memberName} checked in ✓`)).toBeVisible({ timeout: 15_000 })
+      await expect(row.getByRole('button', { name: /^checked in$/i })).toBeDisabled()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
+  })
+
   test('Jev tags the likely member for a nickname check-in', async ({ page, browser, baseURL }) => {
     test.skip(!ALLOW_MEMBER_WRITES || !EXPECT_JEV, 'Set E2E_ALLOW_MEMBER_WRITES=1 and E2E_EXPECT_JEV=1')
     test.setTimeout(120_000)

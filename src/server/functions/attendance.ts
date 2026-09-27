@@ -27,12 +27,14 @@ import {
   applyJevProbabilities,
   canArchiveDuplicateVisitor,
   createdByCheckin,
+  buildMemberSuggestions,
 } from '../../lib/attendanceResolve'
 import { jevMatchProbabilities } from './_jevMatch'
 import {
   MATCH_SIMILARITY_THRESHOLD,
   WALK_IN_SIMILAR_THRESHOLD,
   MAX_MATCH_CANDIDATES,
+  SUGGEST_BELOW_SEARCH_HITS,
 } from '../../lib/constants'
 import type {
   ServiceType,
@@ -51,6 +53,7 @@ import type {
   WalkInResult,
   CreateFromCheckinResult,
   ConfirmMatchResult,
+  MemberSuggestion,
 } from '../../lib/types'
 
 // ============================================
@@ -711,6 +714,58 @@ export const searchMembersForCheckin = createServerFn({ method: 'GET' })
     const admin = createServerAdminClient()
     const hits = searchDirectoryByName(data.query, await loadDirectory(admin), 15)
     return withSatelliteNames(admin, hits)
+  })
+
+// Staff search companion: when the plain name search finds few members, suggest
+// likely ones by initials, surname, similar spelling, or an exact email or
+// phone, re-ranked by Jev when configured. Read-only.
+export const suggestMembersForCheckin = createServerFn({ method: 'GET' })
+  .inputValidator((input: { accessToken: string; query: string }) =>
+    z
+      .object({ accessToken: z.string(), query: z.string().trim().min(2).max(100) })
+      .parse(input),
+  )
+  .handler(async ({ data }): Promise<MemberSuggestion[]> => {
+    await requirePermission(data.accessToken, 'registration.write')
+    const admin = createServerAdminClient()
+    const directory = await loadDirectory(admin)
+    const hits = searchDirectoryByName(data.query, directory, SUGGEST_BELOW_SEARCH_HITS)
+    if (hits.length >= SUGGEST_BELOW_SEARCH_HITS) return []
+
+    const candidates = buildMemberSuggestions(
+      data.query,
+      directory,
+      await fuzzyCandidates(admin, data.query),
+      new Set(hits.map((m) => m.id)),
+      MAX_MATCH_CANDIDATES,
+    )
+    if (candidates.length === 0) return []
+
+    const jev = (
+      await jevMatchProbabilities([
+        {
+          recordId: 'staff-search',
+          typedName: data.query,
+          candidates: candidates.map((c) => ({ id: c.person.id, name: c.person.name })),
+        },
+      ])
+    ).get('staff-search')
+
+    const options = await withSatelliteNames(
+      admin,
+      candidates.map((c) => c.person),
+    )
+    const suggestions = candidates.map((c, i) => ({
+      ...options[i],
+      reasons: c.reasons,
+      jev_probability: jev ? jev.get(c.person.id) ?? 0 : null,
+    }))
+    if (!jev) return suggestions
+    // Contact matches stay first; the rest follow Jev's ranking.
+    const contact = (s: MemberSuggestion) => (s.reasons.includes('email') || s.reasons.includes('phone') ? 0 : 1)
+    return [...suggestions].sort(
+      (a, b) => contact(a) - contact(b) || (b.jev_probability ?? 0) - (a.jev_probability ?? 0),
+    )
   })
 
 const registerWalkInSchema = z.object({
