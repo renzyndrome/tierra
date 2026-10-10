@@ -1,7 +1,7 @@
 # Applying the Account Management migration
 
 **File:** `2026-07-16_account_management.sql` (rollback: `2026-07-16_account_management_rollback.sql`)
-**Backup taken first:** `tierra-app/data/backups/2026-07-16_151146_pre_account_mgmt/`
+**Backup taken first:** `tierra/data/backups/2026-07-16_151146_pre_account_mgmt/` (outside the repo)
 
 The migration is **additive and reversible**. The only change to existing row
 data is a single-row role remap (`super_admin → admin`), because there is
