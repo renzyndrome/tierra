@@ -1,0 +1,18 @@
+services:
+  tierra:
+    build:
+      # Public config is resolved at runtime (see src/lib/runtimeEnv.ts), so no
+      # VITE_* build args are needed — everything comes from the runtime env below.
+      context: .
+    container_name: tierra-app
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    env_file:
+      # Provides the runtime env: VITE_* (also needed at runtime by server functions),
+      # SUPABASE_SERVICE_ROLE_KEY, ADMIN_EMAIL, ADMIN_PASSWORD.
+      - .env
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3002
