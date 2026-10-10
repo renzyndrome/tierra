@@ -63,7 +63,7 @@ export const AUTO_MATCH_CONFIDENCE = 0.9
  * Confidence (0..1) that a typed name refers to a given member's name, using a
  * token-set comparison (order- and duplicate-insensitive). Designed so that
  * middle-name usage scores high — a Filipino naming pattern:
- *   "Laurence Rebadulla" vs "Gabriel Laurence Rebadulla" -> 0.9
+ *   "Dominic Villacrusis" vs "Adrian Dominic Villacrusis" -> 0.9
  * Scoring:
  *   1.00  identical normalized strings
  *   0.97  same set of tokens (order/dupes aside)

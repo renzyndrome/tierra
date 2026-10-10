@@ -134,7 +134,7 @@ function ReportRequestsPage() {
   if (!canView) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3 px-4">
-        <p className="text-gray-600">You don't have permission to view finance requests.</p>
+        <p className="text-gray-600">Not permitted to view finance requests.</p>
         <Link to="/finances" className="text-[#8B1538] hover:underline">Back to Finances</Link>
       </div>
     )

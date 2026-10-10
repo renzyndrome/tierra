@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import type { Member, MemberInsert, SatelliteRow, CellGroup } from '../lib/types'
 import { uploadMemberPhoto, getPlaceholderAvatar } from '../lib/storage'
 import { CIVIL_STATUSES, MEMBER_CATEGORIES, FOLLOW_THROUGH_STAGES, DISCIPLESHIP_JOURNEY_STAGES, LEADERSHIP_LEVELS } from '../lib/constants'
+import { circleAfterDisciplerPick, circlesLedBy, circlesNotLedBy, disciplerToNarrowBy } from '../lib/circleRules'
 
 interface MemberFormProps {
   member?: Member | null
@@ -12,6 +13,17 @@ interface MemberFormProps {
   currentCellGroupId?: string | null
   allMembers?: { id: string; name: string }[]
   currentDisciplerId?: string | null
+  /**
+   * The stored discipler as the profile read returns it (edit page). Names a
+   * discipler missing from allMembers (archived) in the Discipler field.
+   */
+  currentDiscipler?: { id: string; name: string } | null
+  /**
+   * Quest Circle list still loading or failed to load (create page). While
+   * loading, the Discipler field waits, so a discipler pick always applies
+   * the circle rules. Omitted: the list is loaded (or not used).
+   */
+  circlesLoad?: 'loading' | 'failed'
   onSubmit: (data: MemberInsert, cellGroupId?: string | null) => Promise<void>
   onCancel: () => void
   isSubmitting?: boolean
@@ -24,6 +36,8 @@ export function MemberForm({
   currentCellGroupId,
   allMembers,
   currentDisciplerId,
+  currentDiscipler,
+  circlesLoad,
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -64,6 +78,9 @@ export function MemberForm({
 
   const [selectedCellGroupId, setSelectedCellGroupId] = useState<string | null>(currentCellGroupId ?? null)
   const [selectedDisciplerId, setSelectedDisciplerId] = useState<string | null>(currentDisciplerId ?? null)
+  // True after picking a discipler who leads two or more circles, until a
+  // Quest Circle option (or "No Quest Circle") is chosen.
+  const [circleChoiceRequired, setCircleChoiceRequired] = useState(false)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
@@ -171,8 +188,48 @@ export function MemberForm({
     return Object.keys(newErrors).length === 0
   }
 
+  // On an edit, circles the member leads or co-leads are never offered: a
+  // circle leader cannot join their own circle as a member. Teams are never
+  // offered: team membership is managed on the team's own page.
+  const joinableCircles = cellGroups ? circlesNotLedBy(cellGroups, member?.id) : []
+
+  // A chosen discipler narrows the Quest Circle field to the circles they lead
+  // or co-lead. The current selection stays listed so it still shows. A
+  // stored discipler missing from the picker (archived) narrows nothing.
+  const narrowByDisciplerId = disciplerToNarrowBy(selectedDisciplerId, allMembers)
+  const circleOptions = (() => {
+    if (!cellGroups) return []
+    const base = narrowByDisciplerId ? circlesLedBy(joinableCircles, narrowByDisciplerId) : joinableCircles
+    const current = selectedCellGroupId && !base.some((cg) => cg.id === selectedCellGroupId)
+      ? cellGroups.find((cg) => cg.id === selectedCellGroupId)
+      : undefined
+    return current ? [current, ...base] : base
+  })()
+
+  const handleDisciplerChange = (id: string | null) => {
+    setSelectedDisciplerId(id)
+    if (!cellGroups) return
+    if (!id) {
+      // No discipler: the field lists every circle again and keeps its value.
+      setCircleChoiceRequired(false)
+      return
+    }
+    const next = circleAfterDisciplerPick(circlesLedBy(joinableCircles, id).map((cg) => cg.id))
+    setSelectedCellGroupId(next.selectedId)
+    setCircleChoiceRequired(next.choiceRequired)
+  }
+
+  const handleCircleChange = (id: string | null) => {
+    setSelectedCellGroupId(id)
+    setCircleChoiceRequired(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (circleChoiceRequired) {
+      return
+    }
 
     if (!validate()) {
       return
@@ -395,22 +452,41 @@ export function MemberForm({
             </select>
           </div>
 
-          {/* Cell Group (searchable) */}
-          {cellGroups && cellGroups.length > 0 && (
-            <CellGroupSearch
-              cellGroups={cellGroups}
-              selectedId={selectedCellGroupId}
-              onChange={setSelectedCellGroupId}
-            />
+          {/* Quest Circle (searchable). Hidden when the list failed to load. */}
+          {circlesLoad === 'failed' && (
+            <p className="text-sm text-amber-700 md:pt-7">Quest Circles not loaded. Reload to assign a circle.</p>
+          )}
+          {circlesLoad !== 'failed' && cellGroups && cellGroups.length > 0 && (
+            <div>
+              <CellGroupSearch
+                cellGroups={circleOptions}
+                selectedId={selectedCellGroupId}
+                onChange={handleCircleChange}
+              />
+              {circleChoiceRequired && (
+                <p className="mt-1 text-xs text-amber-700">Choose a Quest Circle.</p>
+              )}
+            </div>
           )}
 
-          {/* Discipler (searchable) */}
+          {/* Discipler (searchable). Waits for the Quest Circle list, so a pick
+              always applies the circle preselect and choice rule. */}
           {allMembers && allMembers.length > 0 && (
-            <DisciplerSearch
-              members={allMembers.filter(m => m.id !== member?.id)}
-              selectedId={selectedDisciplerId}
-              onChange={setSelectedDisciplerId}
-            />
+            circlesLoad === 'loading' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Discipler</label>
+                <p className="px-3 py-2 text-sm text-gray-500">Loading Quest Circles...</p>
+              </div>
+            ) : (
+              <DisciplerSearch
+                members={allMembers.filter(m => m.id !== member?.id)}
+                selectedId={selectedDisciplerId}
+                unlistedName={
+                  currentDiscipler && currentDiscipler.id === selectedDisciplerId ? currentDiscipler.name : null
+                }
+                onChange={handleDisciplerChange}
+              />
+            )
           )}
 
           {/* Discipleship Stage */}
@@ -725,7 +801,7 @@ export function MemberForm({
         </button>
         <button
           type="submit"
-          disabled={isSubmitting || uploadingPhoto}
+          disabled={isSubmitting || uploadingPhoto || circleChoiceRequired}
           className="px-4 py-2 text-white bg-[#8B1538] rounded-lg hover:bg-[#6B0F2B] transition-colors disabled:opacity-50 flex items-center gap-2"
         >
           {(isSubmitting || uploadingPhoto) && (
@@ -739,7 +815,7 @@ export function MemberForm({
 }
 
 // ============================================
-// CELL GROUP SEARCH (typeahead)
+// QUEST CIRCLE SEARCH (typeahead)
 // ============================================
 
 function CellGroupSearch({
@@ -833,16 +909,23 @@ function CellGroupSearch({
 function DisciplerSearch({
   members,
   selectedId,
+  unlistedName,
   onChange,
 }: {
   members: { id: string; name: string }[]
   selectedId: string | null
+  /** Name of a selected discipler missing from members (archived), when known. */
+  unlistedName?: string | null
   onChange: (id: string | null) => void
 }) {
   const [query, setQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
 
   const selectedMember = selectedId ? members.find(m => m.id === selectedId) : null
+  // A stored discipler not in the list (getAllMembersLite leaves out archived
+  // members). Shown with a Clear action instead of an empty field that would
+  // still keep the id.
+  const unlisted = Boolean(selectedId) && !selectedMember
 
   const filtered = query.trim()
     ? members.filter(m => m.name.toLowerCase().includes(query.toLowerCase())).slice(0, 20)
@@ -857,7 +940,21 @@ function DisciplerSearch({
   return (
     <div className="relative">
       <label className="block text-sm font-medium text-gray-700 mb-1">Discipler</label>
-      {selectedMember ? (
+      {unlisted ? (
+        <div className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+          <span className="text-sm text-gray-900 truncate">
+            {unlistedName?.trim() || 'Archived member'}
+            {unlistedName?.trim() && <span className="ml-2 text-xs text-gray-500">Archived</span>}
+          </span>
+          <button
+            type="button"
+            onClick={() => handleSelect(null)}
+            className="ml-2 text-sm text-[#8B1538] hover:underline flex-shrink-0"
+          >
+            Clear
+          </button>
+        </div>
+      ) : selectedMember ? (
         <div className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
           <span className="text-sm text-gray-900 truncate">{selectedMember.name}</span>
           <button
@@ -881,7 +978,7 @@ function DisciplerSearch({
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none"
         />
       )}
-      {isOpen && !selectedMember && (
+      {isOpen && !selectedMember && !unlisted && (
         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
           <button
             type="button"
@@ -906,7 +1003,7 @@ function DisciplerSearch({
           )}
         </div>
       )}
-      {isOpen && !selectedMember && (
+      {isOpen && !selectedMember && !unlisted && (
         <div className="fixed inset-0 z-0" onClick={() => setIsOpen(false)} />
       )}
     </div>

@@ -1,5 +1,5 @@
-// Quest Laguna Directory - Cell Group Server Functions Tests
-// Tests for all cell group CRUD operations with seeded data
+// Quest Laguna Directory - Quest Circle Server Functions Tests
+// Tests for all Quest Circle CRUD operations with seeded data
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { resetMockData, seedMockData, getMockData, mockSupabaseClient } from '../mocks/supabase'
@@ -16,17 +16,17 @@ vi.mock('../../lib/supabase', () => ({
   createServerSupabaseClient: () => mockSupabaseClient,
 }))
 
-describe('Cell Group Server Functions', () => {
+describe('Quest Circle Server Functions', () => {
   beforeEach(() => {
     resetMockData()
     resetFactoryCounters()
   })
 
   // ============================================
-  // GET CELL GROUPS TESTS
+  // GET QUEST CIRCLES TESTS
   // ============================================
   describe('getCellGroups', () => {
-    it('should return paginated cell groups', async () => {
+    it('should return paginated Quest Circles', async () => {
       const groups = createMockCellGroups(25)
       seedMockData('cell_groups', groups)
 
@@ -40,7 +40,7 @@ describe('Cell Group Server Functions', () => {
       expect(result.count).toBe(25)
     })
 
-    it('should filter cell groups by satellite_id', async () => {
+    it('should filter Quest Circles by satellite_id', async () => {
       const groups = [
         createMockCellGroup({ satellite_id: 'sat-1' }),
         createMockCellGroup({ satellite_id: 'sat-1' }),
@@ -56,7 +56,7 @@ describe('Cell Group Server Functions', () => {
       expect(result.data).toHaveLength(2)
     })
 
-    it('should filter active cell groups only', async () => {
+    it('should filter active Quest Circles only', async () => {
       const groups = [
         createMockCellGroup({ is_active: true }),
         createMockCellGroup({ is_active: true }),
@@ -72,7 +72,7 @@ describe('Cell Group Server Functions', () => {
       expect(result.data).toHaveLength(2)
     })
 
-    it('should sort cell groups by name', async () => {
+    it('should sort Quest Circles by name', async () => {
       const groups = [
         createMockCellGroup({ name: 'Zion Cell' }),
         createMockCellGroup({ name: 'Alpha Cell' }),
@@ -91,10 +91,10 @@ describe('Cell Group Server Functions', () => {
   })
 
   // ============================================
-  // GET ALL CELL GROUPS TESTS
+  // GET ALL QUEST CIRCLES TESTS
   // ============================================
   describe('getAllCellGroups', () => {
-    it('should return all active cell groups for dropdowns', async () => {
+    it('should return all active Quest Circles for dropdowns', async () => {
       const groups = [
         createMockCellGroup({ is_active: true }),
         createMockCellGroup({ is_active: true }),
@@ -128,10 +128,10 @@ describe('Cell Group Server Functions', () => {
   })
 
   // ============================================
-  // GET SINGLE CELL GROUP TESTS
+  // GET SINGLE QUEST CIRCLE TESTS
   // ============================================
   describe('getCellGroup', () => {
-    it('should return a single cell group by id', async () => {
+    it('should return a single Quest Circle by id', async () => {
       const group = createMockCellGroup({ id: 'cg-test-123', name: 'Youth Cell' })
       seedMockData('cell_groups', [group])
 
@@ -145,7 +145,7 @@ describe('Cell Group Server Functions', () => {
       expect(result.data?.name).toBe('Youth Cell')
     })
 
-    it('should return error when cell group not found', async () => {
+    it('should return error when Quest Circle not found', async () => {
       seedMockData('cell_groups', [])
 
       const result = await mockSupabaseClient
@@ -160,10 +160,10 @@ describe('Cell Group Server Functions', () => {
   })
 
   // ============================================
-  // CREATE CELL GROUP TESTS
+  // CREATE QUEST CIRCLE TESTS
   // ============================================
   describe('createCellGroup', () => {
-    it('should create a new cell group', async () => {
+    it('should create a new Quest Circle', async () => {
       const newGroup = {
         name: 'New Cell Group',
         description: 'A new group for fellowship',
@@ -190,7 +190,7 @@ describe('Cell Group Server Functions', () => {
       expect(allGroups).toHaveLength(1)
     })
 
-    it('should create cell group with leader assignment', async () => {
+    it('should create Quest Circle with leader assignment', async () => {
       const leader = createMockMember({ id: 'leader-1' })
       seedMockData('members', [leader])
 
@@ -212,10 +212,10 @@ describe('Cell Group Server Functions', () => {
   })
 
   // ============================================
-  // UPDATE CELL GROUP TESTS
+  // UPDATE QUEST CIRCLE TESTS
   // ============================================
   describe('updateCellGroup', () => {
-    it('should update an existing cell group', async () => {
+    it('should update an existing Quest Circle', async () => {
       const group = createMockCellGroup({
         id: 'update-cg-id',
         name: 'Original Name',
@@ -261,10 +261,10 @@ describe('Cell Group Server Functions', () => {
   })
 
   // ============================================
-  // DELETE CELL GROUP TESTS
+  // DELETE QUEST CIRCLE TESTS
   // ============================================
   describe('deleteCellGroup', () => {
-    it('should delete a cell group', async () => {
+    it('should delete a Quest Circle', async () => {
       const group = createMockCellGroup({ id: 'delete-cg-id' })
       seedMockData('cell_groups', [group])
 
@@ -280,10 +280,10 @@ describe('Cell Group Server Functions', () => {
   })
 
   // ============================================
-  // MEMBER CELL GROUP JUNCTION TESTS
+  // MEMBER QUEST CIRCLE JUNCTION TESTS
   // ============================================
   describe('addMemberToCellGroup', () => {
-    it('should add a member to a cell group', async () => {
+    it('should add a member to a Quest Circle', async () => {
       const member = createMockMember({ id: 'member-join-1' })
       const group = createMockCellGroup({ id: 'cg-join-1' })
       seedMockData('members', [member])
@@ -306,7 +306,7 @@ describe('Cell Group Server Functions', () => {
       expect(result.data?.role).toBe('member')
     })
 
-    it('should detect if member is already in cell group', async () => {
+    it('should detect if member is already in Quest Circle', async () => {
       const existingMembership = createMockMemberCellGroup({
         member_id: 'existing-member',
         cell_group_id: 'existing-cg',
@@ -345,7 +345,7 @@ describe('Cell Group Server Functions', () => {
   })
 
   describe('removeMemberFromCellGroup', () => {
-    it('should soft-remove a member from cell group', async () => {
+    it('should soft-remove a member from Quest Circle', async () => {
       const membership = createMockMemberCellGroup({
         member_id: 'remove-member',
         cell_group_id: 'remove-cg',
@@ -371,7 +371,7 @@ describe('Cell Group Server Functions', () => {
   })
 
   describe('updateMemberCellGroupRole', () => {
-    it('should update member role in cell group', async () => {
+    it('should update member role in Quest Circle', async () => {
       const membership = createMockMemberCellGroup({
         member_id: 'role-member',
         cell_group_id: 'role-cg',
@@ -391,10 +391,10 @@ describe('Cell Group Server Functions', () => {
   })
 
   // ============================================
-  // GET CELL GROUP COUNT TESTS
+  // GET QUEST CIRCLE COUNT TESTS
   // ============================================
   describe('getCellGroupCount', () => {
-    it('should return count of active cell groups', async () => {
+    it('should return count of active Quest Circles', async () => {
       const groups = [
         createMockCellGroup({ is_active: true }),
         createMockCellGroup({ is_active: true }),
@@ -412,10 +412,10 @@ describe('Cell Group Server Functions', () => {
   })
 
   // ============================================
-  // GET CELL GROUPS BY SATELLITE TESTS
+  // GET QUEST CIRCLES BY SATELLITE TESTS
   // ============================================
   describe('getCellGroupsBySatellite', () => {
-    it('should return cell groups for specific satellite', async () => {
+    it('should return Quest Circles for specific satellite', async () => {
       const groups = [
         createMockCellGroup({ satellite_id: 'target-sat', is_active: true }),
         createMockCellGroup({ satellite_id: 'target-sat', is_active: true }),

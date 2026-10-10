@@ -292,7 +292,7 @@ export const cancelBorrowRequest = createServerFn({ method: 'POST' })
       const matrix = await getPermissionMatrix(supabase)
       allowed = permissionMatches(permissionsForRole(caller.role, matrix), 'inventory.write')
     }
-    if (!allowed) throw new Error('You do not have permission to cancel this request')
+    if (!allowed) throw new Error('Not permitted to cancel this request.')
 
     const { data: row, error } = await supabase
       .from('inventory_borrow_requests')

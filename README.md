@@ -5,12 +5,12 @@ Church directory and member management system for Quest Laguna's 10th Anniversar
 ## Features
 
 - **Member Directory** - 300+ members with profiles, discipleship stages, and contact info
-- **Cell Groups** - Group management with leaders, co-leaders, meeting schedules, and member assignments
+- **Quest Circles** - Circle management with leaders, co-leaders, meeting schedules, and member assignments
 - **Ministries** - Ministry teams with department organization and volunteer tracking
 - **Satellites** - Multi-location satellite management with per-satellite member views
 - **Events** - Event creation with QR-based registration, attendance tracking, and live display
 - **Admin Dashboard** - Overview stats, charts, CRUD operations, and data management tools
-- **Auth System** - Supabase Auth with role-based access (Super Admin, Satellite Leader, Cell Leader, Member)
+- **Auth System** - Supabase Auth with role-based access (Super Admin, Satellite Leader, Circle Leader, Member)
 - **AI Insights** - OpenAI-powered spiritual analysis and mentorship matching
 
 ## Tech Stack
@@ -79,7 +79,7 @@ src/
     admin/
       index.tsx           # Admin dashboard (all tabs)
       members/            # Member CRUD pages
-      cell-groups/        # Cell group detail pages
+      cell-groups/        # Quest Circle detail pages
       ministries/         # Ministry detail pages
     directory/            # Public directory views
     event/                # Event management
@@ -88,7 +88,7 @@ src/
     ui/                   # shadcn/ui components
     AuthProvider.tsx       # Auth context
     MemberCard.tsx         # Member card component
-    CellGroupCard.tsx      # Cell group card component
+    CellGroupCard.tsx      # Quest Circle card component
     MinistryCard.tsx       # Ministry card component
   server/
     functions/            # Server functions (Supabase queries)
@@ -103,7 +103,7 @@ src/
 Source data files (spreadsheets, raw JSON) live outside this repo in `../data/`. To use the import tools in the admin Settings tab:
 
 1. Place `spreadsheet-raw.json` in `public/data/`
-2. Use the Import, Re-link, or Generate Cell Groups tools from the Settings tab
+2. Use the Import, Re-link, or Generate Quest Circles tools from the Settings tab
 
 ## Admin Dashboard Tabs
 
@@ -112,7 +112,7 @@ Source data files (spreadsheets, raw JSON) live outside this repo in `../data/`.
 | Overview | Stats cards, discipleship chart, satellite breakdown |
 | Satellites | Satellite list with member counts, click for detail view |
 | Members | Full directory with search, filters (stage/status/city/satellite), sorting |
-| Cell Groups | Group cards with CRUD, member management |
+| Quest Circles | Circle cards with CRUD, member management |
 | Ministries | Ministry cards with CRUD, member management |
 | Events | Event creation and management |
 | Settings | Data import, re-link relationships, purge tools |

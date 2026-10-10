@@ -29,7 +29,9 @@ import { getCaller, getCallerMemberId, getPermissionMatrix } from './_authGuard'
 import { permissionMatches, permissionsForRole } from '../../lib/auth'
 import { createInvitedAuthUser, findAuthUserByEmail, resendConfirmLink } from '../authInvite'
 import { enrollInAgapayIfEligible } from '../agapayEnroll'
-import { todayIsoDate } from '../../lib/agapay'
+import { placeMemberInCircle } from '../circlePlacement'
+import { todayIsoDate, withAgapayEnrollNote } from '../../lib/agapay'
+import { CIRCLE_PLACEMENT_FAILED_NOTE, claimCircleNote, leadsCircle } from '../../lib/circleRules'
 import {
   resolveClaim,
   topScore,
@@ -137,33 +139,6 @@ async function groupMemberIds(admin: AdminClient, cellGroupId: string): Promise<
     for (const row of (disciples ?? []) as unknown as { id: string }[]) ids.add(row.id)
   }
   return ids
-}
-
-/**
- * Point a member at the circle's leader as their discipler, but ONLY when the
- * member has no discipler yet. Never overwrites an existing assignment (that is
- * an audited change in Agapay via reassign_disciples) and never points a leader
- * at themselves. Best-effort: a failure here must not undo the account link.
- */
-async function setDisciplerIfEmpty(
-  admin: AdminClient,
-  memberId: string,
-  cellGroupId: string,
-): Promise<void> {
-  const { data: group } = await admin
-    .from('cell_groups')
-    .select('leader_id')
-    .eq('id', cellGroupId)
-    .maybeSingle()
-  const leaderId = (group as unknown as { leader_id: string | null } | null)?.leader_id ?? null
-  if (!leaderId || leaderId === memberId) return
-
-  const { error } = await admin
-    .from('members')
-    .update({ discipler_id: leaderId })
-    .eq('id', memberId)
-    .is('discipler_id', null)
-  if (error) console.error('Error setting discipler from claim:', error)
 }
 
 /** Member ids that already back an account (never auto-link to these). */
@@ -355,6 +330,48 @@ async function assertMemberUnlinked(admin: AdminClient, memberId: string, userId
   }
 }
 
+/**
+ * Place a claimed member in the claim's circle as a plain member, under the
+ * same rules as an admin add (placeMemberInCircle). An existing active row is
+ * never changed, and a person who leads or co-leads the circle counts as
+ * already placed. Returns a note for the approver when the person was not
+ * placed, else null. Never throws: the account link stands either way.
+ */
+async function placeClaimInCircle(
+  admin: AdminClient,
+  memberId: string,
+  cellGroupId: string,
+  actorUserId: string | null,
+): Promise<string | null> {
+  try {
+    const { data: group, error: groupErr } = await admin
+      .from('cell_groups')
+      .select('leader_id, co_leader_id')
+      .eq('id', cellGroupId)
+      .maybeSingle()
+    if (groupErr) {
+      console.error('Error loading claim circle for placement:', groupErr)
+      return CIRCLE_PLACEMENT_FAILED_NOTE
+    }
+    const circle = group as unknown as { leader_id: string | null; co_leader_id: string | null } | null
+    if (leadsCircle(memberId, circle)) return null
+
+    const result = await placeMemberInCircle(admin, {
+      memberId,
+      cellGroupId,
+      role: 'member',
+      actorUserId,
+      source: 'circle sign-up',
+    })
+    const note = claimCircleNote(result)
+    if (note) console.warn('Claim circle placement not done:', result.ok ? '' : result.reason)
+    return note
+  } catch (err) {
+    console.error('Error placing claim in circle:', err)
+    return CIRCLE_PLACEMENT_FAILED_NOTE
+  }
+}
+
 // ============================================
 // PUBLIC — SIGN-UP LINK
 // ============================================
@@ -479,6 +496,7 @@ export const submitClaimSignup = createServerFn({ method: 'POST' })
 
     let status: ClaimStatus = 'pending'
     let matchedMemberId: string | null = null
+    let circleNote: string | null = null
 
     if (resolution?.decision === 'auto' && resolution.autoMember) {
       // Re-check 1:1 immediately before writing — the snapshot could be stale.
@@ -491,8 +509,13 @@ export const submitClaimSignup = createServerFn({ method: 'POST' })
         if (linkErr) throw new Error(linkErr.message)
         status = 'auto_linked'
         matchedMemberId = resolution.autoMember.id
+        // No circle placement here: this runs from the public sign-up page,
+        // so placing the person (and setting their discipler) waits for the
+        // circle leader or an admin in the claim queue.
         // An existing member with a discipler joins that discipler's Agapay queue.
-        await enrollInAgapayIfEligible(admin, matchedMemberId, null, 'circle sign-up')
+        // A failure is saved as the claim's note, shown on the resolved claim.
+        const enroll = await enrollInAgapayIfEligible(admin, matchedMemberId, null, 'circle sign-up')
+        circleNote = withAgapayEnrollNote(circleNote, enroll === 'failed')
       } catch (err) {
         // Fall back to review rather than losing the sign-up.
         console.error('Auto-link failed, queuing claim for review:', err)
@@ -509,6 +532,7 @@ export const submitClaimSignup = createServerFn({ method: 'POST' })
       status,
       matched_member_id: matchedMemberId,
       top_score: resolution ? topScore(resolution.candidates) : null,
+      note: circleNote,
     })
     if (insErr) {
       console.error('Error recording claim request:', insErr)
@@ -727,14 +751,16 @@ export const getClaimQueue = createServerFn({ method: 'GET' })
     ]
     const [groupRes, memberRes] = await Promise.all([
       groupIds.length
-        ? admin.from('cell_groups').select('id, name').in('id', groupIds)
+        ? admin.from('cell_groups').select('id, name, is_team').in('id', groupIds)
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
       memberIds.length
         ? admin.from('members').select('id, name').in('id', memberIds)
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     ])
+    const groupRows = (groupRes.data ?? []) as unknown as { id: string; name: string; is_team: boolean | null }[]
+    const groupIsTeam = new Set(groupRows.filter((g) => g.is_team === true).map((g) => g.id))
     const groupName = new Map(
-      ((groupRes.data ?? []) as unknown as { id: string; name: string }[]).map((g) => [g.id, g.name]),
+      groupRows.map((g) => [g.id, g.name]),
     )
     const memberName = new Map(
       ((memberRes.data ?? []) as unknown as { id: string; name: string }[]).map((m) => [m.id, m.name]),
@@ -760,6 +786,7 @@ export const getClaimQueue = createServerFn({ method: 'GET' })
       items.push({
         claim,
         cell_group_name: claim.cell_group_id ? groupName.get(claim.cell_group_id) ?? null : null,
+        cell_group_is_team: claim.cell_group_id ? groupIsTeam.has(claim.cell_group_id) : false,
         matched_member_name: claim.matched_member_id
           ? memberName.get(claim.matched_member_id) ?? null
           : null,
@@ -769,7 +796,11 @@ export const getClaimQueue = createServerFn({ method: 'GET' })
     return items
   })
 
-/** Link a claim's account to an existing member record. */
+/**
+ * Link a claim's account to an existing member record. circleNote is the
+ * approver's note (circle placement not done, Agapay enrollment failed), or
+ * null; it is also saved on the claim.
+ */
 export const confirmClaim = createServerFn({ method: 'POST' })
   .inputValidator(
     (input: { accessToken: string; claimId: string; memberId: string; addToGroup?: boolean }) =>
@@ -782,7 +813,7 @@ export const confirmClaim = createServerFn({ method: 'POST' })
         })
         .parse(input),
   )
-  .handler(async ({ data }): Promise<{ success: boolean }> => {
+  .handler(async ({ data }): Promise<{ success: boolean; circleNote: string | null }> => {
     const admin = createServerAdminClient()
     const claim = await loadClaim(admin, data.claimId)
     const approver = await requireGroupApprover(data.accessToken, claim.cell_group_id)
@@ -805,21 +836,16 @@ export const confirmClaim = createServerFn({ method: 'POST' })
       throw new Error('Account link failed.')
     }
 
+    let circleNote: string | null = null
     if (data.addToGroup && claim.cell_group_id) {
-      await admin.from('member_cell_groups').upsert(
-        {
-          member_id: data.memberId,
-          cell_group_id: claim.cell_group_id,
-          role: 'member',
-          is_active: true,
-        },
-        { onConflict: 'member_id,cell_group_id' },
-      )
-      await setDisciplerIfEmpty(admin, data.memberId, claim.cell_group_id)
+      circleNote = await placeClaimInCircle(admin, data.memberId, claim.cell_group_id, approver.userId)
     }
 
-    // Puts the person in their discipler's Agapay follow-up queue.
-    await enrollInAgapayIfEligible(admin, data.memberId, approver.userId, 'circle sign-up')
+    // Puts the person in their discipler's Agapay follow-up queue. This call
+    // runs last (after any enrollment in the placement), so it decides. A
+    // failure joins the note; the member's Edit page Save retries it.
+    const enroll = await enrollInAgapayIfEligible(admin, data.memberId, approver.userId, 'circle sign-up')
+    circleNote = withAgapayEnrollNote(circleNote, enroll === 'failed')
 
     const { error } = await admin
       .from('member_claim_requests')
@@ -828,13 +854,14 @@ export const confirmClaim = createServerFn({ method: 'POST' })
         matched_member_id: data.memberId,
         resolved_by: approver.userId,
         resolved_at: new Date().toISOString(),
+        note: circleNote,
       })
       .eq('id', data.claimId)
     if (error) {
       console.error('Error updating claim status:', error)
       throw new Error('Account linked. Request status update failed.')
     }
-    return { success: true }
+    return { success: true, circleNote }
   })
 
 const createMemberFromClaimSchema = z.object({
@@ -854,7 +881,7 @@ export const createMemberFromClaim = createServerFn({ method: 'POST' })
   .inputValidator((input: z.infer<typeof createMemberFromClaimSchema>) =>
     createMemberFromClaimSchema.parse(input),
   )
-  .handler(async ({ data }): Promise<{ success: boolean; memberId: string }> => {
+  .handler(async ({ data }): Promise<{ success: boolean; memberId: string; circleNote: string | null }> => {
     const admin = createServerAdminClient()
     const claim = await loadClaim(admin, data.claimId)
     const approver = await requireGroupApprover(data.accessToken, claim.cell_group_id)
@@ -907,32 +934,29 @@ export const createMemberFromClaim = createServerFn({ method: 'POST' })
       throw new Error('Member record created. Account link failed.')
     }
 
+    let circleNote: string | null = null
     if (claim.cell_group_id) {
-      await admin.from('member_cell_groups').upsert(
-        {
-          member_id: memberId,
-          cell_group_id: claim.cell_group_id,
-          role: 'member',
-          is_active: true,
-        },
-        { onConflict: 'member_id,cell_group_id' },
-      )
-      await setDisciplerIfEmpty(admin, memberId, claim.cell_group_id)
+      circleNote = await placeClaimInCircle(admin, memberId, claim.cell_group_id, approver.userId)
     }
 
-    await enrollInAgapayIfEligible(admin, memberId, approver.userId, 'circle sign-up')
+    // Runs last, so it decides; a failure joins the note (see confirmClaim).
+    const enroll = await enrollInAgapayIfEligible(admin, memberId, approver.userId, 'circle sign-up')
+    circleNote = withAgapayEnrollNote(circleNote, enroll === 'failed')
 
-    await admin
+    const { error: statusErr } = await admin
       .from('member_claim_requests')
       .update({
         status: 'new_member',
         matched_member_id: memberId,
         resolved_by: approver.userId,
         resolved_at: new Date().toISOString(),
+        note: circleNote,
       })
       .eq('id', data.claimId)
+    // Logged only: the member and the account link already exist.
+    if (statusErr) console.error('Error updating claim status after member create:', statusErr)
 
-    return { success: true, memberId }
+    return { success: true, memberId, circleNote }
   })
 
 /**

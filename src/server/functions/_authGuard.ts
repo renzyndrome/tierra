@@ -62,8 +62,12 @@ export async function getPermissionMatrix(admin: AdminClient): Promise<Permissio
   return matrix
 }
 
+/** Error when the caller lacks the permission a server function requires. */
+export const PERMISSION_DENIED = 'Not permitted. An admin grants access.'
+
 /**
  * Require the caller to hold a specific permission. Admin always passes.
+ * Throws PERMISSION_DENIED otherwise.
  */
 export async function requirePermission(
   accessToken: string | undefined | null,
@@ -77,7 +81,7 @@ export async function requirePermission(
   const granted = permissionsForRole(caller.role, matrix)
 
   if (!permissionMatches(granted, permission)) {
-    throw new Error('You do not have permission to perform this action')
+    throw new Error(PERMISSION_DENIED)
   }
   return caller
 }

@@ -72,8 +72,16 @@ Actions:
 circle. Sets the circle leader as discipler when none is set. Existing
 discipler unchanged.
 
+Already in another circle, or walking with someone outside this circle:
+account linked, circle unchanged. Note shown, for example "Quest Circle not
+set. Already in <circle>. Remove from that circle first." Confident matches
+(Admin → **Member sign-ups** → **Auto-linked**) are linked only, with no
+circle. Add them on the circle page.
+
 Agapay follow-up queue: automatic. A linked person with a discipler joins that
-discipler's Agapay queue the moment the leader confirms.
+discipler's Agapay queue the moment the leader confirms. When that fails, the
+link stands and the note reads "Agapay enrollment failed. Save on the Edit
+Member page to retry." An admin saves the member's Edit page to retry.
 
 ### New people (not yet in the directory)
 

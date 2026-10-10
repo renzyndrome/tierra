@@ -1,9 +1,19 @@
-// Quest Laguna Directory - Cell Group Card Component
+// Quest Laguna Directory - Quest Circle Card Component
 
 import { memo } from 'react'
 import { Link } from '@tanstack/react-router'
 import type { CellGroup, CellGroupWithRelations } from '../lib/types'
 import { getPlaceholderAvatar } from '../lib/storage'
+
+/** "Team" tag for a group with is_team: a team, not a discipleship circle. */
+export function TeamBadge({ size = 'sm', className = '' }: { size?: 'sm' | 'md'; className?: string }) {
+  const sizing = size === 'md' ? 'px-3 py-1 text-sm' : 'px-2 py-0.5 text-xs'
+  return (
+    <span className={`inline-block ${sizing} font-medium rounded-full bg-teal-100 text-teal-800 ${className}`}>
+      Team
+    </span>
+  )
+}
 
 interface CellGroupCardProps {
   cellGroup: CellGroupWithRelations
@@ -44,6 +54,7 @@ function CellGroupCardImpl({ cellGroup, showActions = false, onEdit, onDelete }:
 
           {/* Meeting Info */}
           <div className="flex flex-wrap gap-2 mt-3">
+            {cellGroup.is_team === true && <TeamBadge />}
             {cellGroup.meeting_day && (
               <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${dayColors[cellGroup.meeting_day] || 'bg-gray-100 text-gray-800'}`}>
                 {cellGroup.meeting_day}s
@@ -141,7 +152,7 @@ function CellGroupCardImpl({ cellGroup, showActions = false, onEdit, onDelete }:
 export const CellGroupCard = memo(CellGroupCardImpl)
 
 // ============================================
-// CELL GROUP CARD SKELETON
+// QUEST CIRCLE CARD SKELETON
 // ============================================
 
 export function CellGroupCardSkeleton() {
@@ -167,7 +178,7 @@ export function CellGroupCardSkeleton() {
 }
 
 // ============================================
-// COMPACT CELL GROUP CARD (for lists)
+// COMPACT QUEST CIRCLE CARD (for lists)
 // ============================================
 
 interface CompactCellGroupCardProps {
@@ -201,6 +212,7 @@ function CompactCellGroupCardImpl({ cellGroup, onClick }: CompactCellGroupCardPr
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {cellGroup.is_team === true && <TeamBadge />}
           {cellGroup.meeting_day && (
             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${dayColors[cellGroup.meeting_day] || 'bg-gray-100 text-gray-800'}`}>
               {cellGroup.meeting_day}

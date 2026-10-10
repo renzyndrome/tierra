@@ -106,7 +106,7 @@ export const DISCIPLESHIP_JOURNEY_STAGES: {
 export const LEADERSHIP_LEVELS: { value: LeadershipLevel; label: string; description: string }[] = [
   { value: 'Member', label: 'Member', description: 'Regular church member' },
   { value: 'Disciple Maker', label: 'Disciple Maker', description: 'Can disciple others' },
-  { value: 'Eagle', label: 'Eagle', description: 'Senior disciple maker / cell leader' },
+  { value: 'Eagle', label: 'Eagle', description: 'Senior disciple maker / circle leader' },
   { value: 'Pastor', label: 'Pastor', description: 'Pastoral role' },
   { value: 'Head Pastor', label: 'Head Pastor', description: 'Lead pastor' },
 ]
@@ -306,7 +306,7 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
   {
     group: 'Quest Circles',
     permissions: [
-      { value: 'cell_groups.read', label: 'View circles', description: 'View Quest Circles (cell groups)' },
+      { value: 'cell_groups.read', label: 'View circles', description: 'View Quest Circles' },
       { value: 'cell_groups.write', label: 'Manage circles', description: 'Create and update circles and membership' },
       { value: 'cell_groups.delete', label: 'Delete circles', description: 'Delete circles' },
     ],

@@ -139,7 +139,7 @@ function ClaimCard({ item, showGroup, onUndo, onConfirm, onCreateMember, onRejec
                     onChange={(e) => setAddToGroup(e.target.checked)}
                     className="w-5 h-5 rounded border-gray-300 text-[#8B1538] focus:ring-[#8B1538]"
                   />
-                  Add to this circle as a disciple
+                  {item.cell_group_is_team ? 'Add to this team' : 'Add to this circle as a disciple'}
                 </label>
               )}
             </>
@@ -194,17 +194,23 @@ function ClaimCard({ item, showGroup, onUndo, onConfirm, onCreateMember, onRejec
         </div>
       ) : (
         <div className="p-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-gray-600">
-            {item.matched_member_name ? (
-              <>
-                Linked to <span className="font-semibold">{item.matched_member_name}</span>
-              </>
-            ) : claim.status === 'rejected' ? (
-              <>Rejected{claim.note ? `: ${claim.note}` : ''}</>
-            ) : (
-              'Not linked to a member record'
+          <div className="min-w-0">
+            <p className="text-sm text-gray-600">
+              {item.matched_member_name ? (
+                <>
+                  Linked to <span className="font-semibold">{item.matched_member_name}</span>
+                </>
+              ) : claim.status === 'rejected' ? (
+                <>Rejected{claim.note ? `: ${claim.note}` : ''}</>
+              ) : (
+                'Not linked to a member record'
+              )}
+            </p>
+            {/* Note from the link: circle placement (see placeClaimInCircle) or a failed Agapay enrollment. */}
+            {claim.status !== 'rejected' && claim.note && (
+              <p className="mt-1 text-xs text-amber-700 break-words">{claim.note}</p>
             )}
-          </p>
+          </div>
           {onUndo && claim.matched_member_id && (
             <button
               type="button"

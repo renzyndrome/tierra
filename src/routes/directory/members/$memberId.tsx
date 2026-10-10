@@ -5,8 +5,10 @@ import { getMemberWithRelations, updateMember } from '../../../server/functions/
 import { addMemberToMinistry } from '../../../server/functions/ministries'
 import { getAllMinistries } from '../../../server/functions/ministries'
 import { addMemberToCellGroup } from '../../../server/functions/cellGroups'
+import { AGAPAY_ENROLL_FAILED_RETRY_ON_EDIT, enrollFailedAfter } from '../../../lib/agapay'
 import { getAllCellGroups } from '../../../server/functions/cellGroups'
 import { MemberAttendanceSection } from '../../../components/MemberAttendanceSection'
+import { TeamBadge } from '../../../components/CellGroupCard'
 import { useAuth } from '../../../components/AuthProvider'
 import { getPlaceholderAvatar, uploadMemberPhoto } from '../../../lib/storage'
 import {
@@ -261,7 +263,8 @@ function MemberProfilePage() {
   const satelliteName = (member as any)?.satellite?.name || null
 
   // Safely access relations
-  const cellGroups = ((member as any)?.cell_groups || []).filter((cg: any) => cg.is_active)
+  // Circle memberships: null reads as active (the column defaults to true).
+  const cellGroups = ((member as any)?.cell_groups || []).filter((cg: any) => cg.is_active !== false)
   const ministries = ((member as any)?.ministries || []).filter((m: any) => m.is_active)
 
   // Quick action state
@@ -275,9 +278,11 @@ function MemberProfilePage() {
   const [selectedCellGroupRole, setSelectedCellGroupRole] = useState<'leader' | 'co_leader' | 'member'>('member')
   const [isSaving, setIsSaving] = useState(false)
   const [actionError, setActionError] = useState('')
+  // Non-blocking warning after a circle add whose Agapay enrollment failed.
+  const [circleNotice, setCircleNotice] = useState<string | null>(null)
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
 
-  // Fetch ministries/cell groups for dropdowns when dialogs open
+  // Fetch ministries/Quest Circles for dropdowns when dialogs open
   useEffect(() => {
     if (showMinistryDialog && allMinistries.length === 0) {
       getAllMinistries({ data: { accessToken, activeOnly: true } }).then(setAllMinistries).catch(console.error)
@@ -310,7 +315,7 @@ function MemberProfilePage() {
     )
   }
 
-  // Filter out ministries/cell groups the member is already in
+  // Filter out ministries/Quest Circles the member is already in
   const existingMinistryIds = new Set(ministries.map((m: any) => m.ministry?.id).filter(Boolean))
   const existingCellGroupIds = new Set(cellGroups.map((cg: any) => cg.cell_group?.id).filter(Boolean))
   const availableMinistries = allMinistries.filter(m => !existingMinistryIds.has(m.id))
@@ -337,8 +342,11 @@ function MemberProfilePage() {
     if (!selectedCellGroupId) return setActionError('Select a Quest Circle')
     setIsSaving(true)
     setActionError('')
+    setCircleNotice(null)
     try {
-      await addMemberToCellGroup({ data: { accessToken, memberId: member.id, cellGroupId: selectedCellGroupId, role: selectedCellGroupRole } })
+      const added = await addMemberToCellGroup({ data: { accessToken, memberId: member.id, cellGroupId: selectedCellGroupId, role: selectedCellGroupRole } })
+      // The add stands; a failed Agapay enrollment is retried from the Edit page.
+      if (enrollFailedAfter(false, added)) setCircleNotice(AGAPAY_ENROLL_FAILED_RETRY_ON_EDIT)
       setShowCellGroupDialog(false)
       setSelectedCellGroupId('')
       setSelectedCellGroupRole('member')
@@ -502,6 +510,29 @@ function MemberProfilePage() {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Discipler */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Discipler</label>
+                    {member.discipler ? (
+                      <Link
+                        to="/directory/members/$memberId"
+                        params={{ memberId: member.discipler.id }}
+                        className="mt-1 inline-flex items-center gap-2 group"
+                      >
+                        <img
+                          src={member.discipler.photo_url || getPlaceholderAvatar(member.discipler.name)}
+                          alt={member.discipler.name}
+                          className="w-6 h-6 rounded-full object-cover"
+                        />
+                        <span className="text-sm text-gray-900 group-hover:text-[#8B1538] group-hover:underline">
+                          {member.discipler.name}
+                        </span>
+                      </Link>
+                    ) : (
+                      <p className="text-sm text-gray-400 italic mt-0.5">No discipler</p>
+                    )}
+                  </div>
+
                   {/* Follow Through */}
                   {followThroughInfo && (
                     <div>
@@ -538,7 +569,7 @@ function MemberProfilePage() {
                 </div>
 
                 {/* Empty state */}
-                {!member.discipleship_journey && !followThroughInfo && member.leadership_level === 'Member' && !member.spiritual_name && !member.community && (
+                {!member.discipler && !member.discipleship_journey && !followThroughInfo && member.leadership_level === 'Member' && !member.spiritual_name && !member.community && (
                   <p className="text-sm text-gray-400 italic">No church journey details recorded yet.</p>
                 )}
               </div>
@@ -582,12 +613,18 @@ function MemberProfilePage() {
               actionLabel="+ Add"
               onAction={() => { setActionError(''); setShowCellGroupDialog(true) }}
             >
+              {circleNotice && (
+                <p className="mb-3 text-sm text-amber-800 bg-amber-50 px-3 py-2 rounded-md">{circleNotice}</p>
+              )}
               {cellGroups.length > 0 ? (
                 <div className="space-y-3">
                   {cellGroups.map((cg: any, i: number) => (
                     <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{cg.cell_group?.name || 'Unknown Quest Circle'}</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {cg.cell_group?.name || 'Unknown Quest Circle'}
+                          {cg.cell_group?.is_team === true && <TeamBadge className="ml-2 align-middle" />}
+                        </p>
                         {(cg.cell_group?.meeting_day || cg.cell_group?.meeting_time) && (
                           <p className="text-xs text-gray-500">
                             {[cg.cell_group.meeting_day, cg.cell_group.meeting_time].filter(Boolean).join(' at ')}
@@ -838,7 +875,7 @@ function MemberProfilePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add to Cell Group Dialog */}
+      {/* Add to Quest Circle Dialog */}
       <Dialog open={showCellGroupDialog} onOpenChange={setShowCellGroupDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

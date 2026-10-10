@@ -103,7 +103,7 @@ export function createMockMemberInsert(overrides?: Partial<Member>) {
 }
 
 // ============================================
-// CELL GROUP FACTORIES
+// QUEST CIRCLE FACTORIES
 // ============================================
 
 let cellGroupCounter = 0
@@ -120,6 +120,7 @@ export function createMockCellGroup(overrides?: Partial<CellGroup>): CellGroup {
     meeting_time: '19:00',
     meeting_location: '123 Meeting Street',
     is_active: true,
+    is_team: false,
     max_members: 12,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -168,7 +169,7 @@ export function createMockUserProfile(overrides?: Partial<UserProfile>): UserPro
 }
 
 // ============================================
-// MEMBER CELL GROUP JUNCTION FACTORIES
+// MEMBER QUEST CIRCLE JUNCTION FACTORIES
 // ============================================
 
 let memberCellGroupCounter = 0

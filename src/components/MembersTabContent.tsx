@@ -186,7 +186,8 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
       onDataChanged()
     } catch (error) {
       console.error('Error archiving member:', error)
-      alert('Failed to archive member')
+      // Refusals (disciples assigned, leads a circle) come back as the message.
+      alert(error instanceof Error && error.message ? error.message : 'Failed to archive member')
     }
   }
 
@@ -210,7 +211,8 @@ export function MembersTabContent({ members, satellites, isLoading, onDataChange
       onDataChanged()
     } catch (error) {
       console.error('Error deleting member:', error)
-      alert('Failed to delete member')
+      // Refusals (disciples assigned, leads a circle, Agapay history) come back as the message.
+      alert(error instanceof Error && error.message ? error.message : 'Failed to delete member')
     } finally {
       setIsDeleting(false)
     }

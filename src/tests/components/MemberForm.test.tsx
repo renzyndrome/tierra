@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemberForm } from '../../components/MemberForm'
-import { createMockMember, createMockSatelliteRow, resetFactoryCounters } from '../factories'
+import { createMockCellGroup, createMockMember, createMockSatelliteRow, resetFactoryCounters } from '../factories'
 
 // Mock the storage module
 vi.mock('../../lib/storage', () => ({
@@ -617,5 +617,374 @@ describe('MemberForm Component', () => {
         'Leader',
       ])
     })
+  })
+})
+
+// ============================================
+// DISCIPLER PICKS THE QUEST CIRCLE
+// ============================================
+describe('MemberForm discipler and Quest Circle', () => {
+  const mockOnSubmit = vi.fn()
+  const mockOnCancel = vi.fn()
+  const satellites = [createMockSatelliteRow({ id: 'sat-1', name: 'Quest Laguna Main' })]
+  const members = [
+    { id: 'disc-one', name: 'Discipler One' },
+    { id: 'disc-two', name: 'Discipler Two' },
+    { id: 'disc-none', name: 'Discipler None' },
+  ]
+  const circles = [
+    createMockCellGroup({ id: 'circle-a', name: 'Circle A', leader_id: 'disc-one', co_leader_id: null }),
+    createMockCellGroup({ id: 'circle-b', name: 'Circle B', leader_id: 'disc-two', co_leader_id: null }),
+    createMockCellGroup({ id: 'circle-c', name: 'Circle C', leader_id: 'someone-else', co_leader_id: 'disc-two' }),
+    createMockCellGroup({ id: 'circle-d', name: 'Circle D', leader_id: 'someone-else', co_leader_id: null }),
+  ]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetFactoryCounters()
+  })
+
+  function renderForm() {
+    render(
+      <MemberForm
+        satellites={satellites}
+        cellGroups={circles}
+        allMembers={members}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />
+    )
+  }
+
+  async function pickDiscipler(user: ReturnType<typeof userEvent.setup>, name: string) {
+    await user.type(screen.getByPlaceholderText('Search discipler...'), name)
+    await user.click(screen.getByRole('button', { name }))
+  }
+
+  it('lists every circle while no discipler is chosen', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.click(screen.getByPlaceholderText('Search Quest Circle...'))
+
+    for (const name of ['Circle A', 'Circle B', 'Circle C', 'Circle D']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
+  })
+
+  it('preselects the only circle a discipler leads and submits it', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await pickDiscipler(user, 'Discipler One')
+
+    expect(screen.getByText('Circle A')).toBeInTheDocument()
+    expect(screen.queryByText('Choose a Quest Circle.')).not.toBeInTheDocument()
+
+    await user.click(screen.getByText('Create Member'))
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
+    expect(mockOnSubmit.mock.calls[0][0].discipler_id).toBe('disc-one')
+    expect(mockOnSubmit.mock.calls[0][1]).toBe('circle-a')
+  })
+
+  it('requires a choice when the discipler leads or co-leads two circles', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await pickDiscipler(user, 'Discipler Two')
+
+    expect(screen.getByText('Choose a Quest Circle.')).toBeInTheDocument()
+    expect(screen.getByText('Create Member').closest('button')).toBeDisabled()
+
+    await user.click(screen.getByPlaceholderText('Search Quest Circle...'))
+    expect(screen.getByRole('button', { name: 'Circle B' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Circle C' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Circle A' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Circle D' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Circle C' }))
+
+    expect(screen.queryByText('Choose a Quest Circle.')).not.toBeInTheDocument()
+    expect(screen.getByText('Create Member').closest('button')).toBeEnabled()
+
+    await user.click(screen.getByText('Create Member'))
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
+    expect(mockOnSubmit.mock.calls[0][1]).toBe('circle-c')
+  })
+
+  it('accepts "No Quest Circle" as the choice', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await pickDiscipler(user, 'Discipler Two')
+    await user.click(screen.getByPlaceholderText('Search Quest Circle...'))
+    await user.click(screen.getByRole('button', { name: 'No Quest Circle' }))
+
+    expect(screen.getByText('Create Member').closest('button')).toBeEnabled()
+
+    await user.click(screen.getByText('Create Member'))
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
+    expect(mockOnSubmit.mock.calls[0][1]).toBeNull()
+  })
+
+  it('leaves the field empty when the discipler leads no circle', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await pickDiscipler(user, 'Discipler None')
+
+    expect(screen.queryByText('Choose a Quest Circle.')).not.toBeInTheDocument()
+    await user.click(screen.getByPlaceholderText('Search Quest Circle...'))
+    expect(screen.getByRole('button', { name: 'No Quest Circle' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Circle A' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the current circle on an edit until a discipler is picked', () => {
+    render(
+      <MemberForm
+        member={createMockMember({ id: 'member-x', discipler_id: 'disc-one' })}
+        satellites={satellites}
+        cellGroups={circles}
+        currentCellGroupId="circle-d"
+        allMembers={members}
+        currentDisciplerId="disc-one"
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />
+    )
+
+    expect(screen.getByText('Circle D')).toBeInTheDocument()
+    expect(screen.queryByText('Choose a Quest Circle.')).not.toBeInTheDocument()
+    expect(screen.getByText('Update Member').closest('button')).toBeEnabled()
+  })
+  // The edited member co-leads Circle A and leads Circle C.
+  const ownCircles = [
+    createMockCellGroup({ id: 'circle-a', name: 'Circle A', leader_id: 'disc-one', co_leader_id: 'member-lead' }),
+    createMockCellGroup({ id: 'circle-b', name: 'Circle B', leader_id: 'disc-two', co_leader_id: null }),
+    createMockCellGroup({ id: 'circle-c', name: 'Circle C', leader_id: 'member-lead', co_leader_id: 'disc-two' }),
+    createMockCellGroup({ id: 'circle-d', name: 'Circle D', leader_id: 'someone-else', co_leader_id: null }),
+  ]
+
+  function renderEditOfLeader() {
+    render(
+      <MemberForm
+        member={createMockMember({ id: 'member-lead', discipler_id: null })}
+        satellites={satellites}
+        cellGroups={ownCircles}
+        currentCellGroupId={null}
+        allMembers={members}
+        currentDisciplerId={null}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />
+    )
+  }
+
+  it('does not offer circles the edited member leads or co-leads', async () => {
+    const user = userEvent.setup()
+    renderEditOfLeader()
+
+    await user.click(screen.getByPlaceholderText('Search Quest Circle...'))
+    expect(screen.queryByRole('button', { name: 'Circle A' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Circle C' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Circle B' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Circle D' })).toBeInTheDocument()
+  })
+
+  it("never preselects the edited member's own circle after a discipler pick", async () => {
+    const user = userEvent.setup()
+    renderEditOfLeader()
+
+    await pickDiscipler(user, 'Discipler One')
+    expect(screen.queryByText('Circle A')).not.toBeInTheDocument()
+    expect(screen.queryByText('Choose a Quest Circle.')).not.toBeInTheDocument()
+  })
+
+  it("counts only the discipler's other circles toward the choice rule", async () => {
+    const user = userEvent.setup()
+    renderEditOfLeader()
+
+    // Discipler Two leads Circle B and co-leads Circle C, which the member leads.
+    await pickDiscipler(user, 'Discipler Two')
+    expect(screen.getByText('Circle B')).toBeInTheDocument()
+    expect(screen.queryByText('Choose a Quest Circle.')).not.toBeInTheDocument()
+    expect(screen.getByText('Update Member').closest('button')).toBeEnabled()
+  })
+
+  it('holds the Discipler field while the Quest Circle list loads', () => {
+    render(
+      <MemberForm
+        satellites={satellites}
+        cellGroups={[]}
+        circlesLoad="loading"
+        allMembers={members}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />
+    )
+
+    expect(screen.queryByPlaceholderText('Search discipler...')).not.toBeInTheDocument()
+    expect(screen.getByText('Loading Quest Circles...')).toBeInTheDocument()
+  })
+
+  it('shows the Discipler field and a reload line when the Quest Circle list failed', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemberForm
+        satellites={satellites}
+        circlesLoad="failed"
+        allMembers={members}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />
+    )
+
+    expect(screen.getByText('Quest Circles not loaded. Reload to assign a circle.')).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Search Quest Circle...')).not.toBeInTheDocument()
+
+    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await pickDiscipler(user, 'Discipler One')
+    await user.click(screen.getByText('Create Member'))
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
+    expect(mockOnSubmit.mock.calls[0][0].discipler_id).toBe('disc-one')
+    expect(mockOnSubmit.mock.calls[0][1]).toBeUndefined()
+  })
+
+  // A stored discipler missing from allMembers: archived (getAllMembersLite
+  // leaves archived members out).
+  function renderEditWithArchivedDiscipler(currentDiscipler?: { id: string; name: string } | null) {
+    render(
+      <MemberForm
+        member={createMockMember({ id: 'member-x', discipler_id: 'disc-archived' })}
+        satellites={satellites}
+        cellGroups={circles}
+        currentCellGroupId={null}
+        allMembers={members}
+        currentDisciplerId="disc-archived"
+        currentDiscipler={currentDiscipler}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />
+    )
+  }
+
+  it('shows an archived discipler as "Archived member" with a Clear action', () => {
+    renderEditWithArchivedDiscipler()
+
+    expect(screen.getByText('Archived member')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Search discipler...')).not.toBeInTheDocument()
+  })
+
+  it('names an archived discipler when the edit page supplies the name', () => {
+    renderEditWithArchivedDiscipler({ id: 'disc-archived', name: 'Former Discipler' })
+
+    expect(screen.getByText('Former Discipler')).toBeInTheDocument()
+    expect(screen.getByText('Archived')).toBeInTheDocument()
+  })
+
+  it('lists every circle for an archived discipler instead of narrowing to none', async () => {
+    const user = userEvent.setup()
+    renderEditWithArchivedDiscipler()
+
+    await user.click(screen.getByPlaceholderText('Search Quest Circle...'))
+    for (const name of ['Circle A', 'Circle B', 'Circle C', 'Circle D']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
+  })
+
+  it('keeps the archived discipler on save, and clears it with Clear', async () => {
+    const user = userEvent.setup()
+    renderEditWithArchivedDiscipler()
+
+    await user.click(screen.getByText('Update Member'))
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1))
+    expect(mockOnSubmit.mock.calls[0][0].discipler_id).toBe('disc-archived')
+
+    await user.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(screen.getByPlaceholderText('Search discipler...')).toBeInTheDocument()
+    await user.click(screen.getByText('Update Member'))
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(2))
+    expect(mockOnSubmit.mock.calls[1][0].discipler_id).toBeNull()
+  })
+
+  it('has no Quest Circle field and submits no circle when no circles are passed (no cell_groups.write)', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemberForm
+        satellites={satellites}
+        allMembers={members}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />
+    )
+
+    expect(screen.queryByPlaceholderText('Search Quest Circle...')).not.toBeInTheDocument()
+    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await pickDiscipler(user, 'Discipler Two')
+    expect(screen.queryByText('Choose a Quest Circle.')).not.toBeInTheDocument()
+    await user.click(screen.getByText('Create Member'))
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
+    expect(mockOnSubmit.mock.calls[0][0].discipler_id).toBe('disc-two')
+    expect(mockOnSubmit.mock.calls[0][1]).toBeUndefined()
+  })
+})
+
+describe('MemberForm Quest Circle field: teams', () => {
+  const mockOnSubmit = vi.fn()
+  const mockOnCancel = vi.fn()
+  const satellites = [createMockSatelliteRow({ id: 'sat-1', name: 'Quest Laguna Main' })]
+  const members = [{ id: 'disc-one', name: 'Discipler One' }]
+  // Discipler One leads Circle A and the team.
+  const groups = [
+    createMockCellGroup({ id: 'circle-a', name: 'Circle A', leader_id: 'disc-one', co_leader_id: null }),
+    createMockCellGroup({ id: 'team-t', name: 'Worship Team', leader_id: 'disc-one', co_leader_id: null, is_team: true }),
+    createMockCellGroup({ id: 'circle-d', name: 'Circle D', leader_id: 'someone-else', co_leader_id: null }),
+  ]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetFactoryCounters()
+  })
+
+  function renderForm() {
+    render(
+      <MemberForm
+        satellites={satellites}
+        cellGroups={groups}
+        allMembers={members}
+        onSubmit={mockOnSubmit}
+        onCancel={mockOnCancel}
+      />
+    )
+  }
+
+  it('never lists a team', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.click(screen.getByPlaceholderText('Search Quest Circle...'))
+    expect(screen.getByRole('button', { name: 'Circle A' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Circle D' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Worship Team' })).not.toBeInTheDocument()
+  })
+
+  it("preselects the discipler's one circle; the team they lead does not count", async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await user.type(screen.getByPlaceholderText('Search discipler...'), 'Discipler One')
+    await user.click(screen.getByRole('button', { name: 'Discipler One' }))
+
+    expect(screen.getByText('Circle A')).toBeInTheDocument()
+    expect(screen.queryByText('Choose a Quest Circle.')).not.toBeInTheDocument()
+
+    await user.click(screen.getByText('Create Member'))
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
+    expect(mockOnSubmit.mock.calls[0][1]).toBe('circle-a')
   })
 })

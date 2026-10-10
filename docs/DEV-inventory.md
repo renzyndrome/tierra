@@ -72,7 +72,7 @@ hand-maintained `Database` type. Option lists/labels/badges in
   ```
 
 ## Related: member profile leaders
-`getMemberWithRelations` (`members.ts`) embeds ministry `head` and cell-group
+`getMemberWithRelations` (`members.ts`) embeds ministry `head` and Quest Circle
 `leader`/`co_leader` (FK-disambiguated). Rendered as `LeaderChip` rows in
 `directory/members/$memberId.tsx`.
 

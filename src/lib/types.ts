@@ -342,6 +342,8 @@ export interface ClaimCandidateView {
 export interface ClaimQueueItem {
   claim: MemberClaimRequest
   cell_group_name: string | null
+  /** the sign-up link belongs to a team, not a discipleship circle */
+  cell_group_is_team: boolean
   matched_member_name: string | null
   candidates: ClaimCandidateView[]
 }
@@ -365,7 +367,7 @@ export interface MyClaimStatus {
 }
 
 // ============================================
-// CELL GROUP TYPES
+// QUEST CIRCLE TYPES
 // ============================================
 
 export interface CellGroup {
@@ -380,6 +382,11 @@ export interface CellGroup {
   meeting_location: string | null
   banner_url: string | null
   is_active: boolean
+  /**
+   * A team (e.g. a ministry crew), not a discipleship circle. Members keep
+   * their own Quest Circle; the circle rules and Agapay ignore teams.
+   */
+  is_team: boolean
   max_members: number
   created_at: string
   updated_at: string
@@ -397,6 +404,7 @@ export interface CellGroupInsert {
   meeting_location?: string | null
   banner_url?: string | null
   is_active?: boolean
+  is_team?: boolean
   max_members?: number
 }
 
@@ -411,10 +419,11 @@ export interface CellGroupUpdate {
   meeting_location?: string | null
   banner_url?: string | null
   is_active?: boolean
+  is_team?: boolean
   max_members?: number
 }
 
-// Cell group with relations
+// Quest Circle with relations
 export interface CellGroupWithRelations extends CellGroup {
   satellite?: Satellite | null
   leader?: Member | null
@@ -424,7 +433,7 @@ export interface CellGroupWithRelations extends CellGroup {
 }
 
 // ============================================
-// MEMBER CELL GROUPS JUNCTION
+// MEMBER QUEST CIRCLES JUNCTION
 // ============================================
 
 export interface MemberCellGroup {
@@ -1336,6 +1345,7 @@ export type Database = {
           status?: ClaimStatus
           matched_member_id?: string | null
           top_score?: number | null
+          note?: string | null
         }
         Update: {
           status?: ClaimStatus

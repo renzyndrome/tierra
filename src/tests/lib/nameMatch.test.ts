@@ -132,13 +132,13 @@ describe('nameMatchConfidence', () => {
 
   it('scores a middle-name subset (>=2 shared tokens) at the auto-match bar', () => {
     // Typed dropped the first name; both typed tokens appear in the member name.
-    expect(nameMatchConfidence('Laurence Rebadulla', 'Gabriel Laurence Rebadulla')).toBeGreaterThanOrEqual(
+    expect(nameMatchConfidence('Dominic Villacrusis', 'Adrian Dominic Villacrusis')).toBeGreaterThanOrEqual(
       AUTO_MATCH_CONFIDENCE,
     )
   })
 
   it('does NOT reach the auto-match bar on a single shared token', () => {
-    expect(nameMatchConfidence('Laurence', 'Gabriel Laurence Rebadulla')).toBeLessThan(AUTO_MATCH_CONFIDENCE)
+    expect(nameMatchConfidence('Dominic', 'Adrian Dominic Villacrusis')).toBeLessThan(AUTO_MATCH_CONFIDENCE)
   })
 
   it('scores unrelated names low', () => {
@@ -149,35 +149,35 @@ describe('nameMatchConfidence', () => {
 describe('resolveMemberMatch — confident subset (middle-name) auto-match', () => {
   it('auto-links a confident subset when exactly one member matches', () => {
     const dir: DirectoryMember[] = [
-      { id: 'g', name: 'Gabriel Laurence Rebadulla', phone: '+639171477836' },
-      { id: 'e', name: 'Laurence Eusebio', phone: null },
+      { id: 'g', name: 'Adrian Dominic Villacrusis', phone: '+639170000001' },
+      { id: 'e', name: 'Dominic Maglanoc', phone: null },
     ]
-    // "Laurence Rebadulla" is a confident subset of only "Gabriel Laurence Rebadulla".
-    expect(resolveMemberMatch('Laurence Rebadulla', null, dir)?.id).toBe('g')
+    // "Dominic Villacrusis" is a confident subset of only "Adrian Dominic Villacrusis".
+    expect(resolveMemberMatch('Dominic Villacrusis', null, dir)?.id).toBe('g')
   })
 
   it('does NOT auto-link when two members (e.g. family) both match — goes to review', () => {
     const dir: DirectoryMember[] = [
-      { id: 'g', name: 'Gabriel Laurence Rebadulla', phone: null },
-      { id: 'm', name: 'Maria Laurence Rebadulla', phone: null },
+      { id: 'g', name: 'Adrian Dominic Villacrusis', phone: null },
+      { id: 'm', name: 'Maria Dominic Villacrusis', phone: null },
     ]
-    expect(resolveMemberMatch('Laurence Rebadulla', null, dir)).toBeNull()
+    expect(resolveMemberMatch('Dominic Villacrusis', null, dir)).toBeNull()
   })
 
   it('does NOT auto-link on just a first name', () => {
     const dir: DirectoryMember[] = [
-      { id: 'g', name: 'Gabriel Laurence Rebadulla', phone: null },
-      { id: 'e', name: 'Laurence Eusebio', phone: null },
+      { id: 'g', name: 'Adrian Dominic Villacrusis', phone: null },
+      { id: 'e', name: 'Dominic Maglanoc', phone: null },
     ]
-    expect(resolveMemberMatch('Laurence', null, dir)).toBeNull()
+    expect(resolveMemberMatch('Dominic', null, dir)).toBeNull()
   })
 
   it('breaks an ambiguous subset tie with a unique phone', () => {
     const dir: DirectoryMember[] = [
-      { id: 'g', name: 'Gabriel Laurence Rebadulla', phone: '09171477836' },
-      { id: 'm', name: 'Maria Laurence Rebadulla', phone: '09990001111' },
+      { id: 'g', name: 'Adrian Dominic Villacrusis', phone: '09170000001' },
+      { id: 'm', name: 'Maria Dominic Villacrusis', phone: '09990001111' },
     ]
-    expect(resolveMemberMatch('Laurence Rebadulla', '0917 147 7836', dir)?.id).toBe('g')
+    expect(resolveMemberMatch('Dominic Villacrusis', '0917 000 0001', dir)?.id).toBe('g')
   })
 })
 
@@ -217,9 +217,9 @@ describe('searchDirectoryByName (staff manual check-in search)', () => {
 
 describe('findSimilarMembers (walk-in duplicate check)', () => {
   const dir = [
-    { id: 'g', name: 'Gabriel Laurence Rebadulla' },
-    { id: 'm', name: 'Maria Laurence Rebadulla' },
-    { id: 'e', name: 'Laurence Eusebio' },
+    { id: 'g', name: 'Adrian Dominic Villacrusis' },
+    { id: 'm', name: 'Maria Dominic Villacrusis' },
+    { id: 'e', name: 'Dominic Maglanoc' },
     { id: 'p', name: 'Pedro Santos' },
   ]
 
@@ -228,11 +228,11 @@ describe('findSimilarMembers (walk-in duplicate check)', () => {
   })
 
   it('finds middle-name variants (confident subset matches)', () => {
-    expect(findSimilarMembers('Laurence Rebadulla', dir).map((m) => m.id)).toEqual(['g', 'm'])
+    expect(findSimilarMembers('Dominic Villacrusis', dir).map((m) => m.id)).toEqual(['g', 'm'])
   })
 
   it('ignores a single shared first name', () => {
-    expect(findSimilarMembers('Laurence', dir)).toEqual([])
+    expect(findSimilarMembers('Dominic', dir)).toEqual([])
   })
 
   it('returns nothing for a new name', () => {
@@ -240,7 +240,7 @@ describe('findSimilarMembers (walk-in duplicate check)', () => {
   })
 
   it('respects the limit', () => {
-    expect(findSimilarMembers('Laurence Rebadulla', dir, 1)).toHaveLength(1)
+    expect(findSimilarMembers('Dominic Villacrusis', dir, 1)).toHaveLength(1)
   })
 })
 

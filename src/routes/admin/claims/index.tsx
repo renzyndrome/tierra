@@ -36,6 +36,8 @@ function AdminClaimsPage() {
   const [items, setItems] = useState<ClaimQueueItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // Circle placement note from the last confirm or create, e.g. a refusal.
+  const [notice, setNotice] = useState('')
   const [busyClaimId, setBusyClaimId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -58,6 +60,7 @@ function AdminClaimsPage() {
   const withBusy = async (claimId: string, fn: () => Promise<unknown>) => {
     setBusyClaimId(claimId)
     setError('')
+    setNotice('')
     try {
       await fn()
       await load()
@@ -108,6 +111,12 @@ function AdminClaimsPage() {
           </div>
         )}
 
+        {notice && (
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+            {notice}
+          </div>
+        )}
+
         {loading ? (
           <p className="p-8 text-center text-gray-500">Loading…</p>
         ) : (
@@ -117,14 +126,16 @@ function AdminClaimsPage() {
             busyClaimId={busyClaimId}
             emptyMessage={`No ${CLAIM_STATUS_LABELS[status].toLowerCase()} sign-ups.`}
             onConfirm={(claimId, memberId, addToGroup) =>
-              withBusy(claimId, () =>
-                confirmClaim({ data: { accessToken: accessToken!, claimId, memberId, addToGroup } }),
-              )
+              withBusy(claimId, async () => {
+                const res = await confirmClaim({ data: { accessToken: accessToken!, claimId, memberId, addToGroup } })
+                if (res.circleNote) setNotice(res.circleNote)
+              })
             }
             onCreateMember={(claimId) =>
-              withBusy(claimId, () =>
-                createMemberFromClaim({ data: { accessToken: accessToken!, claimId } }),
-              )
+              withBusy(claimId, async () => {
+                const res = await createMemberFromClaim({ data: { accessToken: accessToken!, claimId } })
+                if (res.circleNote) setNotice(res.circleNote)
+              })
             }
             onReject={(claimId, note) =>
               withBusy(claimId, () =>

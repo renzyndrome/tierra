@@ -15,6 +15,8 @@ import { Label } from '../../components/ui/label'
 import { Textarea } from '../../components/ui/textarea'
 import { importSpreadsheetData } from '../../server/functions/importMembers'
 import { createCellGroup, updateCellGroup, deleteCellGroup } from '../../server/functions/cellGroups'
+import { circleSaveNotice, memberIdsInQuestCircles, type CircleWithMemberRows } from '../../lib/circleRules'
+import { agapayEnrollFailedCount } from '../../lib/agapay'
 import { createMinistry, updateMinistry, deleteMinistry } from '../../server/functions/ministries'
 import { addSatellite, deleteSatellite } from '../../server/functions/satellites'
 import {
@@ -213,7 +215,8 @@ function AdminDashboard() {
       g.meeting_day || '',
       g.meeting_time || '',
       g.meeting_location || '',
-      String(g.members?.filter(m => m.is_active).length || 0),
+      // null reads as active (the column defaults to true)
+      String(g.members?.filter(m => m.is_active !== false).length || 0),
       g.is_active ? 'Yes' : 'No',
     ])
     if (format === 'excel') downloadExcel('quest-circles', headers, rows, 'Quest Circles')
@@ -254,13 +257,15 @@ function AdminDashboard() {
   // Dialogs
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; disciplerLinks: number; ministryLinks: number; errors: string[] } | null>(null)
+  const [importResult, setImportResult] = useState<{ imported: number; skipped: number; disciplerLinks: number; disciplerSkipped?: number; agapayEnrollFailed?: number; ministryLinks: number; errors: string[] } | null>(null)
 
-  // Cell Group CRUD
+  // Quest Circle CRUD
   const [showCGDialog, setShowCGDialog] = useState(false)
   const [editingCG, setEditingCG] = useState<CellGroupWithRelations | null>(null)
   const [cgToDelete, setCGToDelete] = useState<CellGroupWithRelations | null>(null)
   const [isSavingCG, setIsSavingCG] = useState(false)
+  // Outcome of the last circle save: members moved to a new leader.
+  const [cgNotice, setCGNotice] = useState<{ text: string; warn: boolean } | null>(null)
   const [cgForm, setCGForm] = useState({
     name: '',
     description: '',
@@ -272,6 +277,8 @@ function AdminDashboard() {
     meeting_location: '',
     max_members: 12,
     is_active: true,
+    // Unticked: a new group is a Quest Circle unless marked as a team.
+    is_team: false,
   })
 
   // Ministry CRUD
@@ -296,18 +303,12 @@ function AdminDashboard() {
   const [isSavingSat, setIsSavingSat] = useState(false)
   const [satForm, setSatForm] = useState({ name: '' })
 
-  // Compute member IDs that are in cell groups (for filtering)
-  const memberIdsInCellGroups = useMemo(() => {
-    const ids = new Set<string>()
-    for (const group of cellGroups) {
-      if (group.members) {
-        for (const m of group.members) {
-          if ((m as any).member_id) ids.add((m as any).member_id)
-        }
-      }
-    }
-    return ids
-  }, [cellGroups])
+  // Member IDs in a Quest Circle (for the Members tab filter): active
+  // memberships of discipleship circles only. A team is not a Quest Circle.
+  const memberIdsInCellGroups = useMemo(
+    () => memberIdsInQuestCircles(cellGroups as unknown as CircleWithMemberRows[]),
+    [cellGroups],
+  )
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -368,9 +369,9 @@ function AdminDashboard() {
         if (groupsRes.data) {
           const groupsWithCount = groupsRes.data.map(g => ({
             ...g,
-            // Count only ACTIVE memberships (exclude members who left the circle),
-            // matching how ministry member_count is computed just below.
-            member_count: ((g as any).members || []).filter((mm: any) => mm.is_active).length,
+            // Count only ACTIVE memberships (exclude members who left the circle).
+            // null reads as active (the column defaults to true).
+            member_count: ((g as any).members || []).filter((mm: any) => mm.is_active !== false).length,
           }))
           setCellGroups(groupsWithCount as CellGroupWithRelations[])
         }
@@ -492,7 +493,7 @@ function AdminDashboard() {
           leader:members!cell_groups_leader_id_fkey(id, name, photo_url),
           co_leader:members!cell_groups_co_leader_id_fkey(id, name, photo_url),
           satellite:satellites(id, name),
-          members:member_cell_groups(id, is_active)
+          members:member_cell_groups(id, member_id, is_active)
         `).eq('is_active', true).order('name'),
         supabase.from('ministries').select(`
           *,
@@ -507,7 +508,8 @@ function AdminDashboard() {
         const groupsWithCount = groupsRes.data.map(g => ({
           ...g,
           // Count only ACTIVE memberships (exclude members who left the circle).
-          member_count: ((g as any).members || []).filter((mm: any) => mm.is_active).length,
+          // null reads as active (the column defaults to true).
+          member_count: ((g as any).members || []).filter((mm: any) => mm.is_active !== false).length,
         }))
         setCellGroups(groupsWithCount as CellGroupWithRelations[])
       }
@@ -543,7 +545,7 @@ function AdminDashboard() {
   }
 
   // ============================================
-  // CELL GROUP CRUD HANDLERS
+  // QUEST CIRCLE CRUD HANDLERS
   // ============================================
 
   const openCGDialog = (cg?: CellGroupWithRelations) => {
@@ -560,6 +562,7 @@ function AdminDashboard() {
         meeting_location: cg.meeting_location || '',
         max_members: cg.max_members || 12,
         is_active: cg.is_active !== false,
+        is_team: cg.is_team === true,
       })
     } else {
       setEditingCG(null)
@@ -574,6 +577,7 @@ function AdminDashboard() {
         meeting_location: '',
         max_members: 12,
         is_active: true,
+        is_team: false,
       })
     }
     setShowCGDialog(true)
@@ -582,6 +586,7 @@ function AdminDashboard() {
   const handleSaveCG = async () => {
     if (!cgForm.name.trim()) return
     setIsSavingCG(true)
+    setCGNotice(null)
     try {
       const payload = {
         name: cgForm.name.trim(),
@@ -594,9 +599,16 @@ function AdminDashboard() {
         meeting_location: cgForm.meeting_location.trim() || null,
         max_members: cgForm.max_members,
         is_active: cgForm.is_active,
+        is_team: cgForm.is_team,
       }
       if (editingCG) {
-        await updateCellGroup({ data: { accessToken, id: editingCG.id, updates: payload } })
+        const saved = await updateCellGroup({ data: { accessToken, id: editingCG.id, updates: payload } })
+        // Leader change moves (and failed Agapay enrollments of moved
+        // members) and, for a circle turned back on, members removed for
+        // being in another circle (see circleSaveNotice).
+        const leaderName = members.find((m) => m.id === payload.leader_id)?.name ?? null
+        const notice = circleSaveNotice(saved, leaderName)
+        if (notice) setCGNotice(notice)
       } else {
         await createCellGroup({ data: { ...payload, accessToken } })
       }
@@ -2282,6 +2294,25 @@ function AdminDashboard() {
                 </div>
               </CardHeader>
               <CardContent>
+                {cgNotice && (
+                  <div
+                    className={`mb-4 flex items-start justify-between gap-3 p-3 rounded-lg border text-sm ${
+                      cgNotice.warn
+                        ? 'bg-amber-50 border-amber-200 text-amber-800'
+                        : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    }`}
+                  >
+                    <span>{cgNotice.text}</span>
+                    <button
+                      type="button"
+                      onClick={() => setCGNotice(null)}
+                      aria-label="Dismiss"
+                      className="shrink-0 px-1 leading-none opacity-70 hover:opacity-100"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
                 {/* Search and Filters */}
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
                   <div className="flex-1">
@@ -2873,9 +2904,16 @@ function AdminDashboard() {
                     <li>{importResult.imported} members imported</li>
                     <li>{importResult.skipped} members skipped</li>
                     <li>{importResult.disciplerLinks} discipler relationships linked</li>
+                    <li>{importResult.disciplerSkipped ?? 0} discipler links skipped: already assigned</li>
                     <li>{importResult.ministryLinks} ministry assignments created</li>
                   </ul>
                 </div>
+                {/* Discipler links stand; each member's Edit page Save retries the enrollment. */}
+                {agapayEnrollFailedCount(importResult.agapayEnrollFailed ?? 0) && (
+                  <p className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                    {agapayEnrollFailedCount(importResult.agapayEnrollFailed ?? 0)}
+                  </p>
+                )}
                 {importResult.errors.length > 0 && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <p className="font-medium text-red-800 mb-2">Errors ({importResult.errors.length}):</p>
@@ -2901,7 +2939,7 @@ function AdminDashboard() {
                   </ul>
                 </div>
                 <p className="text-sm text-gray-500">
-                  Members will be matched to satellites automatically. Duplicate names will be skipped.
+                  Members are matched to satellites automatically. Every row is added as a new member, so an import runs once.
                 </p>
               </div>
             )}
@@ -2935,7 +2973,7 @@ function AdminDashboard() {
                 id="cg-name"
                 value={cgForm.name}
                 onChange={(e) => setCGForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="Cell group name"
+                placeholder="Circle name"
                 className="mt-1"
               />
             </div>
@@ -3048,6 +3086,22 @@ function AdminDashboard() {
                   <span className="text-sm">Active</span>
                 </label>
               </div>
+            </div>
+            <div>
+              <label htmlFor="cg-team" className="flex items-center gap-2 cursor-pointer">
+                <input
+                  id="cg-team"
+                  type="checkbox"
+                  checked={cgForm.is_team}
+                  onChange={(e) => setCGForm(f => ({ ...f, is_team: e.target.checked }))}
+                  aria-describedby="cg-team-help"
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm">Team</span>
+              </label>
+              <p id="cg-team-help" className="mt-1 text-xs text-gray-500">
+                Not a discipleship circle. Members keep their own Quest Circle.
+              </p>
             </div>
           </div>
           <DialogFooter>

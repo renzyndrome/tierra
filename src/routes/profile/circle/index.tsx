@@ -34,6 +34,8 @@ function MyCirclePage() {
   const [queue, setQueue] = useState<ClaimQueueItem[]>([])
   const [queueLoading, setQueueLoading] = useState(false)
   const [error, setError] = useState('')
+  // Circle placement note from the last confirm or create, e.g. a refusal.
+  const [notice, setNotice] = useState('')
   const [busyClaimId, setBusyClaimId] = useState<string | null>(null)
   const [showResolved, setShowResolved] = useState(false)
   const [confirmingRotate, setConfirmingRotate] = useState(false)
@@ -92,6 +94,7 @@ function MyCirclePage() {
   const withBusy = async (claimId: string, fn: () => Promise<unknown>) => {
     setBusyClaimId(claimId)
     setError('')
+    setNotice('')
     try {
       await fn()
       await refresh()
@@ -155,6 +158,12 @@ function MyCirclePage() {
         {error && (
           <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
             {error}
+          </div>
+        )}
+
+        {notice && (
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+            {notice}
           </div>
         )}
 
@@ -281,14 +290,16 @@ function MyCirclePage() {
                       : 'No pending sign-ups.'
                   }
                   onConfirm={(claimId, memberId, addToGroup) =>
-                    withBusy(claimId, () =>
-                      confirmClaim({ data: { accessToken: accessToken!, claimId, memberId, addToGroup } }),
-                    )
+                    withBusy(claimId, async () => {
+                      const res = await confirmClaim({ data: { accessToken: accessToken!, claimId, memberId, addToGroup } })
+                      if (res.circleNote) setNotice(res.circleNote)
+                    })
                   }
                   onCreateMember={(claimId) =>
-                    withBusy(claimId, () =>
-                      createMemberFromClaim({ data: { accessToken: accessToken!, claimId } }),
-                    )
+                    withBusy(claimId, async () => {
+                      const res = await createMemberFromClaim({ data: { accessToken: accessToken!, claimId } })
+                      if (res.circleNote) setNotice(res.circleNote)
+                    })
                   }
                   onReject={(claimId, note) =>
                     withBusy(claimId, () =>

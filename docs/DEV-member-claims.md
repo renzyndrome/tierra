@@ -106,11 +106,17 @@ The claim flow bridges them in two places:
 - `groupMemberIds` counts a member whose `discipler_id` is the circle's leader
   as "in this circle", so the scoring bonus applies even when the
   `member_cell_groups` row is missing.
-- `confirmClaim` (with the "Add to this circle as a disciple" box ticked) and
-  `createMemberFromClaim` call `setDisciplerIfEmpty`: sets `discipler_id` to the
-  circle's `leader_id` ONLY when it is null. Never overwrites, never points a
-  leader at themselves. An existing discipler is changed only in Agapay via its
-  audited `reassign_disciples` RPC.
+- `confirmClaim` (with the "Add to this circle as a disciple" box ticked),
+  `createMemberFromClaim` place the person in the circle (the auto-link does
+  not: it runs from the public page)
+  through `placeMemberInCircle` (`src/server/circlePlacement.ts`), the same
+  rules as an admin add. That calls `setDisciplerIfEmpty`: sets `discipler_id`
+  to the circle's `leader_id` ONLY when it is null. Never overwrites, never
+  points a leader at themselves. An existing discipler is changed only in
+  Agapay via its audited `reassign_disciples` RPC. An active row (leader and
+  co-leader included) is never changed; a refusal leaves the link in place and
+  saves a note on the claim. Details: `docs/DEV-circles-disciplers.md`,
+  "QR claim placement".
 
 **Agapay enrollment (`src/server/agapayEnroll.ts`).** `discipler_id` alone
 does not put anyone in the Agapay queue: the view
@@ -129,7 +135,9 @@ cannot undo an account link. `member_id` is UNIQUE, so a race returns
 `'already_enrolled'`.
 
 Called from: the auto-link in `submitClaimSignup`, `confirmClaim`, and
-`createMemberFromClaim`. `createMemberFromClaim` also sets `joined_date` to
+`createMemberFromClaim`. A `'failed'` result is added to the claim note
+(`withAgapayEnrollNote`, see `docs/DEV-circles-disciplers.md`, "QR claim
+placement"). `createMemberFromClaim` also sets `joined_date` to
 today so the new member gets a cohort.
 
 The tierra Supabase client is typed for `public` only, so the helper casts to

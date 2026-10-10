@@ -1,4 +1,4 @@
-// Quest Laguna Directory - Cell Group Detail Page
+// Quest Laguna Directory - Quest Circle Detail Page
 
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -13,17 +13,20 @@ import { searchMembers } from '../../../server/functions/members'
 import type { CellGroupWithRelations, Member } from '../../../lib/types'
 import { STAGE_LABELS } from '../../../lib/constants'
 import { useRefetchOnFocus } from '../../../lib/useRefetchOnFocus'
+import { AGAPAY_ENROLL_FAILED_RETRY_ON_EDIT, enrollFailedAfter } from '../../../lib/agapay'
+import { TeamBadge } from '../../../components/CellGroupCard'
 
 export const Route = createFileRoute('/admin/cell-groups/$groupId')({
   component: CellGroupDetailPage,
 })
 
-// Type for member in cell group query result
+// Type for member in Quest Circle query result
 interface CellGroupMember {
   id: string
   role: string
   joined_at: string
-  is_active: boolean
+  /** null reads as active: the column defaults to true */
+  is_active: boolean | null
   member: {
     id: string
     name: string
@@ -57,6 +60,9 @@ function CellGroupDetailPage() {
   const [addRole, setAddRole] = useState<'leader' | 'co_leader' | 'member'>('member')
   const [memberToRemove, setMemberToRemove] = useState<CellGroupMember | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
+  // Non-blocking warning after an add or a role change whose Agapay
+  // enrollment failed. Shown in the member list (and the add dialog).
+  const [addNotice, setAddNotice] = useState<string | null>(null)
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -66,7 +72,7 @@ function CellGroupDetailPage() {
     }
   }, [authLoading, isAuthenticated, navigate, groupId])
 
-  // Fetch cell group details
+  // Fetch Quest Circle details
   const hasFetchedRef = useRef(false)
 
   const fetchCellGroup = useCallback(async (showLoader = true) => {
@@ -138,8 +144,11 @@ function CellGroupDetailPage() {
   // Add member handler
   const handleAddMember = async (memberId: string) => {
     setIsUpdating(true)
+    setAddNotice(null)
     try {
-      await addMemberToCellGroup({ data: { accessToken, memberId, cellGroupId: groupId, role: addRole } })
+      const added = await addMemberToCellGroup({ data: { accessToken, memberId, cellGroupId: groupId, role: addRole } })
+      // The add stands; a failed Agapay enrollment is retried from the member's Edit page.
+      if (enrollFailedAfter(false, added)) setAddNotice(AGAPAY_ENROLL_FAILED_RETRY_ON_EDIT)
       await fetchCellGroup(false)
     } catch (err: any) {
       alert(err.message || 'Failed to add member')
@@ -164,8 +173,12 @@ function CellGroupDetailPage() {
   // Change role handler
   const handleRoleChange = async (memberId: string, newRole: 'leader' | 'co_leader' | 'member') => {
     setIsUpdating(true)
+    setAddNotice(null)
     try {
-      await updateMemberCellGroupRole({ data: { accessToken, memberId, cellGroupId: groupId, role: newRole } })
+      const changed = await updateMemberCellGroupRole({ data: { accessToken, memberId, cellGroupId: groupId, role: newRole } })
+      // A leader turned plain member is enrolled in Agapay. The role change
+      // stands; a failed enrollment is retried from the member's Edit page.
+      if (enrollFailedAfter(false, changed)) setAddNotice(AGAPAY_ENROLL_FAILED_RETRY_ON_EDIT)
       await fetchCellGroup(false)
     } catch (err: any) {
       alert(err.message || 'Failed to update role')
@@ -234,7 +247,7 @@ function CellGroupDetailPage() {
 
   const leaderAvatar = cellGroup.leader?.photo_url || (cellGroup.leader ? getPlaceholderAvatar(cellGroup.leader.name) : null)
   const coLeaderAvatar = cellGroup.co_leader?.photo_url || (cellGroup.co_leader ? getPlaceholderAvatar(cellGroup.co_leader.name) : null)
-  const activeMembers = cellGroup.members?.filter(m => m.is_active && m.member) || []
+  const activeMembers = cellGroup.members?.filter(m => m.is_active !== false && m.member) || []
   const activeMemberIds = new Set(activeMembers.map(m => m.member.id))
 
   return (
@@ -295,6 +308,7 @@ function CellGroupDetailPage() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {cellGroup.is_team === true && <TeamBadge size="md" />}
                 {cellGroup.meeting_day && (
                   <span className={`px-3 py-1 text-sm font-medium rounded-full ${dayColors[cellGroup.meeting_day] || 'bg-gray-100 text-gray-800'}`}>
                     {cellGroup.meeting_day}s
@@ -440,6 +454,9 @@ function CellGroupDetailPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                {addNotice && (
+                  <p className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">{addNotice}</p>
+                )}
                 {activeMembers.length === 0 ? (
                   <p className="text-gray-500 text-center py-4">No members yet</p>
                 ) : (
@@ -533,7 +550,7 @@ function CellGroupDetailPage() {
                       >
                         {cellGroup.leader.name}
                       </Link>
-                      <p className="text-sm text-[#8B1538] font-medium">Cell Leader</p>
+                      <p className="text-sm text-[#8B1538] font-medium">Circle Leader</p>
                       {cellGroup.leader.phone && (
                         <p className="text-xs text-gray-500">{cellGroup.leader.phone}</p>
                       )}
@@ -718,6 +735,9 @@ function CellGroupDetailPage() {
                 <option value="leader">Leader</option>
               </select>
             </div>
+            {addNotice && (
+              <p className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">{addNotice}</p>
+            )}
             <div className="max-h-64 overflow-y-auto space-y-2">
               {isSearching && (
                 <div className="flex items-center justify-center py-4">

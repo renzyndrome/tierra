@@ -323,7 +323,7 @@ describe('Satellite Server Functions', () => {
       expect(result.data).toHaveLength(2)
     })
 
-    it('should be associated with cell groups', async () => {
+    it('should be associated with Quest Circles', async () => {
       const satellite = createMockSatelliteRow({ id: 'sat-with-groups' })
       seedMockData('satellites', [satellite])
 

@@ -7,6 +7,7 @@ import { getPlaceholderAvatar } from '../../lib/storage'
 import type { Member, Satellite, CellGroupWithRelations, MinistryWithRelations, MemberAttendanceSummary } from '../../lib/types'
 import { STAGE_LABELS } from '../../lib/constants'
 import { AttendanceHistory } from '../../components/AttendanceHistory'
+import { TeamBadge } from '../../components/CellGroupCard'
 import { getMyAttendance } from '../../server/functions/attendance'
 import { getMyClaimStatus, getMyLedGroups } from '../../server/functions/memberClaims'
 import type { MyClaimStatus } from '../../lib/types'
@@ -99,7 +100,7 @@ function ProfilePage() {
           if (sat) setSatellite(sat as Satellite)
         }
 
-        // Fetch cell groups
+        // Fetch Quest Circles
         const { data: cgMemberships } = await supabase
           .from('member_cell_groups')
           .select(`
@@ -107,7 +108,8 @@ function ProfilePage() {
             cell_group:cell_groups(*)
           `)
           .eq('member_id', profile.member_id)
-          .eq('is_active', true)
+          // null reads as active (the column defaults to true)
+          .not('is_active', 'is', false)
 
         if (cgMemberships) {
           setCellGroups(cgMemberships.map((m: any) => m.cell_group) as CellGroupWithRelations[])
@@ -291,7 +293,10 @@ function ProfilePage() {
                         params={{ groupId: cg.id }}
                         className="block p-4 border border-gray-200 rounded-lg hover:border-[#8B1538] transition-colors"
                       >
-                        <p className="font-medium text-gray-900">{cg.name}</p>
+                        <p className="font-medium text-gray-900">
+                          {cg.name}
+                          {cg.is_team === true && <TeamBadge className="ml-2 align-middle" />}
+                        </p>
                         {cg.meeting_day && cg.meeting_time && (
                           <p className="text-sm text-gray-500">
                             {cg.meeting_day}s at {cg.meeting_time}

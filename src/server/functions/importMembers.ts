@@ -5,7 +5,9 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { createServerAdminClient } from '../../lib/supabase'
 import { requireAdmin } from './_authGuard'
+import { enrollInAgapayIfEligible } from '../agapayEnroll'
 import { getSimpleStageFromJourney } from '../../lib/constants'
+import { fetchAllPages } from '../../lib/fetchAllPages'
 import type { DiscipleshipJourney, FollowThrough, LeadershipLevel, CivilStatus, MemberCategory } from '../../lib/types'
 
 // Raw member data from spreadsheet
@@ -392,7 +394,7 @@ export const importSpreadsheetData = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     // Bulk import rewrites the directory: admins only.
-    await requireAdmin(data.accessToken)
+    const caller = await requireAdmin(data.accessToken)
 
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for import')
@@ -426,6 +428,10 @@ export const importSpreadsheetData = createServerFn({ method: 'POST' })
       skipped: 0,
       errors: [] as string[],
       disciplerLinks: 0,
+      /** discipler links not written: the member already had a discipler */
+      disciplerSkipped: 0,
+      /** discipler links whose Agapay enrollment failed (the link stands) */
+      agapayEnrollFailed: 0,
       ministryLinks: 0,
     }
 
@@ -569,7 +575,9 @@ export const importSpreadsheetData = createServerFn({ method: 'POST' })
       if (error) {
         // Only log non-duplicate errors to keep error list manageable
         if (error.code === '23505') {
-          // Duplicate email — retry with email set to null
+          // Duplicate email (members.email is UNIQUE). Deliberate: the sheet
+          // has family members sharing one address, so the second person is
+          // kept without an email instead of being dropped. Retry with null.
           const retryData = { ...tm.memberData, email: null }
           const { data: retryInserted, error: retryError } = await supabase
             .from('members')
@@ -625,14 +633,19 @@ export const importSpreadsheetData = createServerFn({ method: 'POST' })
       addNameVariants(m.rawName, m.id)
     }
 
-    // Also fetch all existing members
-    const { data: existingMembers } = await supabase
-      .from('members')
-      .select('id, name')
-    if (existingMembers) {
-      for (const m of existingMembers) {
-        addNameVariants(m.name, m.id)
-      }
+    // Also fetch all existing members. Paged: a plain select stops at the
+    // PostgREST row cap (1000 by default).
+    const { rows: existingMembers, error: existingErr } = await fetchAllPages<{ id: string; name: string }>(
+      (from, to) =>
+        supabase
+          .from('members')
+          .select('id, name')
+          .order('id')
+          .range(from, to) as unknown as PromiseLike<{ data: { id: string; name: string }[] | null; error: unknown }>,
+    )
+    if (existingErr) console.error('[Import] Member name lookup incomplete:', existingErr)
+    for (const m of existingMembers) {
+      addNameVariants(m.name, m.id)
     }
 
     /**
@@ -671,7 +684,7 @@ export const importSpreadsheetData = createServerFn({ method: 'POST' })
       const noTitleParsed = parseName(noTitleRaw).toLowerCase()
       if (nameToId.has(noTitleParsed)) return nameToId.get(noTitleParsed)!
 
-      // 5. Handle hyphenated/combined names like "EUGENIO-Apple Matabuena"
+      // 5. Handle hyphenated/combined names like "MAGLANOC-Rosario Tamayo"
       const dehyphenated = lower.replace(/-/g, ', ')
       const dehyphenatedParsed = parseName(dehyphenated).toLowerCase()
       if (nameToId.has(dehyphenatedParsed)) return nameToId.get(dehyphenatedParsed)!
@@ -692,12 +705,26 @@ export const importSpreadsheetData = createServerFn({ method: 'POST' })
       const disciplerId = findMemberId(tm.disciplerName)
 
       if (disciplerId && disciplerId !== memberId) {
-        const { error } = await supabase
+        // Only an empty discipler is filled. An existing one is kept: changing
+        // it is an Agapay reassignment, not an import side effect.
+        const { data: linked, error } = await supabase
           .from('members')
           .update({ discipler_id: disciplerId })
           .eq('id', memberId)
+          .is('discipler_id', null)
+          .select('id')
 
-        if (!error) results.disciplerLinks++
+        if (error) {
+          console.error('[Import] Discipler link failed:', error)
+        } else if ((linked ?? []).length === 0) {
+          results.disciplerSkipped++
+        } else {
+          results.disciplerLinks++
+          // A discipler puts the member in that discipler's Agapay queue.
+          // A failure is counted; the member's Edit page Save retries it.
+          const enroll = await enrollInAgapayIfEligible(supabase, memberId, caller.userId, 'import')
+          if (enroll === 'failed') results.agapayEnrollFailed++
+        }
       }
     }
 
@@ -726,7 +753,7 @@ export const importSpreadsheetData = createServerFn({ method: 'POST' })
     return {
       success: true,
       results,
-      summary: `Imported ${results.imported} members, linked ${results.disciplerLinks} discipler relationships, created ${results.ministryLinks} ministry assignments. ${results.skipped} skipped. ${results.errors.length} errors.`,
+      summary: `Imported ${results.imported} members, linked ${results.disciplerLinks} discipler relationships (${results.disciplerSkipped} already assigned, skipped), created ${results.ministryLinks} ministry assignments. ${results.skipped} skipped. ${results.errors.length} errors.`,
     }
   })
 
@@ -736,10 +763,10 @@ export const importSpreadsheetData = createServerFn({ method: 'POST' })
 // ============================================
 
 // ============================================
-// GENERATE CELL GROUPS FROM DISCIPLER RELATIONSHIPS
+// GENERATE QUEST CIRCLES FROM DISCIPLER RELATIONSHIPS
 // Reads spreadsheet data to find discipler-disciple pairs,
-// matches names to DB members, creates cell groups.
-// Each discipler becomes a cell group leader,
-// their disciples become cell group members.
+// matches names to DB members, creates Quest Circles.
+// Each discipler becomes a Quest Circle leader,
+// their disciples become Quest Circle members.
 // ============================================
 
