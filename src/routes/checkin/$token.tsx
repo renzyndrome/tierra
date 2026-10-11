@@ -4,6 +4,8 @@
 //   * Guest -> types name (+ optional email and "who invited you?"); matching is
 //     invisible. The email is a matching hint for staff and the address for a
 //     later account invite.
+// After check-in: a welcome to the service, then (when the session has a
+// prophetic prompt) one verse for the sermon topic.
 
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -319,6 +321,7 @@ function GuestForm({
 
 function SuccessState({ result, serviceName }: { result: CheckinResult; serviceName: string }) {
   const already = result.status === 'already_checked_in'
+  const word = result.propheticWord
   return (
     <div className="p-8 text-center">
       <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
@@ -326,17 +329,21 @@ function SuccessState({ result, serviceName }: { result: CheckinResult; serviceN
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
         </svg>
       </div>
-      <h2 className="text-2xl font-bold text-gray-900">
-        {already ? "You're already checked in" : "You're checked in!"}
-      </h2>
+      <h2 className="text-2xl font-bold text-gray-900">Welcome to {serviceName}</h2>
       {result.displayName && (
         <p className="text-lg text-[#8B1538] font-semibold mt-1">{result.displayName}</p>
       )}
-      <p className="text-gray-600 mt-3">
-        {already
-          ? `We already have your attendance for ${serviceName}.`
-          : `Thanks for joining ${serviceName}. Enjoy the service! 🙌`}
-      </p>
+      <p className="text-gray-600 mt-3">{already ? 'Attendance already recorded.' : 'Checked in.'}</p>
+      {word && (
+        // Arrives a moment after the welcome; no motion when reduced motion is on.
+        <figure className="mt-6 rounded-xl bg-[#FDF2F4] px-5 py-5 text-left animate-in fade-in slide-in-from-bottom-2 duration-700 delay-500 fill-mode-backwards motion-reduce:animate-none">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#8B1538]">Prophetic word</p>
+          <blockquote className="mt-2 font-serif text-lg leading-relaxed text-gray-900">{word.text}</blockquote>
+          <figcaption className="mt-3 text-sm font-medium text-[#8B1538]">
+            {word.reference} <span className="font-normal text-gray-400">{word.translation}</span>
+          </figcaption>
+        </figure>
+      )}
     </div>
   )
 }
