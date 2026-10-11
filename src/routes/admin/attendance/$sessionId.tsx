@@ -437,6 +437,11 @@ function CheckinsTab({
                 {c.invited_by && <p className="text-xs text-gray-400">Invited by {c.invited_by}</p>}
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
+                {c.is_first_timer && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                    First timer
+                  </span>
+                )}
                 <StatusBadge status={c.match_status} />
                 {canWrite && (
                   <Button
