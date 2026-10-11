@@ -1,5 +1,7 @@
 // Quest Laguna Directory System - TypeScript Types
 
+import type { PropheticWord } from './propheticWord'
+
 // ============================================
 // ENUMS AND CONSTANTS
 // ============================================
@@ -1099,6 +1101,8 @@ export interface ServiceSession {
   session_date: string
   satellite_id: string | null
   title: string | null
+  // Sermon topic for the verse shown after QR check-in; null for none.
+  prophetic_prompt?: string | null
   qr_token: string
   is_open: boolean
   opened_at: string | null
@@ -1114,6 +1118,7 @@ export interface ServiceSessionInsert {
   session_date: string
   satellite_id?: string | null
   title?: string | null
+  prophetic_prompt?: string | null
   qr_token?: string
   is_open?: boolean
   created_by?: string | null
@@ -1123,6 +1128,7 @@ export interface ServiceSessionUpdate {
   session_date?: string
   satellite_id?: string | null
   title?: string | null
+  prophetic_prompt?: string | null
   is_open?: boolean
   closed_at?: string | null
 }
@@ -1135,6 +1141,9 @@ export interface ServiceSessionWithRelations extends ServiceSession {
   // Open AND dated before today (church time): QR check-in refuses it and the
   // admin list flags it for closing. Computed server-side, not a column.
   is_overdue?: boolean
+  // Verse list the prophetic prompt matches (session detail only). Computed
+  // server-side, not a column.
+  prophetic_set?: { topic: string; verse_count: number } | null
 }
 
 export interface AttendanceRecord {
@@ -1287,6 +1296,8 @@ export interface CheckinResult {
   matched: boolean
   displayName: string | null
   recordId: string
+  // QR check-ins only: one verse for the session's prophetic prompt.
+  propheticWord?: PropheticWord | null
 }
 
 // ============================================
