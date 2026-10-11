@@ -25,12 +25,25 @@ export type NameGuessFlag =
   | 'particle'
   | 'initial'
   | 'nickname'
+  | 'title'
+  | 'stray_dot'
   | 'ambiguous_middle'
   | 'many_tokens'
+
+/** What one word of `name` is: a part, or left out (titles, nicknames). */
+export type WordRole = 'first' | 'middle' | 'last' | 'suffix' | 'skip'
+
+export interface NameWord {
+  /** The word as written in `name`, without commas. */
+  text: string
+  role: WordRole
+}
 
 export interface NameGuess extends NameParts {
   confidence: 'high' | 'medium' | 'low'
   flags: NameGuessFlag[]
+  /** Every word of the name with its guessed role, in name order. */
+  words: NameWord[]
 }
 
 /** Generational suffixes, compared lowercased with trailing dots and commas removed. */
@@ -44,6 +57,14 @@ export const SURNAME_PARTICLES: ReadonlySet<string> = new Set([
   'de', 'dela', 'del', 'delos', 'delas', 'la', 'las', 'los', 'san', 'sta', 'sto', 'santa', 'santo', 'y',
   'da', 'di', 'van', 'von',
 ])
+
+/** Title words left out of the parts ("Sister", "Pastor", "Dr."). Compared lowercased without a dot. */
+export const TITLE_WORDS: ReadonlySet<string> = new Set([
+  'sister', 'sis', 'bro', 'brother', 'ptr', 'pastor', 'pastora', 'pas', 'rev', 'fr', 'dr', 'engr', 'atty',
+])
+
+// Abbreviations that keep their dot inside a part.
+const KEEP_DOT: ReadonlySet<string> = new Set(['ma', 'sta', 'sto', 'jr', 'sr'])
 
 /**
  * Lowercased first words that block the two-word auto split. Must equal the
@@ -61,8 +82,6 @@ export const AUTO_SPLIT_BLOCKED_FIRST: readonly string[] = [
 export const AUTO_SPLIT_BLOCKED_LAST: readonly string[] = [
   'jr', 'sr', 'ii', 'iii', 'iv', 'de', 'dela', 'del', 'la', 'las', 'los', 'san', 'sta', 'sto', 'santa', 'santo', 'y',
 ]
-
-const EMPTY_PARTS: NameParts = { first_name: null, middle_name: null, last_name: null, suffix: null }
 
 // Letters, apostrophes and hyphens only; same as the SQL [[:alpha:]'-] check.
 const PLAIN_WORD = /^[\p{L}'-]+$/u
@@ -116,135 +135,245 @@ const bare = (token: string) => token.toLowerCase().replace(/[.,]+$/, '')
 const isSuffix = (token: string) => SUFFIX_TOKENS.has(bare(token))
 const isParticle = (token: string) => SURNAME_PARTICLES.has(bare(token))
 const isMaPrefix = (token: string) => bare(token) === 'ma'
+const isTitle = (token: string) => TITLE_WORDS.has(bare(token))
 
 /**
- * Take the last word plus any particles before it, keeping at least `keep`
- * words in front. ["Juan","Dela","Cruz"] -> group "Dela Cruz", rest ["Juan"].
+ * A word as it goes into a part. A stray dot after a full word goes
+ * ("Bom." -> "Bom"); initials ("C."), "Ma.", "Sta.", "Jr." keep theirs.
  */
-function takeTrailingGroup(tokens: string[], keep: number): { group: string[]; rest: string[] } {
-  let start = tokens.length - 1
-  while (start - 1 >= keep && isParticle(tokens[start - 1])) start--
-  return { group: tokens.slice(start), rest: tokens.slice(0, start) }
+export function partWord(text: string): string {
+  const letters = [...text.replace(/[^\p{L}]/gu, '')].length
+  if (text.endsWith('.') && letters >= 3 && !KEEP_DOT.has(bare(text)) && !SUFFIX_TOKENS.has(bare(text))) {
+    return text.replace(/\.+$/, '')
+  }
+  return text
 }
 
-/**
- * Best-guess split of a space-form name (no comma). Suffix first, then the
- * surname with its particles, then the middle (last remaining word with its
- * particles), and the rest is the first name. "Ma."/"Ma" as the first word
- * joins the next word ("Ma. Cristina").
- */
-function guessSpaceForm(raw: string[], flags: NameGuessFlag[]): NameParts {
-  let tokens = [...raw]
-  let suffix: string | null = null
+/** The four parts from word roles: each part is its words in name order. */
+export function partsFromWords(words: readonly NameWord[]): NameParts {
+  const join = (role: WordRole) =>
+    cleanPart(words.filter((w) => w.role === role).map((w) => partWord(w.text)).join(' '))
+  return { first_name: join('first'), middle_name: join('middle'), last_name: join('last'), suffix: join('suffix') }
+}
 
-  if (tokens.length >= 3 && isSuffix(tokens[tokens.length - 1])) {
-    suffix = tokens[tokens.length - 1].replace(/,+$/, '')
-    tokens = tokens.slice(0, -1)
-    flags.push('suffix')
+/** Every word with a different role swapped: e.g. middle -> first. Returns a new array. */
+export function moveRole(words: readonly NameWord[], from: WordRole, to: WordRole): NameWord[] {
+  return words.map((w) => (w.role === from ? { ...w, role: to } : w))
+}
+
+/** One word's role changed. Returns a new array. */
+export function setWordRole(words: readonly NameWord[], index: number, role: WordRole): NameWord[] {
+  return words.map((w, i) => (i === index ? { ...w, role } : w))
+}
+
+interface RawWord {
+  text: string
+  /** Commas before this word: 0 for the first segment. */
+  segment: number
+}
+
+/** Words of a name with commas taken out; each word remembers its comma segment. */
+function splitWords(name: string): RawWord[] {
+  const out: RawWord[] = []
+  let segment = 0
+  for (const token of tokenizeName(name.replace(/,/g, ' , '))) {
+    if (token === ',') segment++
+    else out.push({ text: token, segment })
   }
+  return out
+}
 
-  if (tokens.length >= 3 && isMaPrefix(tokens[0])) {
-    tokens = [`${tokens[0]} ${tokens[1]}`, ...tokens.slice(2)]
+// Groups of word indices handled as one unit ("Ma." + "Cristina").
+type Unit = number[]
+
+/** Units from the end: the last unit plus particle units before it, keeping `keep` in front. */
+function trailingGroup(units: Unit[], words: RawWord[], keep: number): { group: Unit[]; rest: Unit[] } {
+  const particle = (u: Unit) => u.length === 1 && isParticle(words[u[0]].text)
+  let start = units.length - 1
+  while (start - 1 >= keep && particle(units[start - 1])) start--
+  return { group: units.slice(start), rest: units.slice(0, start) }
+}
+
+/** "Ma."/"Ma" in front joins the next word when 3+ units remain. */
+function glueMa(units: Unit[], words: RawWord[], min = 3): Unit[] {
+  if (units.length >= min && isMaPrefix(words[units[0][0]].text)) {
+    return [[...units[0], ...units[1]], ...units.slice(2)]
   }
+  return units
+}
 
-  if (tokens.length === 0) return { ...EMPTY_PARTS, suffix }
-  if (tokens.length === 1) {
-    flags.push('single')
-    return { first_name: tokens[0], middle_name: null, last_name: null, suffix }
+/** Given-name units: one unit is the first name; with more, the last unit (and its particles) is the middle. */
+function assignGiven(units: Unit[], words: RawWord[], roles: WordRole[], flags: NameGuessFlag[]): void {
+  const set = (us: Unit[], role: WordRole) => us.forEach((u) => u.forEach((i) => (roles[i] = role)))
+  if (units.length === 0) return
+  if (units.length === 1) {
+    set(units, 'first')
+    return
   }
-
-  const surname = takeTrailingGroup(tokens, 1)
-  if (surname.group.length > 1) flags.push('particle')
-  const remaining = surname.rest
-  const last_name = surname.group.join(' ')
-
-  if (remaining.length === 1) {
-    return { first_name: remaining[0], middle_name: null, last_name, suffix }
-  }
-
-  const middle = takeTrailingGroup(remaining, 1)
+  const middle = trailingGroup(units, words, 1)
   if (middle.group.length > 1 && !flags.includes('particle')) flags.push('particle')
-  const middle_name = middle.group.join(' ')
-  if (INITIAL.test(middle_name)) flags.push('initial')
+  set(middle.group, 'middle')
+  set(middle.rest, 'first')
+  const middleText = middle.group.flat().map((i) => words[i].text).join(' ')
+  if (INITIAL.test(middleText)) flags.push('initial')
   else flags.push(middle.rest.length > 1 ? 'many_tokens' : 'ambiguous_middle')
+}
 
-  return { first_name: middle.rest.join(' '), middle_name, last_name, suffix }
+/** Surname at the end: "Juan C. Dela Cruz". */
+function assignFirstLast(units: Unit[], words: RawWord[], roles: WordRole[], flags: NameGuessFlag[]): void {
+  units = glueMa(units, words)
+  if (units.length === 1) {
+    units[0].forEach((i) => (roles[i] = 'first'))
+    flags.push('single')
+    return
+  }
+  const surname = trailingGroup(units, words, 1)
+  if (surname.group.length > 1) flags.push('particle')
+  surname.group.flat().forEach((i) => (roles[i] = 'last'))
+  assignGiven(surname.rest, words, roles, flags)
+}
+
+/** Surname in front: "Abando Chloe Gail", "Dela Cruz Juan". */
+function assignLastFirst(units: Unit[], words: RawWord[], roles: WordRole[], flags: NameGuessFlag[]): void {
+  const particle = (u: Unit) => u.length === 1 && isParticle(words[u[0]].text)
+  let end = 0
+  while (end < units.length - 1 && particle(units[end])) end++
+  units.slice(0, end + 1).flat().forEach((i) => (roles[i] = 'last'))
+  if (end > 0) flags.push('particle')
+  const given = glueMa(units.slice(end + 1), words, 2)
+  if (given.length === 0) flags.push('single')
+  assignGiven(given, words, roles, flags)
 }
 
 /**
- * Comma forms. "Juan Cruz, Jr." is a space-form name with a suffix. Anything
- * else is surname first: "Dela Cruz, Juan, C." or "Cruz, Juan C.".
+ * Surname-first comma form: "Dela Cruz, Juan, C." or "Cruz, Juan C.".
+ * Segment 0 is the last name, segment 1 the first name (a trailing initial
+ * there is the middle), segments 2+ the middle name.
  */
-function guessCommaForm(name: string, flags: NameGuessFlag[]): NameParts {
-  const segments = name.split(',').map((s) => s.trim()).filter(Boolean)
-
-  if (segments.length === 2 && isSuffix(segments[1]) && !segments[1].includes(' ')) {
-    const parts = guessSpaceForm(tokenizeName(segments[0]), flags)
-    if (!flags.includes('suffix')) flags.push('suffix')
-    return { ...parts, suffix: segments[1] }
+function assignComma(core: number[], words: RawWord[], roles: WordRole[], flags: NameGuessFlag[]): void {
+  const seg = (n: number) => core.filter((i) => words[i].segment === n)
+  seg(0).forEach((i) => (roles[i] = 'last'))
+  const given = seg(1)
+  const middle = core.filter((i) => words[i].segment >= 2)
+  if (middle.length === 0 && given.length >= 2 && INITIAL.test(words[given[given.length - 1]].text)) {
+    middle.push(given.pop()!)
   }
-
-  flags.push('comma')
-  const suffixIndex = segments.findIndex((seg, i) => i > 0 && isSuffix(seg) && !seg.includes(' '))
-  const suffix = suffixIndex === -1 ? null : segments[suffixIndex]
-  const rest = segments.filter((_, i) => i !== suffixIndex)
-  if (suffix) flags.push('suffix')
-
-  const last_name = cleanPart(rest[0])
-  let first_name = cleanPart(rest[1])
-  let middle_name: string | null = null
-
-  if (rest.length >= 3) {
-    const m = cleanPart(rest.slice(2).join(' '))
-    // A full middle name with a stray trailing dot ("Santos.") loses the dot;
-    // an initial ("C.") keeps it.
-    middle_name = m && !INITIAL.test(m) ? m.replace(/\.+$/, '') : m
-  } else if (first_name) {
-    const given = tokenizeName(first_name)
-    if (given.length >= 2 && INITIAL.test(given[given.length - 1])) {
-      middle_name = given[given.length - 1]
-      first_name = given.slice(0, -1).join(' ')
-    }
-  }
-  if (middle_name && INITIAL.test(middle_name)) flags.push('initial')
-
-  return { first_name, middle_name, last_name, suffix }
-}
-
-/** Pull "(Bong)" and "Bong" in quotes out of a name; they are nicknames, not parts. */
-function stripNicknames(name: string, flags: NameGuessFlag[]): string {
-  const stripped = name.replace(/\([^)]*\)|"[^"]*"|“[^”]*”/g, ' ')
-  if (stripped !== name) flags.push('nickname')
-  return stripped
+  given.forEach((i) => (roles[i] = 'first'))
+  middle.forEach((i) => (roles[i] = 'middle'))
+  if (middle.length === 1 && INITIAL.test(words[middle[0]].text)) flags.push('initial')
 }
 
 /**
- * Best-guess split of a full name for an admin to confirm. Keeps the original
- * casing and never rewrites words. Confidence:
+ * Best-guess role for every word, for an admin to confirm. Keeps the original
+ * words; only partWord() drops stray dots when the parts are built.
+ *   order 'first-last'  (default) surname at the end, or surname-first when
+ *                       written with a comma ("Cruz, Juan")
+ *   order 'last-first'  surname in front, no comma ("Abando Chloe Gail")
+ * Titles ("Sister") and nicknames in brackets or quotes are left out. A
+ * suffix (Jr., Sr., II, III, IV) is found anywhere after the first word.
+ * Confidence:
  *   high    two words, or a middle initial ("Juan C. Cruz")
- *   medium  a full middle name, 4+ words, commas, nicknames
+ *   medium  a full middle name, 4+ words, commas, nicknames, titles, stray dots
  *   low     empty or one word
  */
-export function guessNameParts(name: string | null | undefined): NameGuess {
-  const flags: NameGuessFlag[] = []
-  const cleaned = stripNicknames(name ?? '', flags).trim()
+export function guessWordRoles(
+  name: string | null | undefined,
+  order: 'first-last' | 'last-first' = 'first-last',
+): { words: NameWord[]; flags: NameGuessFlag[]; confidence: NameGuess['confidence'] } {
+  const raw = splitWords(name ?? '')
+  if (raw.length === 0) return { words: [], flags: ['empty'], confidence: 'low' }
 
-  if (!cleaned.replace(/[,\s]/g, '')) {
-    return { ...EMPTY_PARTS, confidence: 'low', flags: ['empty'] }
+  const flags: NameGuessFlag[] = []
+  const roles: WordRole[] = raw.map(() => 'first')
+
+  // Nicknames: every word inside brackets or quotes.
+  let open: string | null = null
+  raw.forEach((w, i) => {
+    const t = w.text
+    let opened = false
+    if (!open && /^[("“]/.test(t)) {
+      open = t[0] === '(' ? ')' : t[0] === '“' ? '”' : '"'
+      opened = true
+    }
+    if (open) {
+      roles[i] = 'skip'
+      if (!flags.includes('nickname')) flags.push('nickname')
+      // A lone opening bracket does not close itself.
+      if (t.endsWith(open) && !(opened && t.length === 1)) open = null
+    }
+  })
+  raw.forEach((w, i) => {
+    if (roles[i] === 'skip') return
+    if (isTitle(w.text)) {
+      roles[i] = 'skip'
+      if (!flags.includes('title')) flags.push('title')
+    }
+  })
+  const firstKept = roles.findIndex((r) => r !== 'skip')
+  raw.forEach((w, i) => {
+    if (roles[i] !== 'skip' && i !== firstKept && isSuffix(w.text)) {
+      roles[i] = 'suffix'
+      if (!flags.includes('suffix')) flags.push('suffix')
+    }
+  })
+
+  const core = raw.map((_, i) => i).filter((i) => roles[i] !== 'skip' && roles[i] !== 'suffix')
+  const hasComma = raw.some((w) => w.segment > 0)
+  if (hasComma) flags.push('comma')
+
+  if (core.length > 0) {
+    const seg0 = core.filter((i) => raw[i].segment === 0)
+    const surnameFirstComma =
+      order === 'first-last' &&
+      hasComma &&
+      seg0.length > 0 &&
+      core.some((i) => raw[i].segment > 0) &&
+      seg0.filter((i) => !isParticle(raw[i].text)).length <= 1
+    if (surnameFirstComma) assignComma(core, raw, roles, flags)
+    else if (order === 'last-first') assignLastFirst(core.map((i) => [i]), raw, roles, flags)
+    else assignFirstLast(core.map((i) => [i]), raw, roles, flags)
   }
 
-  const parts = cleaned.includes(',')
-    ? guessCommaForm(cleaned, flags)
-    : guessSpaceForm(tokenizeName(cleaned), flags)
+  const words: NameWord[] = raw.map((w, i) => ({ text: w.text, role: roles[i] }))
+  if (words.some((w) => w.role !== 'skip' && partWord(w.text) !== w.text)) flags.push('stray_dot')
 
+  const parts = partsFromWords(words)
   const confidence: NameGuess['confidence'] =
     flags.includes('single') || !parts.first_name
       ? 'low'
-      : flags.some((f) => f === 'comma' || f === 'nickname' || f === 'ambiguous_middle' || f === 'many_tokens')
+      : flags.some((f) =>
+            ['comma', 'nickname', 'title', 'stray_dot', 'ambiguous_middle', 'many_tokens'].includes(f),
+          )
         ? 'medium'
         : 'high'
+  return { words, flags, confidence }
+}
 
-  return { ...parts, confidence, flags }
+/** Best-guess split of a full name (see guessWordRoles). */
+export function guessNameParts(name: string | null | undefined): NameGuess {
+  const g = guessWordRoles(name)
+  return { ...partsFromWords(g.words), confidence: g.confidence, flags: g.flags, words: g.words }
+}
+
+/**
+ * Roles for the words of `name` that rebuild stored parts, for showing a
+ * stored split as word menus. A word found in no part is left out.
+ */
+export function rolesFromParts(name: string, parts: NameParts): NameWord[] {
+  const key = (t: string) => partWord(t).toLowerCase().replace(/[.,]+$/, '')
+  const queues: [WordRole, string[]][] = [
+    ['first', tokenizeName(parts.first_name).map(key)],
+    ['middle', tokenizeName(parts.middle_name).map(key)],
+    ['last', tokenizeName(parts.last_name).map(key)],
+    ['suffix', tokenizeName(parts.suffix).map(key)],
+  ]
+  return splitWords(name).map((w) => {
+    const k = key(w.text)
+    const hit = queues.find(([, q]) => q[0] === k)
+    if (!hit) return { text: w.text, role: 'skip' as WordRole }
+    hit[1].shift()
+    return { text: w.text, role: hit[0] }
+  })
 }
 
 /** Move the middle name to the end of the first name ("John" + "Paul" -> "John Paul"). */
@@ -294,6 +423,22 @@ export function initialNameParts(member: NamePartsSource): { parts: NameParts; s
     suffix: guess.suffix,
   }
   return { parts, source: 'guess', guess }
+}
+
+/**
+ * Word menus and parts to show for a member on the review screen: the stored
+ * split when trusted (words mapped back with rolesFromParts), otherwise a
+ * fresh guess from `name`.
+ */
+export function initialWordRoles(member: NamePartsSource): {
+  words: NameWord[]
+  parts: NameParts
+  source: 'confirmed' | 'auto' | 'guess'
+  guess: NameGuess | null
+} {
+  const init = initialNameParts(member)
+  if (init.guess) return { words: init.guess.words, parts: init.parts, source: init.source, guess: init.guess }
+  return { words: rolesFromParts(member.name, init.parts), parts: init.parts, source: init.source, guess: null }
 }
 
 const NAME_PART_KEYS = ['first_name', 'middle_name', 'last_name', 'suffix'] as const
