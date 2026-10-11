@@ -34,6 +34,7 @@ import { Route as DirectoryMembersIndexRouteImport } from './routes/directory/me
 import { Route as DirectoryCellGroupsIndexRouteImport } from './routes/directory/cell-groups/index'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
 import { Route as AdminRolesIndexRouteImport } from './routes/admin/roles/index'
+import { Route as AdminNameReviewIndexRouteImport } from './routes/admin/name-review/index'
 import { Route as AdminMembersIndexRouteImport } from './routes/admin/members/index'
 import { Route as AdminClaimsIndexRouteImport } from './routes/admin/claims/index'
 import { Route as AdminAttendanceIndexRouteImport } from './routes/admin/attendance/index'
@@ -176,6 +177,11 @@ const AdminRolesIndexRoute = AdminRolesIndexRouteImport.update({
   path: '/admin/roles/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminNameReviewIndexRoute = AdminNameReviewIndexRouteImport.update({
+  id: '/admin/name-review/',
+  path: '/admin/name-review/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminMembersIndexRoute = AdminMembersIndexRouteImport.update({
   id: '/admin/members/',
   path: '/admin/members/',
@@ -287,6 +293,7 @@ export interface FileRoutesByFullPath {
   '/admin/attendance': typeof AdminAttendanceIndexRoute
   '/admin/claims': typeof AdminClaimsIndexRoute
   '/admin/members': typeof AdminMembersIndexRoute
+  '/admin/name-review': typeof AdminNameReviewIndexRoute
   '/admin/roles': typeof AdminRolesIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/directory/cell-groups': typeof DirectoryCellGroupsIndexRoute
@@ -328,6 +335,7 @@ export interface FileRoutesByTo {
   '/admin/attendance': typeof AdminAttendanceIndexRoute
   '/admin/claims': typeof AdminClaimsIndexRoute
   '/admin/members': typeof AdminMembersIndexRoute
+  '/admin/name-review': typeof AdminNameReviewIndexRoute
   '/admin/roles': typeof AdminRolesIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/directory/cell-groups': typeof DirectoryCellGroupsIndexRoute
@@ -370,6 +378,7 @@ export interface FileRoutesById {
   '/admin/attendance/': typeof AdminAttendanceIndexRoute
   '/admin/claims/': typeof AdminClaimsIndexRoute
   '/admin/members/': typeof AdminMembersIndexRoute
+  '/admin/name-review/': typeof AdminNameReviewIndexRoute
   '/admin/roles/': typeof AdminRolesIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/directory/cell-groups/': typeof DirectoryCellGroupsIndexRoute
@@ -413,6 +422,7 @@ export interface FileRouteTypes {
     | '/admin/attendance'
     | '/admin/claims'
     | '/admin/members'
+    | '/admin/name-review'
     | '/admin/roles'
     | '/admin/users'
     | '/directory/cell-groups'
@@ -454,6 +464,7 @@ export interface FileRouteTypes {
     | '/admin/attendance'
     | '/admin/claims'
     | '/admin/members'
+    | '/admin/name-review'
     | '/admin/roles'
     | '/admin/users'
     | '/directory/cell-groups'
@@ -495,6 +506,7 @@ export interface FileRouteTypes {
     | '/admin/attendance/'
     | '/admin/claims/'
     | '/admin/members/'
+    | '/admin/name-review/'
     | '/admin/roles/'
     | '/admin/users/'
     | '/directory/cell-groups/'
@@ -537,6 +549,7 @@ export interface RootRouteChildren {
   AdminAttendanceIndexRoute: typeof AdminAttendanceIndexRoute
   AdminClaimsIndexRoute: typeof AdminClaimsIndexRoute
   AdminMembersIndexRoute: typeof AdminMembersIndexRoute
+  AdminNameReviewIndexRoute: typeof AdminNameReviewIndexRoute
   AdminRolesIndexRoute: typeof AdminRolesIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
   DirectoryCellGroupsIndexRoute: typeof DirectoryCellGroupsIndexRoute
@@ -723,6 +736,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRolesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/name-review/': {
+      id: '/admin/name-review/'
+      path: '/admin/name-review'
+      fullPath: '/admin/name-review'
+      preLoaderRoute: typeof AdminNameReviewIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/members/': {
       id: '/admin/members/'
       path: '/admin/members'
@@ -857,6 +877,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAttendanceIndexRoute: AdminAttendanceIndexRoute,
   AdminClaimsIndexRoute: AdminClaimsIndexRoute,
   AdminMembersIndexRoute: AdminMembersIndexRoute,
+  AdminNameReviewIndexRoute: AdminNameReviewIndexRoute,
   AdminRolesIndexRoute: AdminRolesIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
   DirectoryCellGroupsIndexRoute: DirectoryCellGroupsIndexRoute,
