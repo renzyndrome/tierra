@@ -9,14 +9,22 @@ import {
   cleanPart,
   composeName,
   guessNameParts,
+  guessWordRoles,
   hasNameParts,
   initialNameParts,
+  initialWordRoles,
+  moveRole,
+  partWord,
+  partsFromWords,
+  rolesFromParts,
+  setWordRole,
   joinMiddleToFirst,
   joinMiddleToLast,
   splitTwoTokenName,
   tokenizeName,
   withNamePartsReview,
   type NameParts,
+  type WordRole,
 } from '../../lib/nameParts'
 
 const parts = (first: string | null, middle: string | null, last: string | null, suffix: string | null = null): NameParts => ({
@@ -158,6 +166,135 @@ describe('guessNameParts', () => {
     '  Juan   Cruz ',
   ])('round-trips space-form %s through composeName', (name) => {
     expect(composeName(guessNameParts(name))).toBe(tokenizeName(name).join(' '))
+  })
+})
+
+describe('guessNameParts: cases seen in the directory', () => {
+  it.each<[string, NameParts]>([
+    // Suffix in the middle of the name
+    ['Pedro Jr. Garcia Luna', parts('Pedro', 'Garcia', 'Luna', 'Jr.')],
+    ['Jose Iii L. Ramirez', parts('Jose', 'L.', 'Ramirez', 'Iii')],
+    ['Tomas Sr. Aquino Valdez', parts('Tomas', 'Aquino', 'Valdez', 'Sr.')],
+    // Title word left out
+    ['Carla Sister Domingo', parts('Carla', null, 'Domingo')],
+    ['Pastor Juan Cruz', parts('Juan', null, 'Cruz')],
+    // Stray dot after a full word dropped, initials and abbreviations kept
+    ['Rico Dan. Lopez', parts('Rico', 'Dan', 'Lopez')],
+    ['Lea N. De Leon', parts('Lea', 'N.', 'De Leon')],
+    ['Ma. Cristina Sta. Maria', parts('Ma. Cristina', null, 'Sta. Maria')],
+    // Comma after more than one word is not surname-first
+    ['Rosa Mira DA, Torres', parts('Rosa', 'Mira', 'DA Torres')],
+    // Multi-word nickname
+    ['Juan (Jun Jun) Cruz', parts('Juan', null, 'Cruz')],
+    ['Juan "Bong" Cruz', parts('Juan', null, 'Cruz')],
+  ])('splits %s', (name, expected) => {
+    expect(partsOf(name)).toEqual(expected)
+  })
+
+  it('flags titles and stray dots', () => {
+    expect(guessNameParts('Carla Sister Domingo').flags).toContain('title')
+    expect(guessNameParts('Rico Dan. Lopez').flags).toContain('stray_dot')
+    expect(guessNameParts('Lea N. De Leon').flags).not.toContain('stray_dot')
+  })
+})
+
+describe('guessWordRoles', () => {
+  const roles = (name: string, order?: 'first-last' | 'last-first') =>
+    guessWordRoles(name, order).words.map((w) => `${w.text}:${w.role}`)
+
+  it('gives every word a role, in name order', () => {
+    expect(roles('Juan C. Dela Cruz Jr.')).toEqual(['Juan:first', 'C.:middle', 'Dela:last', 'Cruz:last', 'Jr.:suffix'])
+    expect(roles('Carla Sister Domingo')).toEqual(['Carla:first', 'Sister:skip', 'Domingo:last'])
+    expect(roles('Cruz, Juan')).toEqual(['Cruz:last', 'Juan:first'])
+  })
+
+  it('reads last name first on request', () => {
+    expect(roles('Navarro Liza Mae', 'last-first')).toEqual(['Navarro:last', 'Liza:first', 'Mae:middle'])
+    expect(roles('Navarro Liza', 'last-first')).toEqual(['Navarro:last', 'Liza:first'])
+    expect(roles('Dela Cruz Juan Carlo', 'last-first')).toEqual(['Dela:last', 'Cruz:last', 'Juan:first', 'Carlo:middle'])
+    expect(roles('Reyes Ma. Cristina Santos', 'last-first')).toEqual([
+      'Reyes:last',
+      'Ma.:first',
+      'Cristina:first',
+      'Santos:middle',
+    ])
+    expect(roles('Santos Juan Jr.', 'last-first')).toEqual(['Santos:last', 'Juan:first', 'Jr.:suffix'])
+  })
+
+  it('returns no words for an empty name', () => {
+    expect(guessWordRoles('  ')).toEqual({ words: [], flags: ['empty'], confidence: 'low' })
+  })
+
+  it('keeps a lone opening bracket open', () => {
+    expect(roles('Juan ( Bong ) Cruz')).toEqual(['Juan:first', '(:skip', 'Bong:skip', '):skip', 'Cruz:last'])
+  })
+})
+
+describe('word role helpers', () => {
+  const w = (text: string, role: WordRole) => ({ text, role })
+
+  it('builds parts from roles in name order', () => {
+    expect(partsFromWords([w('Navarro', 'last'), w('Liza', 'first'), w('Mae', 'first')])).toEqual(
+      parts('Liza Mae', null, 'Navarro'),
+    )
+    expect(partsFromWords([w('Rico', 'first'), w('Dan.', 'middle'), w('Lopez', 'last'), w('Sister', 'skip')])).toEqual(
+      parts('Rico', 'Dan', 'Lopez'),
+    )
+  })
+
+  it('drops stray dots but keeps initials and abbreviations', () => {
+    expect(partWord('Dan.')).toBe('Dan')
+    expect(partWord('C.')).toBe('C.')
+    expect(partWord('Ma.')).toBe('Ma.')
+    expect(partWord('Sta.')).toBe('Sta.')
+    expect(partWord('Jr.')).toBe('Jr.')
+    expect(partWord('Iii.')).toBe('Iii.')
+  })
+
+  it('changes one word or one role without touching the input', () => {
+    const words = [w('Navarro', 'first'), w('Liza', 'middle'), w('Mae', 'last')]
+    const moved = moveRole(words, 'middle', 'first')
+    expect(moved.map((x) => x.role)).toEqual(['first', 'first', 'last'])
+    const set = setWordRole(words, 0, 'last')
+    expect(set.map((x) => x.role)).toEqual(['last', 'middle', 'last'])
+    expect(words.map((x) => x.role)).toEqual(['first', 'middle', 'last'])
+  })
+
+  it('maps stored parts back onto the words', () => {
+    expect(rolesFromParts('Navarro Liza Mae', parts('Liza Mae', null, 'Navarro')).map((x) => x.role)).toEqual([
+      'last',
+      'first',
+      'first',
+    ])
+    expect(rolesFromParts('Rico Dan. Lopez', parts('Rico', 'Dan', 'Lopez')).map((x) => x.role)).toEqual([
+      'first',
+      'middle',
+      'last',
+    ])
+    expect(rolesFromParts('Carla Sister Domingo', parts('Carla', null, 'Domingo')).map((x) => x.role)).toEqual([
+      'first',
+      'skip',
+      'last',
+    ])
+  })
+
+  it('initialWordRoles uses the stored split when trusted', () => {
+    const r = initialWordRoles({
+      name: 'Navarro Liza Mae',
+      first_name: 'Liza Mae',
+      last_name: 'Navarro',
+      name_parts_status: 'confirmed',
+    })
+    expect(r.source).toBe('confirmed')
+    expect(r.words.map((x) => x.role)).toEqual(['last', 'first', 'first'])
+    expect(r.parts).toEqual(parts('Liza Mae', null, 'Navarro'))
+  })
+
+  it('initialWordRoles guesses when pending', () => {
+    const r = initialWordRoles({ name: 'Juan C. Cruz', name_parts_status: 'pending' })
+    expect(r.source).toBe('guess')
+    expect(r.words.map((x) => x.role)).toEqual(['first', 'middle', 'last'])
+    expect(r.parts).toEqual(parts('Juan', 'C.', 'Cruz'))
   })
 })
 
