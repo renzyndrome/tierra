@@ -2883,6 +2883,21 @@ function AdminDashboard() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Data Quality */}
+                {profile && hasPermission(profile.role, 'members.write', permMatrix) && (
+                  <Card className="border-gray-200">
+                    <CardHeader>
+                      <CardTitle>Data Quality</CardTitle>
+                      <CardDescription>Member names split into first, middle, last name and suffix.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Link to="/admin/name-review">
+                        <Button variant="outline">Name Review</Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
           </TabsContent>
         </Tabs>

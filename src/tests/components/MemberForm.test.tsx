@@ -13,6 +13,12 @@ vi.mock('../../lib/storage', () => ({
   getPlaceholderAvatar: (name: string) => `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}`,
 }))
 
+// Types a first and last name into the split name boxes.
+async function typeName(user: ReturnType<typeof userEvent.setup>, first: string, last: string) {
+  await user.type(screen.getByPlaceholderText('First name'), first)
+  await user.type(screen.getByPlaceholderText('Last name'), last)
+}
+
 describe('MemberForm Component', () => {
   const mockOnSubmit = vi.fn()
   const mockOnCancel = vi.fn()
@@ -41,7 +47,10 @@ describe('MemberForm Component', () => {
       )
 
       // Check required fields
-      expect(screen.getByPlaceholderText('Full name')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('First name')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('Middle name')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('Last name')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('Suffix')).toBeInTheDocument()
       expect(screen.getByPlaceholderText('City')).toBeInTheDocument()
       expect(screen.getByText('Discipleship Stage')).toBeInTheDocument()
     })
@@ -123,7 +132,10 @@ describe('MemberForm Component', () => {
         />
       )
 
-      expect(screen.getByDisplayValue('John Doe')).toBeInTheDocument()
+      // No stored split: the boxes start from a guess and a hint says so.
+      expect(screen.getByPlaceholderText('First name')).toHaveValue('John')
+      expect(screen.getByPlaceholderText('Last name')).toHaveValue('Doe')
+      expect(screen.getByText('Guessed split. Saved only after a name edit.')).toBeInTheDocument()
       expect(screen.getByDisplayValue('john@example.com')).toBeInTheDocument()
       expect(screen.getByDisplayValue('Laguna')).toBeInTheDocument()
       expect(screen.getByDisplayValue('09171234567')).toBeInTheDocument()
@@ -138,8 +150,9 @@ describe('MemberForm Component', () => {
         />
       )
 
-      const nameInput = screen.getByPlaceholderText('Full name') as HTMLInputElement
-      expect(nameInput.value).toBe('')
+      for (const placeholder of ['First name', 'Middle name', 'Last name', 'Suffix']) {
+        expect(screen.getByPlaceholderText(placeholder)).toHaveValue('')
+      }
     })
   })
 
@@ -147,7 +160,7 @@ describe('MemberForm Component', () => {
   // VALIDATION TESTS
   // ============================================
   describe('Form Validation', () => {
-    it('should show error when name is too short', async () => {
+    it('should require a first and a last name', async () => {
       const user = userEvent.setup()
 
       render(
@@ -158,13 +171,29 @@ describe('MemberForm Component', () => {
         />
       )
 
-      const nameInput = screen.getByPlaceholderText('Full name')
-      await user.type(nameInput, 'A')
+      await user.click(screen.getByText('Create Member'))
 
-      const submitButton = screen.getByText('Create Member')
-      await user.click(submitButton)
+      expect(screen.getByText('First name required.')).toBeInTheDocument()
+      expect(screen.getByText('Last name required.')).toBeInTheDocument()
+      expect(mockOnSubmit).not.toHaveBeenCalled()
+    })
 
-      expect(screen.getByText('Name must be at least 2 characters')).toBeInTheDocument()
+    it('should not submit with a first name only', async () => {
+      const user = userEvent.setup()
+
+      render(
+        <MemberForm
+          satellites={mockSatellites}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />
+      )
+
+      await user.type(screen.getByPlaceholderText('First name'), 'Bong')
+      await user.click(screen.getByText('Create Member'))
+
+      expect(screen.queryByText('First name required.')).not.toBeInTheDocument()
+      expect(screen.getByText('Last name required.')).toBeInTheDocument()
       expect(mockOnSubmit).not.toHaveBeenCalled()
     })
 
@@ -179,8 +208,7 @@ describe('MemberForm Component', () => {
         />
       )
 
-      const nameInput = screen.getByPlaceholderText('Full name')
-      await user.type(nameInput, 'John Doe')
+      await typeName(user, 'John', 'Doe')
 
       const submitButton = screen.getByText('Create Member')
       await user.click(submitButton)
@@ -204,8 +232,7 @@ describe('MemberForm Component', () => {
       const emailInput = screen.getByPlaceholderText('email@example.com')
       await user.type(emailInput, 'invalid-email')
 
-      const nameInput = screen.getByPlaceholderText('Full name')
-      await user.type(nameInput, 'John Doe')
+      await typeName(user, 'John', 'Doe')
 
       const cityInput = screen.getByPlaceholderText('City')
       await user.type(cityInput, 'Laguna')
@@ -228,19 +255,18 @@ describe('MemberForm Component', () => {
         />
       )
 
-      const nameInput = screen.getByPlaceholderText('Full name')
-      await user.type(nameInput, 'A')
+      await user.type(screen.getByPlaceholderText('First name'), 'Alice')
 
       const submitButton = screen.getByText('Create Member')
       await user.click(submitButton)
 
-      expect(screen.getByText('Name must be at least 2 characters')).toBeInTheDocument()
+      expect(screen.getByText('Last name required.')).toBeInTheDocument()
 
-      // Type more characters to fix the error
-      await user.type(nameInput, 'lice')
+      // Type a last name to fix the error
+      await user.type(screen.getByPlaceholderText('Last name'), 'Reyes')
 
       // Error should be gone
-      expect(screen.queryByText('Name must be at least 2 characters')).not.toBeInTheDocument()
+      expect(screen.queryByText('Last name required.')).not.toBeInTheDocument()
     })
   })
 
@@ -259,7 +285,7 @@ describe('MemberForm Component', () => {
         />
       )
 
-      await user.type(screen.getByPlaceholderText('Full name'), 'John Doe')
+      await typeName(user, 'John', 'Doe')
       await user.type(screen.getByPlaceholderText('City'), 'Laguna')
       await user.type(screen.getByPlaceholderText('email@example.com'), 'john@example.com')
 
@@ -272,6 +298,10 @@ describe('MemberForm Component', () => {
 
       const submitData = mockOnSubmit.mock.calls[0][0]
       expect(submitData.name).toBe('John Doe')
+      expect(submitData.first_name).toBe('John')
+      expect(submitData.middle_name).toBeNull()
+      expect(submitData.last_name).toBe('Doe')
+      expect(submitData.suffix).toBeNull()
       expect(submitData.city).toBe('Laguna')
       expect(submitData.email).toBe('john@example.com')
     })
@@ -287,7 +317,7 @@ describe('MemberForm Component', () => {
         />
       )
 
-      await user.type(screen.getByPlaceholderText('Full name'), 'John Doe')
+      await typeName(user, 'John', 'Doe')
       await user.type(screen.getByPlaceholderText('City'), 'Laguna')
 
       await user.click(screen.getByText('Create Member'))
@@ -426,7 +456,7 @@ describe('MemberForm Component', () => {
         />
       )
 
-      await user.type(screen.getByPlaceholderText('Full name'), 'John Doe')
+      await typeName(user, 'John', 'Doe')
       await user.type(screen.getByPlaceholderText('City'), 'Laguna')
       await user.type(screen.getByPlaceholderText('Emergency contact name'), 'Jane Doe')
       await user.type(screen.getByPlaceholderText('Emergency contact phone'), '09181234567')
@@ -545,7 +575,7 @@ describe('MemberForm Component', () => {
         />
       )
 
-      await user.type(screen.getByPlaceholderText('Full name'), 'John Doe')
+      await typeName(user, 'John', 'Doe')
       await user.type(screen.getByPlaceholderText('City'), 'Laguna')
 
       await user.click(screen.getByText('Create Member'))
@@ -676,7 +706,7 @@ describe('MemberForm discipler and Quest Circle', () => {
     const user = userEvent.setup()
     renderForm()
 
-    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await typeName(user, 'Plain', 'Member')
     await pickDiscipler(user, 'Discipler One')
 
     expect(screen.getByText('Circle A')).toBeInTheDocument()
@@ -692,7 +722,7 @@ describe('MemberForm discipler and Quest Circle', () => {
     const user = userEvent.setup()
     renderForm()
 
-    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await typeName(user, 'Plain', 'Member')
     await pickDiscipler(user, 'Discipler Two')
 
     expect(screen.getByText('Choose a Quest Circle.')).toBeInTheDocument()
@@ -718,7 +748,7 @@ describe('MemberForm discipler and Quest Circle', () => {
     const user = userEvent.setup()
     renderForm()
 
-    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await typeName(user, 'Plain', 'Member')
     await pickDiscipler(user, 'Discipler Two')
     await user.click(screen.getByPlaceholderText('Search Quest Circle...'))
     await user.click(screen.getByRole('button', { name: 'No Quest Circle' }))
@@ -845,7 +875,7 @@ describe('MemberForm discipler and Quest Circle', () => {
     expect(screen.getByText('Quest Circles not loaded. Reload to assign a circle.')).toBeInTheDocument()
     expect(screen.queryByPlaceholderText('Search Quest Circle...')).not.toBeInTheDocument()
 
-    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await typeName(user, 'Plain', 'Member')
     await pickDiscipler(user, 'Discipler One')
     await user.click(screen.getByText('Create Member'))
     await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
@@ -923,7 +953,7 @@ describe('MemberForm discipler and Quest Circle', () => {
     )
 
     expect(screen.queryByPlaceholderText('Search Quest Circle...')).not.toBeInTheDocument()
-    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await typeName(user, 'Plain', 'Member')
     await pickDiscipler(user, 'Discipler Two')
     expect(screen.queryByText('Choose a Quest Circle.')).not.toBeInTheDocument()
     await user.click(screen.getByText('Create Member'))
@@ -976,7 +1006,7 @@ describe('MemberForm Quest Circle field: teams', () => {
     const user = userEvent.setup()
     renderForm()
 
-    await user.type(screen.getByPlaceholderText('Full name'), 'Plain Member')
+    await typeName(user, 'Plain', 'Member')
     await user.type(screen.getByPlaceholderText('Search discipler...'), 'Discipler One')
     await user.click(screen.getByRole('button', { name: 'Discipler One' }))
 
@@ -986,5 +1016,126 @@ describe('MemberForm Quest Circle field: teams', () => {
     await user.click(screen.getByText('Create Member'))
     await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled())
     expect(mockOnSubmit.mock.calls[0][1]).toBe('circle-a')
+  })
+})
+
+describe('MemberForm split name', () => {
+  const satellites = [createMockSatelliteRow({ id: 'sat-1', name: 'Quest Laguna Main' })]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetFactoryCounters()
+  })
+
+  it('composes name from all four parts on create', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    render(<MemberForm satellites={satellites} onSubmit={onSubmit} onCancel={vi.fn()} />)
+
+    await user.type(screen.getByPlaceholderText('First name'), ' Juan ')
+    await user.type(screen.getByPlaceholderText('Middle name'), 'C.')
+    await user.type(screen.getByPlaceholderText('Last name'), 'Dela Cruz')
+    await user.type(screen.getByPlaceholderText('Suffix'), 'Jr.')
+    await user.click(screen.getByText('Create Member'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const data = onSubmit.mock.calls[0][0]
+    expect(data.name).toBe('Juan C. Dela Cruz Jr.')
+    expect(data).toMatchObject({ first_name: 'Juan', middle_name: 'C.', last_name: 'Dela Cruz', suffix: 'Jr.' })
+  })
+
+  it('refuses a full name over 100 characters', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    render(<MemberForm satellites={satellites} onSubmit={onSubmit} onCancel={vi.fn()} />)
+
+    await user.type(screen.getByPlaceholderText('First name'), 'A'.repeat(50))
+    await user.type(screen.getByPlaceholderText('Last name'), 'B'.repeat(55))
+    await user.click(screen.getByText('Create Member'))
+
+    expect(screen.getByText('Full name over 100 characters. Shorten a part.')).toBeInTheDocument()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('shows a stored confirmed split with no hint', () => {
+    const member = createMockMember({
+      name: 'Juan Carlo Cruz',
+      first_name: 'Juan Carlo',
+      last_name: 'Cruz',
+      name_parts_status: 'confirmed',
+    })
+    render(<MemberForm member={member} satellites={satellites} onSubmit={vi.fn()} onCancel={vi.fn()} />)
+
+    expect(screen.getByPlaceholderText('First name')).toHaveValue('Juan Carlo')
+    expect(screen.getByPlaceholderText('Middle name')).toHaveValue('')
+    expect(screen.getByPlaceholderText('Last name')).toHaveValue('Cruz')
+    expect(screen.queryByText(/Guessed split/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Auto split/)).not.toBeInTheDocument()
+  })
+
+  it('marks an auto split', () => {
+    const member = createMockMember({ name: 'Juan Cruz', first_name: 'Juan', last_name: 'Cruz', name_parts_status: 'auto' })
+    render(<MemberForm member={member} satellites={satellites} onSubmit={vi.fn()} onCancel={vi.fn()} />)
+
+    expect(screen.getByText('Auto split from a two-word name.')).toBeInTheDocument()
+  })
+
+  it('sends no name parts when only another field changes', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    const member = createMockMember({ name: 'Maria  Santos Reyes', phone: null })
+    render(<MemberForm member={member} satellites={satellites} onSubmit={onSubmit} onCancel={vi.fn()} />)
+
+    await user.type(screen.getByPlaceholderText('09XX XXX XXXX'), '09171234567')
+    await user.click(screen.getByText('Update Member'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const data = onSubmit.mock.calls[0][0]
+    expect(data.name).toBe('Maria  Santos Reyes')
+    expect(data.phone).toBe('09171234567')
+    for (const key of ['first_name', 'middle_name', 'last_name', 'suffix']) {
+      expect(key in data).toBe(false)
+    }
+  })
+
+  it('does not block an unrelated edit when the guess has no last name', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    const member = createMockMember({ name: 'Bong' })
+    render(<MemberForm member={member} satellites={satellites} onSubmit={onSubmit} onCancel={vi.fn()} />)
+
+    await user.click(screen.getByText('Update Member'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    expect(onSubmit.mock.calls[0][0].name).toBe('Bong')
+  })
+
+  it('sends the parts and the rebuilt name after a name edit', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    const member = createMockMember({ name: 'John Paul Reyes' })
+    render(<MemberForm member={member} satellites={satellites} onSubmit={onSubmit} onCancel={vi.fn()} />)
+
+    // Guess: John / Paul / Reyes. "Paul" belongs to the first name.
+    await user.clear(screen.getByPlaceholderText('Middle name'))
+    await user.clear(screen.getByPlaceholderText('First name'))
+    await user.type(screen.getByPlaceholderText('First name'), 'John Paul')
+
+    expect(screen.queryByText(/Display name on save/)).not.toBeInTheDocument()
+    await user.click(screen.getByText('Update Member'))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const data = onSubmit.mock.calls[0][0]
+    expect(data).toMatchObject({ name: 'John Paul Reyes', first_name: 'John Paul', middle_name: null, last_name: 'Reyes', suffix: null })
+  })
+
+  it('shows the new display name when a name edit changes it', async () => {
+    const user = userEvent.setup()
+    const member = createMockMember({ name: 'Juan Cruz' })
+    render(<MemberForm member={member} satellites={satellites} onSubmit={vi.fn()} onCancel={vi.fn()} />)
+
+    await user.type(screen.getByPlaceholderText('Suffix'), 'Jr.')
+
+    expect(screen.getByText('Display name on save: Juan Cruz Jr.')).toBeInTheDocument()
   })
 })

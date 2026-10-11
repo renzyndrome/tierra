@@ -5,6 +5,26 @@ import type { Member, MemberInsert, SatelliteRow, CellGroup } from '../lib/types
 import { uploadMemberPhoto, getPlaceholderAvatar } from '../lib/storage'
 import { CIVIL_STATUSES, MEMBER_CATEGORIES, FOLLOW_THROUGH_STAGES, DISCIPLESHIP_JOURNEY_STAGES, LEADERSHIP_LEVELS } from '../lib/constants'
 import { circleAfterDisciplerPick, circlesLedBy, circlesNotLedBy, disciplerToNarrowBy } from '../lib/circleRules'
+import { cleanPart, composeName, initialNameParts, type NameParts } from '../lib/nameParts'
+
+type NamePartKey = keyof NameParts
+type NamePartsForm = Record<NamePartKey, string>
+
+const EMPTY_NAME_PARTS: NamePartsForm = { first_name: '', middle_name: '', last_name: '', suffix: '' }
+
+const NAME_PART_FIELDS: { key: NamePartKey; label: string; required: boolean }[] = [
+  { key: 'first_name', label: 'First name', required: true },
+  { key: 'middle_name', label: 'Middle name', required: false },
+  { key: 'last_name', label: 'Last name', required: true },
+  { key: 'suffix', label: 'Suffix', required: false },
+]
+
+const cleanNameParts = (f: NamePartsForm): NameParts => ({
+  first_name: cleanPart(f.first_name),
+  middle_name: cleanPart(f.middle_name),
+  last_name: cleanPart(f.last_name),
+  suffix: cleanPart(f.suffix),
+})
 
 interface MemberFormProps {
   member?: Member | null
@@ -85,10 +105,25 @@ export function MemberForm({
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  // Split name. On an edit the boxes start from the stored split (auto or
+  // confirmed) or a guess from `name`; the parts are saved, and `name` rebuilt
+  // from them, only after a name box changes.
+  const [nameParts, setNameParts] = useState<NamePartsForm>(EMPTY_NAME_PARTS)
+  const [nameTouched, setNameTouched] = useState(false)
+  const [nameSource, setNameSource] = useState<'confirmed' | 'auto' | 'guess' | null>(null)
 
   // Initialize form with member data if editing
   useEffect(() => {
     if (member) {
+      const init = initialNameParts(member)
+      setNameParts({
+        first_name: init.parts.first_name ?? '',
+        middle_name: init.parts.middle_name ?? '',
+        last_name: init.parts.last_name ?? '',
+        suffix: init.parts.suffix ?? '',
+      })
+      setNameSource(init.source)
+      setNameTouched(false)
       setFormData({
         name: member.name,
         email: member.email,
@@ -156,6 +191,24 @@ export function MemberForm({
     }
   }
 
+  const handleNamePartChange = (key: NamePartKey, value: string) => {
+    const next = { ...nameParts, [key]: value }
+    setNameParts(next)
+    setNameTouched(true)
+    setFormData((prev) => ({ ...prev, name: composeName(cleanNameParts(next)) }))
+    if (errors[key] || errors.name) {
+      setErrors((prev) => {
+        const newErrors = { ...prev }
+        delete newErrors[key]
+        delete newErrors.name
+        return newErrors
+      })
+    }
+  }
+
+  // The name is written on a create, and on an edit once a name box changed.
+  const writesName = !member || nameTouched
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -172,8 +225,11 @@ export function MemberForm({
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {}
 
-    if (!formData.name || formData.name.length < 2) {
-      newErrors.name = 'Name must be at least 2 characters'
+    if (writesName) {
+      const parts = cleanNameParts(nameParts)
+      if (!parts.first_name) newErrors.first_name = 'First name required.'
+      if (!parts.last_name) newErrors.last_name = 'Last name required.'
+      if (composeName(parts).length > 100) newErrors.name = 'Full name over 100 characters. Shorten a part.'
     }
 
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -252,8 +308,12 @@ export function MemberForm({
       photoUrl = url
     }
 
+    // Parts only when the name is written, so an unrelated edit never
+    // confirms a guessed split (the server stamps a sent split as confirmed).
+    const parts = cleanNameParts(nameParts)
     await onSubmit({
       ...formData,
+      ...(writesName ? { ...parts, name: composeName(parts) } : {}),
       photo_url: photoUrl,
       ...(allMembers ? { discipler_id: selectedDisciplerId } : {}),
     }, cellGroups ? selectedCellGroupId : undefined)
@@ -293,22 +353,40 @@ export function MemberForm({
 
       {/* Basic Information */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none ${
-              errors.name ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="Full name"
-          />
+        {/* Name (split) */}
+        <div className="md:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {NAME_PART_FIELDS.map((f) => (
+              <div key={f.key}>
+                <label htmlFor={`member-${f.key}`} className="block text-sm font-medium text-gray-700 mb-1">
+                  {f.label} {f.required && <span className="text-red-500">*</span>}
+                </label>
+                <input
+                  id={`member-${f.key}`}
+                  type="text"
+                  name={f.key}
+                  value={nameParts[f.key]}
+                  onChange={(e) => handleNamePartChange(f.key, e.target.value)}
+                  maxLength={f.key === 'suffix' ? 20 : 60}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#8B1538] focus:border-transparent outline-none ${
+                    errors[f.key] ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder={f.label}
+                />
+                {errors[f.key] && <p className="text-xs text-red-500 mt-1">{errors[f.key]}</p>}
+              </div>
+            ))}
+          </div>
           {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+          {member && !nameTouched && nameSource === 'guess' && (
+            <p className="text-xs text-amber-700 mt-1">Guessed split. Saved only after a name edit.</p>
+          )}
+          {member && !nameTouched && nameSource === 'auto' && (
+            <p className="text-xs text-gray-500 mt-1">Auto split from a two-word name.</p>
+          )}
+          {member && nameTouched && formData.name !== member.name && (
+            <p className="text-xs text-gray-500 mt-1">Display name on save: {formData.name || '–'}</p>
+          )}
         </div>
 
         {/* Email */}

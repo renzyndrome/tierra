@@ -13,6 +13,7 @@ import { agapayEnrollFlag, savedStageChange, savedWithDiscipler, type AgapayEnro
 import { enrollInAgapayIfEligible, recordAgapayStageChange, type AgapayEnrollResult } from '../agapayEnroll'
 import { endPlainCircleMemberships, memberArchiveBlockReason, memberDeleteBlockReason } from '../memberArchive'
 import { toSafeSearchTerm } from '../../lib/searchTerm'
+import { withNamePartsReview } from '../../lib/nameParts'
 import type { Member, MemberInsert, MemberUpdate } from '../../lib/types'
 
 // ============================================
@@ -53,6 +54,12 @@ const memberInsertSchema = z.object({
   is_full_time: z.boolean().optional(),
   community: z.string().optional().nullable(),
   facebook_url: z.string().optional().nullable(),
+  // Split name from the admin member form. name_parts_status is never taken
+  // from the client; withNamePartsReview sets it.
+  first_name: z.string().max(60).optional().nullable(),
+  middle_name: z.string().max(60).optional().nullable(),
+  last_name: z.string().max(60).optional().nullable(),
+  suffix: z.string().max(20).optional().nullable(),
 })
 
 const memberUpdateSchema = memberInsertSchema.partial()
@@ -148,8 +155,9 @@ export const createMember = createServerFn({ method: 'POST' })
     return result.data
   })
   .handler(async ({ data }): Promise<Member & AgapayEnrollFlag> => {
-    const { accessToken, ...insert } = data
+    const { accessToken, ...fields } = data
     const caller = await requirePermission(accessToken, 'members.write')
+    const insert = withNamePartsReview(fields, caller.userId)
     const supabase = createServerAdminClient()
 
     const { data: member, error } = await supabase
@@ -211,6 +219,7 @@ export const updateMember = createServerFn({ method: 'POST' })
       Object.keys(data.updates).every((k) => SELF_EDITABLE_FIELDS.has(k)) &&
       (await getCallerMemberId(supabase, caller.userId)) === data.id
     if (!selfEdit) await requirePermission(data.accessToken, 'members.write')
+    const updates = withNamePartsReview(data.updates, caller.userId)
 
     // The stage before the save, to record a stage change on the member's
     // Agapay record. Read only when the save writes the stage.
@@ -230,7 +239,7 @@ export const updateMember = createServerFn({ method: 'POST' })
 
     const { data: member, error } = await supabase
       .from('members')
-      .update(data.updates)
+      .update(updates)
       .eq('id', data.id)
       .select()
       .single()

@@ -22,6 +22,8 @@ export type DiscipleshipJourney = 'Consolidations' | 'Pre Encounter' | 'Encounte
 export type LeadershipLevel = 'Member' | 'Disciple Maker' | 'Eagle' | 'Pastor' | 'Head Pastor'
 export type InventoryLocation = 'Moriah Hall' | 'Nxtgen Hall'
 export type InventoryCondition = 'Good' | 'Fair' | 'Needs Repair' | 'Damaged'
+// Split-name review state (members.name_parts_status). See src/lib/nameParts.ts.
+export type NamePartsStatus = 'pending' | 'auto' | 'confirmed'
 
 // ============================================
 // SATELLITE TYPES
@@ -119,6 +121,15 @@ export interface Member {
   is_full_time: boolean
   community: string | null
   facebook_url: string | null
+  // Split name. `name` stays the display source; these are trusted only
+  // when name_parts_status is not 'pending'.
+  first_name: string | null
+  middle_name: string | null
+  last_name: string | null
+  suffix: string | null
+  name_parts_status: NamePartsStatus
+  name_parts_reviewed_at: string | null
+  name_parts_reviewed_by: string | null
   // Meta
   is_archived: boolean
   created_at: string
@@ -162,6 +173,14 @@ export interface MemberInsert {
   is_full_time?: boolean
   community?: string | null
   facebook_url?: string | null
+  first_name?: string | null
+  middle_name?: string | null
+  last_name?: string | null
+  suffix?: string | null
+  // Server-set only (createMember / updateMember / confirmNameParts).
+  name_parts_status?: NamePartsStatus
+  name_parts_reviewed_at?: string | null
+  name_parts_reviewed_by?: string | null
   is_archived?: boolean
 }
 
@@ -201,7 +220,37 @@ export interface MemberUpdate {
   is_full_time?: boolean
   community?: string | null
   facebook_url?: string | null
+  first_name?: string | null
+  middle_name?: string | null
+  last_name?: string | null
+  suffix?: string | null
+  // Server-set only (createMember / updateMember / confirmNameParts).
+  name_parts_status?: NamePartsStatus
+  name_parts_reviewed_at?: string | null
+  name_parts_reviewed_by?: string | null
   is_archived?: boolean
+}
+
+// One row of the admin name review queue (/admin/name-review).
+export type NameReviewItem = Pick<
+  Member,
+  | 'id'
+  | 'name'
+  | 'first_name'
+  | 'middle_name'
+  | 'last_name'
+  | 'suffix'
+  | 'name_parts_status'
+  | 'is_archived'
+  | 'membership_status'
+  | 'photo_url'
+>
+
+export interface NameReviewCounts {
+  pending: number
+  auto: number
+  confirmed: number
+  total: number
 }
 
 // Member with relations
