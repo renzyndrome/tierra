@@ -1,7 +1,8 @@
 // Booth registration for a walk-in who is not in the directory (e.g. a guest
 // without a phone). Creates a visitor member and checks them in to the session.
 // When similar names already exist, it lists them first so staff can check the
-// right member in instead of creating a duplicate.
+// right member in instead of creating a duplicate. The "First timer" box keeps
+// known attendees who are only new to the system out of New Friends.
 
 import { useState, useEffect, useRef } from 'react'
 import { registerWalkIn, manualCheckIn } from '../server/functions/attendance'
@@ -48,6 +49,7 @@ export function RegisterWalkInDialog({
   const [age, setAge] = useState('')
   const [city, setCity] = useState('')
   const [invitedBy, setInvitedBy] = useState('')
+  const [isFirstTimer, setIsFirstTimer] = useState(false)
   const [satelliteId, setSatelliteId] = useState(sessionSatelliteId ?? '')
   const [satellites, setSatellites] = useState<SatelliteRow[]>([])
   const [satellitesLoaded, setSatellitesLoaded] = useState(false)
@@ -99,6 +101,7 @@ export function RegisterWalkInDialog({
           city: city.trim() || null,
           satelliteId: satelliteId || null,
           invitedBy: invitedBy.trim() || null,
+          isFirstTimer,
           force,
         },
       })
@@ -119,7 +122,7 @@ export function RegisterWalkInDialog({
     setBusy(true)
     setError('')
     try {
-      const res = await manualCheckIn({ data: { accessToken, sessionId, memberId: member.id } })
+      const res = await manualCheckIn({ data: { accessToken, sessionId, memberId: member.id, isFirstTimer } })
       onDone(
         res.status === 'already_checked_in'
           ? `${member.name} is already checked in.`
@@ -182,6 +185,21 @@ export function RegisterWalkInDialog({
                 spellCheck={false}
               />
             </div>
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input
+                id="wi-first-timer"
+                type="checkbox"
+                className="mt-0.5"
+                checked={isFirstTimer}
+                onChange={(e) => setIsFirstTimer(e.target.checked)}
+              />
+              <span>
+                First timer
+                <span className="block text-xs text-gray-400">
+                  Ticked: New Friends stage. Unticked: Schooling stage.
+                </span>
+              </span>
+            </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="wi-phone">Mobile <span className="text-gray-400 font-normal">(optional)</span></Label>
