@@ -9,19 +9,23 @@ import { AdminRoute } from '../../../components/ProtectedRoute'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'
 import { Label } from '../../../components/ui/label'
+import { SELECT_CLASS } from '../../../components/formClasses'
 import { getNameReviewQueue, confirmNameParts } from '../../../server/functions/nameReview'
 import {
   cleanPart,
   composeName,
-  guessNameParts,
+  guessWordRoles,
   hasNameParts,
-  initialNameParts,
-  joinMiddleToFirst,
-  joinMiddleToLast,
+  initialWordRoles,
+  moveRole,
+  partsFromWords,
+  setWordRole,
   tokenizeName,
   type NameGuess,
   type NameGuessFlag,
   type NameParts,
+  type NameWord,
+  type WordRole,
 } from '../../../lib/nameParts'
 import type { NamePartsStatus, NameReviewCounts, NameReviewItem } from '../../../lib/types'
 
@@ -47,14 +51,33 @@ const EMPTY_MESSAGES: Record<NamePartsStatus, string> = {
 const FLAG_LABELS: Record<NameGuessFlag, string> = {
   empty: 'Empty name',
   single: 'One word',
-  comma: 'Comma form',
+  comma: 'Comma in name',
   suffix: 'Suffix',
   particle: 'Surname particle',
   initial: 'Middle initial',
-  nickname: 'Nickname removed',
+  nickname: 'Nickname left out',
+  title: 'Title word left out',
+  stray_dot: 'Stray dot removed',
   ambiguous_middle: 'Check middle name',
   many_tokens: 'Check first name',
 }
+const ROLE_OPTIONS: { value: WordRole; label: string }[] = [
+  { value: 'first', label: 'First name' },
+  { value: 'middle', label: 'Middle name' },
+  { value: 'last', label: 'Last name' },
+  { value: 'suffix', label: 'Suffix' },
+  { value: 'skip', label: 'Leave out' },
+]
+// Card border per role, so the split reads at a glance.
+const ROLE_TONE: Record<WordRole, string> = {
+  first: 'border-blue-300 bg-blue-50',
+  middle: 'border-violet-300 bg-violet-50',
+  last: 'border-emerald-300 bg-emerald-50',
+  suffix: 'border-amber-300 bg-amber-50',
+  skip: 'border-gray-200 bg-gray-50 opacity-70',
+}
+
+type GuessInfo = Pick<NameGuess, 'flags' | 'confidence'>
 const PAGE_SIZE = 50
 
 type PartKey = keyof NameParts
@@ -102,8 +125,9 @@ function NameReviewPage() {
   const [exhausted, setExhausted] = useState(false)
   const [counts, setCounts] = useState<NameReviewCounts | null>(null)
   const [form, setForm] = useState<PartsForm>(toForm({ first_name: null, middle_name: null, last_name: null, suffix: null }))
+  const [words, setWords] = useState<NameWord[]>([])
   const [source, setSource] = useState<'confirmed' | 'auto' | 'guess'>('guess')
-  const [guess, setGuess] = useState<NameGuess | null>(null)
+  const [guess, setGuess] = useState<GuessInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -175,11 +199,13 @@ function NameReviewPage() {
     if (!loading && !error && index >= items.length && !exhausted && items.length > 0) loadMore()
   }, [index, items.length, exhausted, loading, error, loadMore])
 
-  // Prefill the four boxes whenever a different member comes up.
+  // Prefill the word menus and the four boxes whenever a different member
+  // comes up.
   const currentId = current?.id
   useEffect(() => {
     if (!current) return
-    const init = initialNameParts(current)
+    const init = initialWordRoles(current)
+    setWords(init.words)
     setForm(toForm(init.parts))
     setSource(init.source)
     setGuess(init.guess)
@@ -193,18 +219,22 @@ function NameReviewPage() {
     setFormError('')
   }
 
-  const applyParts = (p: NameParts) => {
-    setForm(toForm(p))
+  // A word menu or quick fix changed the roles: the boxes refill from them.
+  const applyWords = (next: NameWord[]) => {
+    setWords(next)
+    setForm(toForm(partsFromWords(next)))
     setFormError('')
   }
 
-  const resetGuess = () => {
+  const regroup = (order: 'first-last' | 'last-first') => {
     if (!current) return
-    const g = guessNameParts(current.name)
-    setGuess(g)
+    const g = guessWordRoles(current.name, order)
+    setGuess({ flags: g.flags, confidence: g.confidence })
     setSource('guess')
-    applyParts(g)
+    applyWords(g.words)
   }
+
+  const hasMiddleWord = words.some((w) => w.role === 'middle')
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -369,6 +399,33 @@ function NameReviewPage() {
             </div>
 
             <div className="p-4 space-y-4">
+              {words.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Each word</p>
+                  <div className="flex flex-wrap gap-2">
+                    {words.map((w, i) => (
+                      <label key={`${i}-${w.text}`} className={`flex flex-col gap-1 rounded-lg border p-2 min-w-[9rem] ${ROLE_TONE[w.role]}`}>
+                        <span className="text-base font-semibold text-gray-900 break-all">{w.text}</span>
+                        <select
+                          value={w.role}
+                          onChange={(e) => applyWords(setWordRole(words, i, e.target.value as WordRole))}
+                          disabled={busy}
+                          aria-label={`Part for ${w.text}`}
+                          className={SELECT_CLASS.replace('mt-1 ', '')}
+                        >
+                          {ROLE_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">A menu change refills the boxes below.</p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {PART_FIELDS.map((f) => (
                   <div key={f.key}>
@@ -389,12 +446,15 @@ function NameReviewPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={() => regroup('last-first')}>
+                  Last name first
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
                   className="min-h-11"
-                  disabled={busy || !form.middle_name.trim()}
-                  onClick={() => applyParts(joinMiddleToFirst(fromForm(form)))}
+                  disabled={busy || !hasMiddleWord}
+                  onClick={() => applyWords(moveRole(words, 'middle', 'first'))}
                 >
                   Middle joins first
                 </Button>
@@ -402,12 +462,12 @@ function NameReviewPage() {
                   type="button"
                   variant="outline"
                   className="min-h-11"
-                  disabled={busy || !form.middle_name.trim()}
-                  onClick={() => applyParts(joinMiddleToLast(fromForm(form)))}
+                  disabled={busy || !hasMiddleWord}
+                  onClick={() => applyWords(moveRole(words, 'middle', 'last'))}
                 >
                   Middle joins last
                 </Button>
-                <Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={resetGuess}>
+                <Button type="button" variant="outline" className="min-h-11" disabled={busy} onClick={() => regroup('first-last')}>
                   Reset guess
                 </Button>
               </div>
@@ -443,7 +503,7 @@ function NameReviewPage() {
   )
 }
 
-function SourceBadge({ source, guess }: { source: 'confirmed' | 'auto' | 'guess'; guess: NameGuess | null }) {
+function SourceBadge({ source, guess }: { source: 'confirmed' | 'auto' | 'guess'; guess: GuessInfo | null }) {
   if (source === 'confirmed') {
     return <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">Confirmed</span>
   }

@@ -52,20 +52,39 @@ first and last name and gets the `confirmed` stamp. The client can never send
 still matches, so a rename during review returns "Member changed. Reload the
 queue." instead of confirming a split of the old name.
 
-## Guess rules (`guessNameParts`)
+## Guess rules (`guessWordRoles`)
 
-In order, original casing kept:
-1. Nicknames in brackets or quotes are dropped (`nickname`).
-2. Comma forms: "Juan Cruz, Jr." is space form plus suffix. Otherwise surname
-   first: "Dela Cruz, Juan, C.", "Cruz, Juan C." (`comma`).
-3. A trailing Jr/Sr/II/III/IV (3+ words) becomes `suffix`.
-4. "Ma"/"Ma." as the first word joins the next ("Ma. Cristina").
-5. Surname = last word plus preceding particles (de, dela, del, delos, la,
-   los, san, sta, ...), keeping one word in front.
-6. Middle = last remaining word plus its particles. First = the rest.
+Every word of `name` gets a role: `first`, `middle`, `last`, `suffix` or `skip`
+(left out). The parts are built from the roles in name order
+(`partsFromWords`), so the review screen's word menus and boxes always agree.
+`guessNameParts` is `partsFromWords(guessWordRoles(name))` plus confidence and flags.
 
-Confidence: `high` for two words or a middle initial, `medium` for a full
-middle name, 4+ words, commas or nicknames, `low` for one word or empty.
+In order, original words kept:
+1. Words inside brackets or quotes: `skip` (`nickname`).
+2. Title words (`TITLE_WORDS`: sister, pastor, dr, ...): `skip` (`title`).
+3. Jr/Sr/II/III/IV anywhere after the first kept word: `suffix`
+   ("Ramon Jr. Dingding Santos").
+4. Comma, surname first: when the words before the first comma hold at most
+   one non-particle word ("Dela Cruz, Juan, C.", "Cruz, Juan C."). Otherwise
+   the comma is ignored ("April Micosa DA, Tuico") and flagged `comma`.
+5. Space form, default order `first-last`: "Ma"/"Ma." in front joins the next
+   word; surname = last word plus preceding particles; middle = last remaining
+   word plus its particles; first = the rest.
+6. Order `last-first` (the **Last name first** button): surname = first word
+   plus following words while they are particles; then the same given-name rule.
+
+`partWord` drops a stray dot after a full word ("Bom." -> "Bom") when the parts
+are built; initials, "Ma.", "Sta.", "Sto.", Jr./Sr. keep it (`stray_dot` flag).
+`rolesFromParts` maps a stored split back onto the words for the menus; a word
+found in no part shows as **Leave out**.
+
+Confidence: `high` for two words or a middle initial; `medium` for a full
+middle name, 4+ words, commas, nicknames, titles or stray dots; `low` for one
+word or empty.
+
+Directory check, 2026-10-11 (310 names): last name first without a comma is
+rare (1 clear case, 2 scrambled records); 4 comma names; 8 suffixes, 5 of them
+mid-name; 3 title words; 9 stray dots.
 
 ## Backfill rule (`splitTwoTokenName`)
 
