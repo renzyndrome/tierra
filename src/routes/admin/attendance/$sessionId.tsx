@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../../components/AuthProvider'
 import { AdminRoute } from '../../../components/ProtectedRoute'
 import { RegisterWalkInDialog } from '../../../components/RegisterWalkInDialog'
+import { PropheticPromptCard } from '../../../components/PropheticPromptCard'
 import { ResolveCheckinDialog } from '../../../components/ResolveCheckinDialog'
 import { CreateMemberFromCheckinDialog } from '../../../components/CreateMemberFromCheckinDialog'
 import { MemberSuggestionTags } from '../../../components/MemberSuggestionTags'
@@ -275,6 +276,15 @@ function SessionDetail() {
             </Button>
           )}
         </div>
+
+        <PropheticPromptCard
+          accessToken={accessToken}
+          sessionId={sessionId}
+          prompt={info.prophetic_prompt ?? null}
+          matchedSet={info.prophetic_set ?? null}
+          canWrite={canWrite}
+          onSaved={loadAll}
+        />
 
         {/* Delete confirmation */}
         <Dialog open={showDelete} onOpenChange={setShowDelete}>
