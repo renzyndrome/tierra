@@ -46,6 +46,9 @@ Do this once per service, on the day of the service.
    - **Date** — the date of the service (defaults to today).
    - **Satellite** *(optional)* — choose the campus, or leave as **All / Main**.
    - **Label** *(optional)* — a note shown beside the session, e.g. "Anniversary Sunday".
+   - **Prophetic prompt** *(optional)*: the sermon topic, e.g. "The Love of an
+     Extravagant Father". After a QR check-in, one matching Bible verse shows.
+     See **Prophetic word** in section 3.
 4. Click to create. The new session appears at the top of the list with a green
    **Open** badge.
 
@@ -98,6 +101,24 @@ When someone scans the QR, they see the service name and date, then:
 
 **If the session is closed,** scanning shows *"Check-in is closed"* and no one can
 check in. Reopen the session if you closed it too early.
+
+### Prophetic word (after QR check-in)
+
+After a QR check-in the screen shows **Welcome to** and the service name. When the
+session has a prophetic prompt with a matching verse list, a **Prophetic word**
+follows: one random Bible verse for the sermon topic (Berean Standard Bible, BSB).
+
+- Set or change it: open the session, **Prophetic prompt**, then **Save prompt**.
+- The line under the field shows the result:
+  - **Verse list: ... verses.** A verse shows after each QR check-in.
+  - **No verse list for this prompt.** No verse shows. Use the topic name of an
+    existing list, or ask the developer for a new list.
+  - **None.** No prompt, no verse.
+- Matching ignores capital letters and punctuation. A prompt with a key word of a
+  list (e.g. "Father", "love", "grace") also matches that list.
+- Manual check-ins show no verse.
+
+Current verse lists: **The Love of an Extravagant Father** (135 verses).
 
 ---
 

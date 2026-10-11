@@ -22,6 +22,8 @@ import {
   normalizeEmail,
 } from '../../lib/nameMatch'
 import { churchToday, isSessionOverdue, acceptsQrCheckin } from '../../lib/sessionSchedule'
+import { findPropheticSet, pickPropheticWord, type PropheticLibrary } from '../../lib/propheticWord'
+import propheticWords from '../../content/propheticWords.json'
 import {
   mergeMatchCandidates,
   applyJevProbabilities,
@@ -203,6 +205,13 @@ const optionalEmail = z
   .nullable()
   .refine((v) => !v || normalizeEmail(v) !== null, 'Email address invalid.')
 
+// Verse lists for the prophetic word after a QR check-in (temporary, until an
+// AI connector generates verses from the prompt).
+const PROPHETIC_LIBRARY = propheticWords as PropheticLibrary
+
+// Optional sermon topic typed by an admin; '' and whitespace mean none.
+const optionalPropheticPrompt = z.string().trim().max(200).optional().nullable()
+
 
 // ============================================
 // SERVICE TYPES
@@ -237,6 +246,7 @@ const createSessionSchema = z.object({
   sessionDate: z.string().min(1, 'Date is required'),
   satelliteId: z.string().uuid().optional().nullable(),
   title: z.string().max(120).optional().nullable(),
+  propheticPrompt: optionalPropheticPrompt,
 })
 
 export const createSession = createServerFn({ method: 'POST' })
@@ -252,6 +262,9 @@ export const createSession = createServerFn({ method: 'POST' })
         session_date: data.sessionDate,
         satellite_id: data.satelliteId ?? null,
         title: data.title ?? null,
+        // Written only when given, so sessions still start before the
+        // prophetic_prompt migration is applied.
+        ...(data.propheticPrompt ? { prophetic_prompt: data.propheticPrompt } : {}),
         created_by: caller.userId,
         // qr_token + is_open use DB defaults (random token, open).
       })
@@ -352,7 +365,43 @@ export const getSessionDetail = createServerFn({ method: 'GET' })
       checkin_count: Number(c?.checkin_count ?? 0),
       pending_count: Number(c?.pending_count ?? 0),
       is_overdue: row.is_open && isSessionOverdue(row.session_date),
+      prophetic_set: propheticSetSummary(row.prophetic_prompt),
     }
+  })
+
+// Which verse list a prompt matches, for the admin hint on the Manage page.
+function propheticSetSummary(
+  prompt: string | null | undefined,
+): { topic: string; verse_count: number } | null {
+  const set = findPropheticSet(prompt, PROPHETIC_LIBRARY)
+  return set ? { topic: set.topic, verse_count: set.verses.length } : null
+}
+
+// Set or clear a session's prophetic prompt (the sermon topic).
+export const setSessionPropheticPrompt = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: { accessToken: string; sessionId: string; propheticPrompt: string | null }) =>
+      z
+        .object({
+          accessToken: z.string(),
+          sessionId: z.string().uuid(),
+          propheticPrompt: optionalPropheticPrompt,
+        })
+        .parse(input),
+  )
+  .handler(async ({ data }): Promise<{ topic: string; verse_count: number } | null> => {
+    await requirePermission(data.accessToken, 'registration.write')
+    const admin = createServerAdminClient()
+    const prompt = data.propheticPrompt || null
+    const { error } = await admin
+      .from('service_sessions')
+      .update({ prophetic_prompt: prompt })
+      .eq('id', data.sessionId)
+    if (error) {
+      console.error('Error saving prophetic prompt:', error)
+      throw new Error('Prophetic prompt not saved. Retry.')
+    }
+    return propheticSetSummary(prompt)
   })
 
 export const setSessionOpen = createServerFn({ method: 'POST' })
@@ -531,9 +580,11 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
     const admin = createServerAdminClient()
 
     // Validate the session via the token (not RLS) and require it to be open.
+    // select('*') keeps check-in working whether or not the prophetic_prompt
+    // column exists yet.
     const { data: session, error: sErr } = await admin
       .from('service_sessions')
-      .select('id, is_open, session_date')
+      .select('*')
       .eq('qr_token', data.qrToken)
       .single()
     if (sErr || !session) throw new Error('This check-in link is invalid.')
@@ -542,6 +593,14 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
       throw new Error('Check-in for this service is closed.')
     }
     const sessionId = session.id as string
+    // One verse per check-in for the session's sermon topic, if any.
+    const withWord = (result: CheckinResult): CheckinResult => ({
+      ...result,
+      propheticWord: pickPropheticWord(
+        (session as { prophetic_prompt?: string | null }).prophetic_prompt,
+        PROPHETIC_LIBRARY,
+      ),
+    })
 
     // Self check-in: a logged-in user with a linked member profile.
     let selfMemberId: string | null = null
@@ -561,14 +620,14 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
     }
 
     if (selfMemberId) {
-      return linkCheckIn(admin, {
+      return withWord(await linkCheckIn(admin, {
         sessionId,
         memberId: selfMemberId,
         method: 'qr_self',
         matchStatus: 'auto_matched',
         rawName: null,
         rawPhone: null,
-      })
+      }))
     }
 
     // Guest flow requires a typed name.
@@ -587,7 +646,7 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
       matched !== null && emailOwners.length > 0 && !emailOwners.some((m) => m.id === matched.id)
 
     if (matched && !emailConflict) {
-      return linkCheckIn(admin, {
+      return withWord(await linkCheckIn(admin, {
         sessionId,
         memberId: matched.id,
         method: 'qr_guest',
@@ -597,7 +656,7 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
         rawEmail,
         invitedBy,
         displayName: matched.name,
-      })
+      }))
     }
 
     // No confident match -> pending for the admin queue.
@@ -619,12 +678,12 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
       console.error('Error recording pending check-in:', error)
       throw new Error('Could not record your check-in. Please try again.')
     }
-    return {
+    return withWord({
       status: 'checked_in',
       matched: false,
       displayName: rawName,
       recordId: record.id as string,
-    }
+    })
   })
 
 // Insert a member-linked check-in, tolerating the "already checked in" unique

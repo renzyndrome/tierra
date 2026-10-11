@@ -285,6 +285,13 @@ test.describe('Admin — Service Attendance', () => {
     try {
       const token = await readQrToken(page)
 
+      // 0. A prophetic prompt matches the shipped verse list.
+      await page.locator('#session-prophetic').fill('The Love of an Extravagant Father')
+      await page.getByRole('button', { name: /^save prompt$/i }).click()
+      await expect(page.getByText(/^Verse list: The Love of an Extravagant Father, \d+ verses\./)).toBeVisible({
+        timeout: 15_000,
+      })
+
       // 1. A guest scans the QR in a separate, signed-out browser.
       const guestCtx = await browser.newContext({ baseURL })
       const guest = await guestCtx.newPage()
@@ -292,9 +299,12 @@ test.describe('Admin — Service Attendance', () => {
       await guest.goto(`/checkin/${token}`)
       await guest.getByLabel(/your name/i).fill(guestName)
       await guest.getByRole('button', { name: /^check in$/i }).click()
-      await expect(guest.getByRole('heading', { name: /you're checked in/i })).toBeVisible({
+      await expect(guest.getByRole('heading', { name: /^welcome to /i })).toBeVisible({
         timeout: 15_000,
       })
+      // Then one verse for the sermon topic.
+      await expect(guest.getByText('Prophetic word', { exact: true })).toBeVisible()
+      await expect(guest.locator('figcaption')).toContainText('BSB')
 
       // 2. Staff sees the guest check-in.
       await page.reload()
@@ -467,7 +477,7 @@ test.describe('Admin — Service Attendance', () => {
       await expect(guest.getByText(/email address invalid/i)).toBeVisible()
       await guest.getByLabel(/^email/i).fill(email.toUpperCase())
       await guest.getByRole('button', { name: /^check in$/i }).click()
-      await expect(guest.getByRole('heading', { name: /you're checked in/i })).toBeVisible({ timeout: 15_000 })
+      await expect(guest.getByRole('heading', { name: /^welcome to /i })).toBeVisible({ timeout: 15_000 })
       await guestCtx.close()
 
       // 3. The nickname stays unmatched (no auto-link by email alone).
@@ -582,7 +592,7 @@ test.describe('Admin — Service Attendance', () => {
       await expect(guest.getByLabel(/^email/i)).toBeFocused()
       await guest.getByLabel(/^email/i).press('Enter')
       await expect(guest.getByLabel(/who invited you/i)).toBeFocused()
-      await expect(guest.getByRole('heading', { name: /you're checked in/i })).toHaveCount(0)
+      await expect(guest.getByRole('heading', { name: /^welcome to /i })).toHaveCount(0)
       await guest.screenshot({ path: test.info().outputPath('phone-checkin.png'), fullPage: true })
       await guestCtx.close()
 
@@ -638,7 +648,7 @@ test.describe('Admin — Service Attendance', () => {
       await guest.goto(`/checkin/${token}`)
       await guest.getByLabel(/your name/i).fill(`Kat ${surname}`)
       await guest.getByRole('button', { name: /^check in$/i }).click()
-      await expect(guest.getByRole('heading', { name: /you're checked in/i })).toBeVisible({ timeout: 15_000 })
+      await expect(guest.getByRole('heading', { name: /^welcome to /i })).toBeVisible({ timeout: 15_000 })
       await guestCtx.close()
 
       await page.reload()

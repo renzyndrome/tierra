@@ -40,7 +40,7 @@ test.describe('Public service check-in', () => {
     await page.getByRole('button', { name: /^check in$/i }).click()
 
     // Success screen (matching is invisible to the attendee; pending still succeeds).
-    await expect(page.getByRole('heading', { name: /you're checked in/i })).toBeVisible({
+    await expect(page.getByRole('heading', { name: /^welcome to /i })).toBeVisible({
       timeout: 15_000,
     })
     await expect(page.getByText(guestName)).toBeVisible()

@@ -70,6 +70,7 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
   const [newDate, setNewDate] = useState(todayLocal())
   const [newSatelliteId, setNewSatelliteId] = useState('')
   const [newTitle, setNewTitle] = useState('')
+  const [newPropheticPrompt, setNewPropheticPrompt] = useState('')
   const [createBusy, setCreateBusy] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -115,10 +116,12 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
           sessionDate: newDate,
           satelliteId: newSatelliteId || null,
           title: newTitle.trim() || null,
+          propheticPrompt: newPropheticPrompt.trim() || null,
         },
       })
       setShowCreate(false)
       setNewTitle('')
+      setNewPropheticPrompt('')
       await load()
       navigate({ to: '/admin/attendance/$sessionId', params: { sessionId: created.id } })
     } catch (err) {
@@ -321,6 +324,18 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
             <div>
               <Label htmlFor="svc-title">Label <span className="text-gray-400 font-normal">(optional)</span></Label>
               <Input id="svc-title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="e.g. Anniversary Sunday" className="mt-1" />
+            </div>
+            <div>
+              <Label htmlFor="svc-prophetic">Prophetic prompt <span className="text-gray-400 font-normal">(optional)</span></Label>
+              <Input
+                id="svc-prophetic"
+                value={newPropheticPrompt}
+                onChange={(e) => setNewPropheticPrompt(e.target.value)}
+                placeholder="e.g. The Love of an Extravagant Father"
+                maxLength={200}
+                className="mt-1"
+              />
+              <p className="mt-1 text-xs text-gray-400">Sermon topic. A matching verse shows after QR check-in.</p>
             </div>
             {createError && <p className="text-sm text-red-600">{createError}</p>}
           </div>
