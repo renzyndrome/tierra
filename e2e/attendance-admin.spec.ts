@@ -416,10 +416,14 @@ test.describe('Admin — Service Attendance', () => {
       await dialog.getByLabel(/^city/i).fill('Santa Rosa')
       await dialog.locator('#wi-gender').selectOption('female')
       await dialog.getByLabel(/^age/i).fill('72')
+      await dialog.locator('#wi-first-timer').check()
       await submitWalkIn(page, walkIn)
       await expect(page.getByRole('tab', { name: /check-ins \(1\)/i })).toBeVisible()
       await page.getByRole('tab', { name: /check-ins/i }).click()
       await expect(page.getByText(walkIn)).toBeVisible()
+      await expect(
+        page.locator('[data-slot="card"]', { hasText: walkIn }).getByText('First timer', { exact: true }),
+      ).toBeVisible()
     } finally {
       await deleteSessionAt(page, sessionUrl)
     }

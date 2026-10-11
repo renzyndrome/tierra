@@ -30,6 +30,7 @@ import {
   buildMemberSuggestions,
 } from '../../lib/attendanceResolve'
 import { jevMatchProbabilities } from './_jevMatch'
+import { walkInStage, isFirstTimerCheckin } from '../../lib/firstTimer'
 import {
   MATCH_SIMILARITY_THRESHOLD,
   WALK_IN_SIMILAR_THRESHOLD,
@@ -54,6 +55,7 @@ import type {
   CreateFromCheckinResult,
   ConfirmMatchResult,
   MemberSuggestion,
+  DiscipleshipStage,
 } from '../../lib/types'
 
 // ============================================
@@ -163,6 +165,8 @@ async function insertVisitorMember(
     gender?: 'male' | 'female' | null
     age?: number | null
     city?: string | null
+    // Defaults to New Friends (Newbie).
+    stage?: DiscipleshipStage
   },
 ): Promise<string> {
   const { data: member, error } = await admin
@@ -177,7 +181,7 @@ async function insertVisitorMember(
       // city is NOT NULL in the schema; when not collected it starts empty
       // for an admin to fill in later on the member profile.
       city: args.city ?? '',
-      discipleship_stage: 'Newbie',
+      discipleship_stage: args.stage ?? 'Newbie',
       membership_status: 'visitor',
     })
     .select('id')
@@ -642,6 +646,8 @@ async function linkCheckIn(
     invitedBy?: string | null
     matchedBy?: string | null
     displayName?: string | null
+    // Staff answer from a manual check-in; left out (null) on QR check-ins.
+    isFirstTimer?: boolean
   },
 ): Promise<CheckinResult> {
   const { data: record, error } = await admin
@@ -656,6 +662,7 @@ async function linkCheckIn(
       checkin_method: args.method,
       match_status: args.matchStatus,
       matched_by: args.matchedBy ?? null,
+      ...(args.isFirstTimer === undefined ? {} : { is_first_timer: args.isFirstTimer }),
     })
     .select('id')
     .single()
@@ -779,6 +786,9 @@ const registerWalkInSchema = z.object({
   city: z.string().trim().max(50).optional().nullable(),
   satelliteId: z.string().uuid().optional().nullable(),
   invitedBy: z.string().trim().max(100).optional().nullable(),
+  // "First timer" checkbox. Unticked files a known attendee as Schooling, not
+  // New Friends. Omitted (an older page) keeps the New Friends default.
+  isFirstTimer: z.boolean().optional(),
   // Set after staff chose "Register anyway" on the similar-name warning.
   force: z.boolean().optional(),
 })
@@ -816,6 +826,7 @@ export const registerWalkIn = createServerFn({ method: 'POST' })
       gender: data.gender ?? null,
       age: data.age ?? null,
       city: data.city || null,
+      stage: walkInStage(data.isFirstTimer),
       // null is an explicit "Unassigned"; only an omitted value falls back.
       satelliteId:
         data.satelliteId === undefined
@@ -834,6 +845,7 @@ export const registerWalkIn = createServerFn({ method: 'POST' })
         invitedBy: data.invitedBy || null,
         matchedBy: caller.userId,
         displayName: data.name,
+        isFirstTimer: data.isFirstTimer,
       })
     } catch {
       throw new Error('Member created. Check-in not recorded: search the name and check in.')
@@ -841,15 +853,20 @@ export const registerWalkIn = createServerFn({ method: 'POST' })
     return { status: 'registered', memberId, displayName: data.name }
   })
 
+// Staff check-in of a directory member. A member already in the directory is a
+// known attendee, so the check-in is recorded as not a first visit unless the
+// caller says otherwise (the walk-in dialog passes its "First timer" box).
 export const manualCheckIn = createServerFn({ method: 'POST' })
-  .inputValidator((input: { accessToken: string; sessionId: string; memberId: string }) =>
-    z
-      .object({
-        accessToken: z.string(),
-        sessionId: z.string().uuid(),
-        memberId: z.string().uuid(),
-      })
-      .parse(input),
+  .inputValidator(
+    (input: { accessToken: string; sessionId: string; memberId: string; isFirstTimer?: boolean }) =>
+      z
+        .object({
+          accessToken: z.string(),
+          sessionId: z.string().uuid(),
+          memberId: z.string().uuid(),
+          isFirstTimer: z.boolean().optional(),
+        })
+        .parse(input),
   )
   .handler(async ({ data }): Promise<CheckinResult> => {
     const caller = await requirePermission(data.accessToken, 'registration.write')
@@ -871,6 +888,7 @@ export const manualCheckIn = createServerFn({ method: 'POST' })
       rawName: null,
       rawPhone: null,
       matchedBy: caller.userId,
+      isFirstTimer: data.isFirstTimer ?? false,
     })
   })
 
@@ -1283,6 +1301,7 @@ interface AnalyticsRow {
   match_status: string
   checked_in_at: string
   checkin_method: string
+  is_first_timer: boolean | null
   session: {
     session_date: string
     satellite_id: string | null
@@ -1310,7 +1329,7 @@ export const getAttendanceStats = createServerFn({ method: 'GET' })
     const { data: rowsRaw, error } = await admin
       .from('attendance_records')
       .select(
-        'id, session_id, member_id, match_status, checked_in_at, session:service_sessions!attendance_records_session_id_fkey(session_date, satellite_id, service_type_id, service_type:service_types!service_sessions_service_type_id_fkey(name, slug), satellite:satellites!service_sessions_satellite_id_fkey(name))',
+        'id, session_id, member_id, match_status, checked_in_at, is_first_timer, session:service_sessions!attendance_records_session_id_fkey(session_date, satellite_id, service_type_id, service_type:service_types!service_sessions_service_type_id_fkey(name, slug), satellite:satellites!service_sessions_satellite_id_fkey(name))',
       )
       .neq('match_status', 'ignored')
     if (error) {
@@ -1327,7 +1346,8 @@ export const getAttendanceStats = createServerFn({ method: 'GET' })
     if (data.serviceTypeId) rows = rows.filter((r) => r.session?.service_type_id === data.serviceTypeId)
 
     // First-ever check-in per member (across all counted records, unfiltered)
-    // so first-timer detection is accurate regardless of the date window.
+    // so first-timer detection is accurate regardless of the date window. Only
+    // used for check-ins with no recorded first-timer answer.
     const firstSessionByMember = new Map<string, string>()
     const allCounted = (rowsRaw ?? []) as unknown as AnalyticsRow[]
     const sortedByTime = [...allCounted].sort((a, b) =>
@@ -1366,9 +1386,7 @@ export const getAttendanceStats = createServerFn({ method: 'GET' })
       sat.count += 1
       bySatelliteMap.set(satKey, sat)
 
-      const isFirstTimer = r.member_id
-        ? firstSessionByMember.get(r.member_id) === r.session_id
-        : false
+      const isFirstTimer = isFirstTimerCheckin(r, firstSessionByMember)
       const tr =
         trendMap.get(r.session_id) ??
         {

@@ -1149,6 +1149,8 @@ export interface AttendanceRecord {
   match_status: MatchStatus
   matched_by: string | null
   note: string | null
+  // Staff answer at the booth; null when not recorded (QR, older rows).
+  is_first_timer: boolean | null
   checked_in_at: string
   created_at: string
 }
@@ -1165,6 +1167,7 @@ export interface AttendanceRecordInsert {
   match_status?: MatchStatus
   matched_by?: string | null
   note?: string | null
+  is_first_timer?: boolean | null
 }
 
 export interface AttendanceRecordUpdate {

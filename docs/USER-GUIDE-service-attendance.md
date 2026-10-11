@@ -144,6 +144,8 @@ For someone new, e.g. a senior guest with no phone.
 2. Click **Register new member** (below the results).
 3. Fill in the form:
    - **Name**: prefilled from the search. The only required field.
+   - **First timer**: tick only for a first visit to Quest. Leave unticked for a
+     known attendee who is only new to the system.
    - **Mobile**, **Email**, **City**, **Gender**, **Age** *(optional)*.
      Email must be unique: an email already on another member shows that member first.
    - **Satellite**: defaults to the session's satellite, else Quest Laguna Main.
@@ -151,8 +153,10 @@ For someone new, e.g. a senior guest with no phone.
 4. Click **Register & check in**. Result: a new visitor record plus a check-in, status **New member**.
 5. Other details (birthday, address, and so on): later, on the member's profile, **Edit**.
 
-The new record is a normal directory member: membership status **Visitor**, stage
-**New Friends**. Every later check-in adds to the same attendance history.
+The new record is a normal directory member: membership status **Visitor**.
+Stage: **New Friends** when **First timer** is ticked, **Schooling** when not.
+A ticked check-in shows a **First timer** tag in the session's check-ins list.
+Every later check-in adds to the same attendance history.
 
 **Similar names in the directory**: the form lists existing members with a close
 name instead of registering. Pick **Check in** beside the right member, or
@@ -259,7 +263,10 @@ A session still open after its service date (Philippine time) is **Overdue**.
 - The **Check-ins** tab inside a session lists everyone, with how they checked in
   (*QR (self)*, *QR (guest)*, or *Manual*).
 - **Admin → Attendance → View analytics** shows the bigger picture:
-  - **Attendance trend** over time
+  - **Attendance trend** over time, with a **First-timers** line. A booth check-in
+    counts only when **First timer** was ticked. A directory member checked in
+    at the booth never counts. A QR check-in counts on the member's first
+    check-in on record.
   - **By service** and **By satellite**
   - **Most consistent attendees**
 
