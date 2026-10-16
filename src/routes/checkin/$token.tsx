@@ -340,7 +340,8 @@ function SuccessState({ result, serviceName }: { result: CheckinResult; serviceN
           <p className="text-xs font-semibold uppercase tracking-wide text-[#8B1538]">Prophetic word</p>
           <blockquote className="mt-2 font-serif text-lg leading-relaxed text-gray-900">{word.text}</blockquote>
           <figcaption className="mt-3 text-sm font-medium text-[#8B1538]">
-            {word.reference} <span className="font-normal text-gray-400">{word.translation}</span>
+            {word.reference}
+            {word.translation && <span className="font-normal text-gray-400"> {word.translation}</span>}
           </figcaption>
         </figure>
       )}

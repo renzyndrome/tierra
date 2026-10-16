@@ -46,8 +46,8 @@ Do this once per service, on the day of the service.
    - **Date** — the date of the service (defaults to today).
    - **Satellite** *(optional)* — choose the campus, or leave as **All / Main**.
    - **Label** *(optional)* — a note shown beside the session, e.g. "Anniversary Sunday".
-   - **Prophetic prompt** *(optional)*: the sermon topic, e.g. "The Love of an
-     Extravagant Father". After a QR check-in, one matching Bible verse shows.
+   - **Prophetic prompt** *(optional)*: the sermon topic or passage, e.g.
+     "Luke 10:38-42". After a QR check-in, one matching prophetic word shows.
      See **Prophetic word** in section 3.
 4. Click to create. The new session appears at the top of the list with a green
    **Open** badge.
@@ -105,15 +105,19 @@ check in. Reopen the session if you closed it too early.
 ### Prophetic word (after QR check-in)
 
 After a QR check-in the screen shows **Welcome to** and the service name. When the
-session has a prophetic prompt with a matching verse list, a **Prophetic word**
-follows: one random Bible verse for the sermon topic (Berean Standard Bible, BSB).
+session has a prophetic prompt with a matching word list, a **Prophetic word**
+follows: one random entry from that list, with its passage reference. A list of
+Bible verses also shows the translation (e.g. BSB).
+
+Current list: **Luke 10:38-42** (30 prophetic words, Young Pro, Oct 16). The
+prompt "Luke 10:38-42", or words like "Mary and Martha", selects it.
 
 - Set or change it: open the session, **Prophetic prompt**, then **Save prompt**.
 - The line under the field shows the result:
-  - **Verse list: ... verses.** A verse shows after each QR check-in.
-  - **No verse list for this prompt.** No verse shows. Use the topic name of an
+  - **Word list: ... words.** A prophetic word shows after each QR check-in.
+  - **No word list for this prompt.** No word shows. Use the topic name of an
     existing list, or ask the developer for a new list.
-  - **None.** No prompt, no verse.
+  - **None.** No prompt, no word.
 - Matching ignores capital letters and punctuation. A prompt with a key word of a
   list (e.g. "Father", "love", "grace") also matches that list.
 - Manual check-ins show no verse.
