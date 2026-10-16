@@ -370,6 +370,8 @@ test.describe('Admin — Service Attendance', () => {
       // on an open past session (backfill from a paper list).
       await expect(page.getByText(/^overdue$/i).first()).toBeVisible({ timeout: 15_000 })
       await expect(page.getByText(/service date passed/i)).toBeVisible()
+      // Created today, so the 3-day automatic close runs from today.
+      await expect(page.getByText(/closes\s+automatically on/i)).toBeVisible()
       await expect(page.getByRole('tab', { name: /manual check-in/i })).toBeVisible()
 
       // The public QR refuses check-ins even though the session is still open.

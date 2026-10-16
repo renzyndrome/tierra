@@ -15,6 +15,7 @@ import {
 import { getSatellites } from '../server/functions/satellites'
 import { hasPermission } from '../lib/auth'
 import { MAIN_SATELLITE_NAME } from '../lib/constants'
+import { AUTO_CLOSE_AFTER_DAYS } from '../lib/sessionSchedule'
 import type { ServiceSessionWithRelations, ServiceType, SatelliteRow } from '../lib/types'
 import { Card, CardContent } from './ui/card'
 import { Button } from './ui/button'
@@ -193,7 +194,7 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
         <div className="mb-4 p-3 bg-amber-50 text-amber-800 rounded-lg text-sm flex items-center justify-between gap-3 flex-wrap">
           <span>
             {overdueCount} open {overdueCount === 1 ? 'session' : 'sessions'} past the service date.
-            QR check-in stopped.
+            QR check-in stopped. Closes automatically {AUTO_CLOSE_AFTER_DAYS} days after the date.
           </span>
           {canWrite && (
             <Button size="sm" variant="outline" disabled={closingOverdue} onClick={handleCloseOverdue}>
