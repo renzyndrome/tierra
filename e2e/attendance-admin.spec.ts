@@ -404,7 +404,9 @@ test.describe('Admin — Service Attendance', () => {
       // 1. Registering an existing member's exact name shows the similar-name
       //    warning instead of creating a duplicate. Nothing is written.
       await search.fill(MEMBER_QUERY)
-      const firstName = (await page.locator('[data-slot="card"] p.font-medium').first().innerText()).trim()
+      const firstName = (
+        await page.getByRole('tabpanel').locator('[data-slot="card"] p.font-medium').first().innerText()
+      ).trim()
       await page.getByRole('button', { name: /register new member/i }).click()
       const dialog = page.getByRole('dialog')
       await dialog.getByLabel(/^name/i).fill(firstName)
@@ -635,6 +637,72 @@ test.describe('Admin — Service Attendance', () => {
       await dialog.getByRole('button', { name: /^cancel$/i }).click()
       await expect(dialog).toBeHidden()
       await staffCtx.close()
+    } finally {
+      await deleteSessionAt(page, sessionUrl)
+    }
+  })
+
+  test('prophetic words: import a list for one service, check-in draws from it', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    test.setTimeout(150_000)
+    await loginAsAdmin(page)
+    const sessionUrl = await createSession(page, `E2E IMPORT ${Date.now()}`)
+    const csvWords = ['Imported word one for this service.', 'Imported word two for this service.']
+
+    try {
+      // 1. Spreadsheet (CSV) with a reference row, a header and a number column.
+      await page.getByRole('button', { name: /^import words$/i }).click()
+      const dialog = page.getByRole('dialog')
+      await dialog.getByTestId('prophetic-file').setInputFiles({
+        name: 'words.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from(`Psalm 23\nNo.,Prophetic Word\n1,${csvWords[0]}\n2,${csvWords[1]}\n`),
+      })
+      await dialog.getByRole('button', { name: /^read words$/i }).click()
+      await expect(dialog.locator('#prophetic-reference')).toHaveValue('Psalm 23')
+      await expect(dialog.getByText('2 words', { exact: true })).toBeVisible()
+
+      // The real PDF, when its path is given (kept out of the repo).
+      const pdf = process.env.E2E_PROPHETIC_PDF
+      if (pdf) {
+        await dialog.getByRole('button', { name: /^back$/i }).click()
+        await dialog.getByTestId('prophetic-file').setInputFiles(pdf)
+        await dialog.getByRole('button', { name: /^read words$/i }).click()
+        await expect(dialog.locator('#prophetic-reference')).toHaveValue('Luke 10:38-42', { timeout: 20_000 })
+        await expect(dialog.getByText('30 words', { exact: true })).toBeVisible()
+        await dialog.getByRole('button', { name: /^back$/i }).click()
+        await dialog.getByTestId('prophetic-file').setInputFiles({
+          name: 'words.csv',
+          mimeType: 'text/csv',
+          buffer: Buffer.from(`Psalm 23\n1,${csvWords[0]}\n2,${csvWords[1]}\n`),
+        })
+        await dialog.getByRole('button', { name: /^read words$/i }).click()
+        await expect(dialog.getByText('2 words', { exact: true })).toBeVisible()
+      }
+
+      await dialog.getByRole('button', { name: /^save list$/i }).click()
+      await expect(dialog).toBeHidden({ timeout: 15_000 })
+      await expect(page.getByText('Imported: Psalm 23, 2 words. One random word per QR check-in.')).toBeVisible()
+
+      // 2. A guest check-in draws its word from the imported list.
+      const token = await readQrToken(page)
+      const guestCtx = await browser.newContext({ baseURL })
+      const guest = await guestCtx.newPage()
+      await guest.goto(`/checkin/${token}`)
+      await guest.getByLabel(/your name/i).fill(`E2E Import ${Date.now()}`)
+      await guest.getByRole('button', { name: /^check in$/i }).click()
+      await expect(guest.locator('figcaption')).toHaveText('Psalm 23', { timeout: 15_000 })
+      expect(csvWords).toContain((await guest.locator('blockquote').innerText()).trim())
+      await guestCtx.close()
+
+      // 3. Remove the list: the prompt applies again.
+      await page.getByRole('button', { name: /^remove list$/i }).click()
+      await expect(page.getByText('None imported. PDF, Excel, CSV or text, or paste.')).toBeVisible({
+        timeout: 15_000,
+      })
     } finally {
       await deleteSessionAt(page, sessionUrl)
     }

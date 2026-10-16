@@ -125,6 +125,22 @@ service and questlaguna.org.
   puts it in Photos.
 - The page footer links to **questlaguna.org**.
 
+**Import the words for a service (recommended):** each service has its own list.
+
+1. Open the session. On the Prophetic card, **Word list**, click **Import words**.
+2. **Choose file** (PDF, Excel, CSV or text), or paste the words.
+3. Click **Read words**. The app finds the passage heading (e.g. "LUKE 10:38-42"
+   becomes "Luke 10:38-42") and each numbered line, bullet, or line.
+   - PDF: text PDFs only. A scanned image has no text: paste instead.
+   - Excel/CSV: one word per row. A header row and a number column are skipped.
+4. Check the preview: fix the reference, edit or remove a word, **Add word**.
+   Notes above the list say what was skipped (repeats, short lines).
+5. **Save list**. The card shows **Imported: ..., N words**. Each QR check-in
+   now shows one random word from this list.
+- **Edit words** reopens the list. **Remove list** goes back to the prompt.
+- Nothing is uploaded: the file is read on the device. Only the words are saved.
+
+**Prophetic prompt (built-in lists):** used only when no list is imported.
 - Set or change it: open the session, **Prophetic prompt**, then **Save prompt**.
 - The line under the field shows the result:
   - **Word list: ... words.** A prophetic word shows after each QR check-in.

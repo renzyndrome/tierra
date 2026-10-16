@@ -92,3 +92,35 @@ export function pickPropheticWord(
   const translation = set.translation === undefined ? library.translation ?? null : set.translation
   return { ...set.verses[index], translation }
 }
+
+/** A service's own word list, imported for that service (JSON on the session). */
+export interface PropheticWordList {
+  reference: string
+  translation?: string | null
+  words: string[]
+}
+
+/** The stored list when it is well-formed with at least one word, else null. */
+export function asWordList(value: unknown): PropheticWordList | null {
+  if (!value || typeof value !== 'object') return null
+  const v = value as { reference?: unknown; translation?: unknown; words?: unknown }
+  if (typeof v.reference !== 'string' || !Array.isArray(v.words)) return null
+  const words = v.words.filter((w): w is string => typeof w === 'string' && w.trim().length > 0)
+  if (words.length === 0) return null
+  return {
+    reference: v.reference,
+    translation: typeof v.translation === 'string' && v.translation ? v.translation : null,
+    words,
+  }
+}
+
+/** One random word from a service's own list, or null for no usable list. */
+export function pickFromWordList(
+  value: unknown,
+  random: () => number = Math.random,
+): PropheticWord | null {
+  const list = asWordList(value)
+  if (!list) return null
+  const index = Math.min(list.words.length - 1, Math.floor(random() * list.words.length))
+  return { reference: list.reference, text: list.words[index], translation: list.translation ?? null }
+}
