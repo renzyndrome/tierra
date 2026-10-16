@@ -308,6 +308,15 @@ test.describe('Admin — Service Attendance', () => {
       // Then one prophetic word for the passage (no Bible translation label).
       await expect(guest.getByText('Prophetic word', { exact: true })).toBeVisible()
       await expect(guest.locator('figcaption')).toHaveText('Luke 10:38-42')
+      // Story image: three designs, downloadable; promotion link in the footer.
+      await expect(guest.getByRole('radio')).toHaveCount(3)
+      await expect(guest.getByRole('link', { name: /download/i })).toHaveAttribute('href', /^blob:/, {
+        timeout: 20_000,
+      })
+      await expect(guest.getByRole('link', { name: 'questlaguna.org' })).toHaveAttribute(
+        'href',
+        'https://questlaguna.org',
+      )
 
       // 2. Staff sees the guest check-in.
       await page.reload()
