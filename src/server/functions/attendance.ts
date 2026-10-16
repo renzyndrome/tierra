@@ -22,7 +22,14 @@ import {
   normalizeEmail,
 } from '../../lib/nameMatch'
 import { churchToday, isSessionOverdue, acceptsQrCheckin } from '../../lib/sessionSchedule'
-import { findPropheticSet, pickPropheticWord, type PropheticLibrary } from '../../lib/propheticWord'
+import {
+  findPropheticSet,
+  pickPropheticWord,
+  pickFromWordList,
+  type PropheticLibrary,
+  type PropheticWordList,
+} from '../../lib/propheticWord'
+import { MAX_WORDS, MAX_WORD_LENGTH } from '../../lib/propheticImport'
 import propheticWords from '../../content/propheticWords.json'
 import {
   mergeMatchCandidates,
@@ -216,6 +223,17 @@ const PROPHETIC_LIBRARY = propheticWords as PropheticLibrary
 // Optional sermon topic typed by an admin; '' and whitespace mean none.
 const optionalPropheticPrompt = z.string().trim().max(200).optional().nullable()
 
+// A word list imported for one service (PDF, spreadsheet or paste, parsed and
+// reviewed in the browser). Stored as JSON on the session.
+const propheticWordListSchema = z.object({
+  reference: z.string().trim().min(1, 'Passage reference required.').max(80),
+  translation: z.string().trim().max(20).optional().nullable(),
+  words: z
+    .array(z.string().trim().min(1).max(MAX_WORD_LENGTH, `Each word: ${MAX_WORD_LENGTH} characters or fewer.`))
+    .min(1, 'At least one word required.')
+    .max(MAX_WORDS, `${MAX_WORDS} words or fewer.`),
+})
+
 
 // ============================================
 // SERVICE TYPES
@@ -408,6 +426,36 @@ export const setSessionPropheticPrompt = createServerFn({ method: 'POST' })
     return propheticSetSummary(prompt)
   })
 
+// Save or remove the word list imported for one service. While set, QR
+// check-ins draw from it instead of the prompt's built-in list.
+export const setSessionPropheticWords = createServerFn({ method: 'POST' })
+  .inputValidator(
+    (input: { accessToken: string; sessionId: string; list: PropheticWordList | null }) =>
+      z
+        .object({
+          accessToken: z.string(),
+          sessionId: z.string().uuid(),
+          list: propheticWordListSchema.nullable(),
+        })
+        .parse(input),
+  )
+  .handler(async ({ data }): Promise<{ success: boolean }> => {
+    await requirePermission(data.accessToken, 'registration.write')
+    const admin = createServerAdminClient()
+    const list = data.list
+      ? { reference: data.list.reference, translation: data.list.translation || null, words: data.list.words }
+      : null
+    const { error } = await admin
+      .from('service_sessions')
+      .update({ prophetic_words: list })
+      .eq('id', data.sessionId)
+    if (error) {
+      console.error('Error saving prophetic words:', error)
+      throw new Error('Word list not saved. Retry.')
+    }
+    return { success: true }
+  })
+
 export const setSessionOpen = createServerFn({ method: 'POST' })
   .inputValidator((input: { accessToken: string; sessionId: string; isOpen: boolean }) =>
     z
@@ -597,14 +645,16 @@ export const publicCheckIn = createServerFn({ method: 'POST' })
       throw new Error('Check-in for this service is closed.')
     }
     const sessionId = session.id as string
-    // One verse per check-in for the session's sermon topic, if any.
-    const withWord = (result: CheckinResult): CheckinResult => ({
-      ...result,
-      propheticWord: pickPropheticWord(
-        (session as { prophetic_prompt?: string | null }).prophetic_prompt,
-        PROPHETIC_LIBRARY,
-      ),
-    })
+    // One prophetic word per check-in: from the list imported for this
+    // service, else from the built-in list the sermon prompt matches.
+    const withWord = (result: CheckinResult): CheckinResult => {
+      const row = session as { prophetic_words?: unknown; prophetic_prompt?: string | null }
+      return {
+        ...result,
+        propheticWord:
+          pickFromWordList(row.prophetic_words) ?? pickPropheticWord(row.prophetic_prompt, PROPHETIC_LIBRARY),
+      }
+    }
 
     // Self check-in: a logged-in user with a linked member profile.
     let selfMemberId: string | null = null
