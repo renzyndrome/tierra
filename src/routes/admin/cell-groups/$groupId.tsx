@@ -8,7 +8,7 @@ import { Button } from '../../../components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../../components/ui/dialog'
 import { Input } from '../../../components/ui/input'
 import { getPlaceholderAvatar } from '../../../lib/storage'
-import { getCellGroupWithRelations, addMemberToCellGroup, removeMemberFromCellGroup, updateMemberCellGroupRole } from '../../../server/functions/cellGroups'
+import { getCellGroupWithRelations, addMemberToCellGroup, removeMemberFromCellGroup } from '../../../server/functions/cellGroups'
 import { searchMembers } from '../../../server/functions/members'
 import type { CellGroupWithRelations, Member } from '../../../lib/types'
 import { STAGE_LABELS } from '../../../lib/constants'
@@ -57,7 +57,6 @@ function CellGroupDetailPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Member[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [addRole, setAddRole] = useState<'leader' | 'co_leader' | 'member'>('member')
   const [memberToRemove, setMemberToRemove] = useState<CellGroupMember | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   // Non-blocking warning after an add or a role change whose Agapay
@@ -146,7 +145,9 @@ function CellGroupDetailPage() {
     setIsUpdating(true)
     setAddNotice(null)
     try {
-      const added = await addMemberToCellGroup({ data: { accessToken, memberId, cellGroupId: groupId, role: addRole } })
+      // Always a plain member. The circle leader is set in Admin > Circles >
+      // Edit (cell_groups.leader_id); a role picked here never changed it.
+      const added = await addMemberToCellGroup({ data: { accessToken, memberId, cellGroupId: groupId, role: 'member' } })
       // The add stands; a failed Agapay enrollment is retried from the member's Edit page.
       if (enrollFailedAfter(false, added)) setAddNotice(AGAPAY_ENROLL_FAILED_RETRY_ON_EDIT)
       await fetchCellGroup(false)
@@ -166,22 +167,6 @@ function CellGroupDetailPage() {
       await fetchCellGroup(false)
     } catch (err: any) {
       alert(err.message || 'Failed to remove member')
-    }
-    setIsUpdating(false)
-  }
-
-  // Change role handler
-  const handleRoleChange = async (memberId: string, newRole: 'leader' | 'co_leader' | 'member') => {
-    setIsUpdating(true)
-    setAddNotice(null)
-    try {
-      const changed = await updateMemberCellGroupRole({ data: { accessToken, memberId, cellGroupId: groupId, role: newRole } })
-      // A leader turned plain member is enrolled in Agapay. The role change
-      // stands; a failed enrollment is retried from the member's Edit page.
-      if (enrollFailedAfter(false, changed)) setAddNotice(AGAPAY_ENROLL_FAILED_RETRY_ON_EDIT)
-      await fetchCellGroup(false)
-    } catch (err: any) {
-      alert(err.message || 'Failed to update role')
     }
     setIsUpdating(false)
   }
@@ -496,16 +481,11 @@ function CellGroupDetailPage() {
                                 {STAGE_LABELS[membership.member.discipleship_stage] || membership.member.discipleship_stage}
                               </span>
                             )}
-                            <select
-                              value={membership.role}
-                              onChange={(e) => handleRoleChange(membership.member.id, e.target.value as 'leader' | 'co_leader' | 'member')}
-                              disabled={isUpdating}
-                              className="text-xs font-medium rounded-full px-2 py-1 border-0 cursor-pointer bg-gray-100 text-gray-700 focus:ring-2 focus:ring-[#8B1538]"
-                            >
-                              <option value="member">Member</option>
-                              <option value="co_leader">Co-Leader</option>
-                              <option value="leader">Leader</option>
-                            </select>
+                            {membership.role !== 'member' && (
+                              <span className="text-xs font-medium rounded-full px-2 py-1 bg-[#8B1538]/10 text-[#8B1538]">
+                                {membership.role === 'leader' ? 'Leader' : 'Co-Leader'}
+                              </span>
+                            )}
                             <button
                               onClick={() => setMemberToRemove(membership)}
                               disabled={isUpdating}
@@ -723,18 +703,7 @@ function CellGroupDetailPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               autoFocus
             />
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1 block">Role</label>
-              <select
-                value={addRole}
-                onChange={(e) => setAddRole(e.target.value as 'leader' | 'co_leader' | 'member')}
-                className="w-full px-3 py-2 border rounded-md text-sm"
-              >
-                <option value="member">Member</option>
-                <option value="co_leader">Co-Leader</option>
-                <option value="leader">Leader</option>
-              </select>
-            </div>
+            <p className="text-xs text-gray-500">Added as a member. Circle leader: Admin, Circles tab, Edit.</p>
             {addNotice && (
               <p className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">{addNotice}</p>
             )}
