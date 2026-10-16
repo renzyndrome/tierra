@@ -21,7 +21,7 @@ import {
   findSurnameCandidates,
   normalizeEmail,
 } from '../../lib/nameMatch'
-import { churchToday, isSessionOverdue, acceptsQrCheckin } from '../../lib/sessionSchedule'
+import { churchToday, isSessionOverdue, acceptsQrCheckin, AUTO_CLOSE_AFTER_DAYS } from '../../lib/sessionSchedule'
 import {
   findPropheticSet,
   pickPropheticWord,
@@ -311,6 +311,13 @@ export const getSessions = createServerFn({ method: 'GET' })
   .handler(async ({ data }): Promise<ServiceSessionWithRelations[]> => {
     await requirePermission(data.accessToken, 'registration.read')
     const admin = createServerAdminClient()
+    // Close sessions more than AUTO_CLOSE_AFTER_DAYS days past their date. The
+    // nightly pg_cron job does the same; this keeps the list current if the
+    // job is paused. Never blocks the list.
+    const { error: staleErr } = await admin.rpc('close_stale_service_sessions', {
+      p_days: AUTO_CLOSE_AFTER_DAYS,
+    })
+    if (staleErr) console.error('Error closing stale sessions:', staleErr)
 
     let query = admin
       .from('service_sessions')
@@ -470,6 +477,9 @@ export const setSessionOpen = createServerFn({ method: 'POST' })
       .update({
         is_open: data.isOpen,
         closed_at: data.isOpen ? null : new Date().toISOString(),
+        // Reopening restarts the automatic-close clock (a past session reopened
+        // to enter a paper list stays open AUTO_CLOSE_AFTER_DAYS days).
+        ...(data.isOpen ? { opened_at: new Date().toISOString() } : {}),
       })
       .eq('id', data.sessionId)
       .select()

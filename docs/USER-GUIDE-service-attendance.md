@@ -308,6 +308,11 @@ A session still open after its service date (Philippine time) is **Overdue**.
 - QR check-in: stopped for overdue sessions. The QR page shows "Check-in is closed".
 - Manual check-in: still available while the session is open.
 - List banner: count of overdue sessions, plus **Close overdue sessions** to close them all at once.
+- **Automatic close:** a session closes on its own once its date is more than
+  3 days past, e.g. a Friday Oct 16 session closes on Tuesday Oct 20, 12:05 AM.
+  The session page shows the day: "Closes automatically on ...".
+- **Reopen session** on an old session (e.g. to enter a paper list) gives it
+  3 more days before it closes again.
 
 ---
 
