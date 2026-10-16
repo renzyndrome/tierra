@@ -1,10 +1,12 @@
 // Prophetic word shown after a QR check-in.
 //
 // A session may carry a "prophetic prompt" (the sermon topic). Until an AI
-// connector exists, verses come from a hand-made list in
+// connector exists, words come from a hand-made list in
 // src/content/propheticWords.json: one set per topic, each with match keywords.
-// The prompt picks a set (exact topic first, then most keyword hits) and each
-// check-in gets one random verse from it. No matching set: no verse.
+// A set holds Bible verses (with a translation, e.g. "BSB") or prophetic words
+// written for the passage (no translation). The prompt picks a set (exact
+// topic first, then most keyword hits) and each check-in gets one random entry
+// from it. No matching set: no word.
 
 export interface PropheticVerse {
   reference: string
@@ -15,16 +17,19 @@ export interface PropheticWordSet {
   topic: string
   keywords: string[]
   verses: PropheticVerse[]
+  // Bible translation of this set's verses, e.g. "BSB". Omitted for prophetic
+  // words written for a passage.
+  translation?: string | null
 }
 
 export interface PropheticLibrary {
-  // Bible translation of every verse in the file, e.g. "BSB".
-  translation: string
+  // Default translation for sets that do not name one.
+  translation?: string | null
   sets: PropheticWordSet[]
 }
 
 export interface PropheticWord extends PropheticVerse {
-  translation: string
+  translation: string | null
 }
 
 // Words too common to signal a topic.
@@ -41,9 +46,12 @@ function normalize(text: string): string {
 }
 
 function topicWords(text: string): string[] {
-  return normalize(text)
-    .split(' ')
-    .filter((w) => w.length >= 3 && !FILLER_WORDS.has(w))
+  const words = normalize(text).split(' ')
+  // A word right before a number is the book of a Bible reference ("Luke 15"):
+  // every passage of that book shares it, so it does not identify a topic.
+  return words.filter(
+    (w, i) => w.length >= 3 && !FILLER_WORDS.has(w) && !/^\d/.test(words[i + 1] ?? ''),
+  )
 }
 
 /** The verse set for a session prompt, or null when none fits. */
@@ -81,5 +89,6 @@ export function pickPropheticWord(
   const set = findPropheticSet(prompt, library)
   if (!set) return null
   const index = Math.min(set.verses.length - 1, Math.floor(random() * set.verses.length))
-  return { ...set.verses[index], translation: library.translation }
+  const translation = set.translation === undefined ? library.translation ?? null : set.translation
+  return { ...set.verses[index], translation }
 }
