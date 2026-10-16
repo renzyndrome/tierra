@@ -103,12 +103,15 @@ const PHONE = {
   userAgent: devices['iPhone 13'].userAgent,
 }
 
-// No sideways scrolling, and every visible field has 16px+ text (smaller text
-// makes iOS Safari zoom on focus) and a 44px+ tap target.
+// No sideways scrolling, and every visible text field or dropdown has 16px+
+// text (smaller text makes iOS Safari zoom on focus) and a 44px+ tap target.
+// Checkboxes and radios are not typed into, so they are left out.
 async function expectPhoneFriendly(page: Page, scope: Locator) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   expect(overflow).toBeLessThanOrEqual(0)
-  const fields = await scope.locator('input:visible, select:visible').all()
+  const fields = await scope
+    .locator('input:visible:not([type="checkbox"]):not([type="radio"]), select:visible')
+    .all()
   expect(fields.length).toBeGreaterThan(0)
   for (const field of fields) {
     const { id, size, height } = await field.evaluate((el) => ({
@@ -285,10 +288,10 @@ test.describe('Admin — Service Attendance', () => {
     try {
       const token = await readQrToken(page)
 
-      // 0. A prophetic prompt matches the shipped verse list.
-      await page.locator('#session-prophetic').fill('The Love of an Extravagant Father')
+      // 0. A prophetic prompt matches the shipped word list.
+      await page.locator('#session-prophetic').fill('Mary and Martha')
       await page.getByRole('button', { name: /^save prompt$/i }).click()
-      await expect(page.getByText(/^Verse list: The Love of an Extravagant Father, \d+ verses\./)).toBeVisible({
+      await expect(page.getByText(/^Word list: Luke 10:38-42, \d+ words\./)).toBeVisible({
         timeout: 15_000,
       })
 
@@ -302,9 +305,9 @@ test.describe('Admin — Service Attendance', () => {
       await expect(guest.getByRole('heading', { name: /^welcome to /i })).toBeVisible({
         timeout: 15_000,
       })
-      // Then one verse for the sermon topic.
+      // Then one prophetic word for the passage (no Bible translation label).
       await expect(guest.getByText('Prophetic word', { exact: true })).toBeVisible()
-      await expect(guest.locator('figcaption')).toContainText('BSB')
+      await expect(guest.locator('figcaption')).toHaveText('Luke 10:38-42')
 
       // 2. Staff sees the guest check-in.
       await page.reload()
