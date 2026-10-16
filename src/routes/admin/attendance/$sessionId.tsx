@@ -282,6 +282,7 @@ function SessionDetail() {
           sessionId={sessionId}
           prompt={info.prophetic_prompt ?? null}
           matchedSet={info.prophetic_set ?? null}
+          words={info.prophetic_words ?? null}
           canWrite={canWrite}
           onSaved={loadAll}
         />

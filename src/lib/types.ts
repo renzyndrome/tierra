@@ -1,6 +1,6 @@
 // Quest Laguna Directory System - TypeScript Types
 
-import type { PropheticWord } from './propheticWord'
+import type { PropheticWord, PropheticWordList } from './propheticWord'
 
 // ============================================
 // ENUMS AND CONSTANTS
@@ -1103,6 +1103,8 @@ export interface ServiceSession {
   title: string | null
   // Sermon topic for the verse shown after QR check-in; null for none.
   prophetic_prompt?: string | null
+  // Word list imported for this service; wins over the prompt when set.
+  prophetic_words?: PropheticWordList | null
   qr_token: string
   is_open: boolean
   opened_at: string | null
@@ -1119,6 +1121,7 @@ export interface ServiceSessionInsert {
   satellite_id?: string | null
   title?: string | null
   prophetic_prompt?: string | null
+  prophetic_words?: PropheticWordList | null
   qr_token?: string
   is_open?: boolean
   created_by?: string | null
@@ -1129,6 +1132,7 @@ export interface ServiceSessionUpdate {
   satellite_id?: string | null
   title?: string | null
   prophetic_prompt?: string | null
+  prophetic_words?: PropheticWordList | null
   is_open?: boolean
   closed_at?: string | null
 }

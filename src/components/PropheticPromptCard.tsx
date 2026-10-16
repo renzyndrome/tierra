@@ -1,9 +1,13 @@
-// Session Manage page: the optional prophetic prompt (sermon topic). After a QR
-// check-in, attendees see one entry from the word list the prompt matches
-// (src/content/propheticWords.json). The hint shows which list matched, if any.
+// Session Manage page: the prophetic word after a QR check-in. A word list
+// imported for this service (PDF, spreadsheet or paste) comes first; without
+// one, the prompt (sermon topic) picks a built-in list from
+// src/content/propheticWords.json. The hints say which applies.
 
 import { useState, useEffect } from 'react'
-import { setSessionPropheticPrompt } from '../server/functions/attendance'
+import { FileUp } from 'lucide-react'
+import { setSessionPropheticPrompt, setSessionPropheticWords } from '../server/functions/attendance'
+import type { PropheticWordList } from '../lib/propheticWord'
+import { PropheticImportDialog } from './PropheticImportDialog'
 import { Card, CardContent } from './ui/card'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -16,6 +20,8 @@ interface PropheticPromptCardProps {
   sessionId: string
   prompt: string | null
   matchedSet: PropheticSetSummary
+  // Word list imported for this service, if any.
+  words: PropheticWordList | null
   canWrite: boolean
   // Called after a save so the page can reload the session.
   onSaved: () => Promise<void>
@@ -32,9 +38,13 @@ export function PropheticPromptCard({
   sessionId,
   prompt,
   matchedSet,
+  words,
   canWrite,
   onSaved,
 }: PropheticPromptCardProps) {
+  const [importing, setImporting] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const hasList = Boolean(words && words.words.length > 0)
   const [value, setValue] = useState(prompt ?? '')
   const [saved, setSaved] = useState({ prompt: prompt ?? '', set: matchedSet })
   const [busy, setBusy] = useState(false)
@@ -70,9 +80,56 @@ export function PropheticPromptCard({
     }
   }
 
+  const removeList = async () => {
+    if (!accessToken) return
+    setRemoving(true)
+    setError('')
+    try {
+      await setSessionPropheticWords({ data: { accessToken, sessionId, list: null } })
+      await onSaved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Word list not removed. Retry.')
+    } finally {
+      setRemoving(false)
+    }
+  }
+
   return (
     <Card className="mb-4">
       <CardContent className="p-4">
+        <div className="mb-4 border-b border-gray-100 pb-4">
+          <p className="text-sm font-medium text-gray-900">Word list</p>
+          {hasList && words ? (
+            <p className="mt-1 text-xs text-gray-500">
+              Imported: {words.reference}, {words.words.length} words. One random word per QR check-in.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-gray-500">None imported. PDF, Excel, CSV or text, or paste.</p>
+          )}
+          {canWrite && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={hasList ? 'outline' : 'default'}
+                onClick={() => setImporting(true)}
+                className={hasList ? 'h-11 sm:h-9' : 'h-11 sm:h-9 bg-[#8B1538] hover:bg-[#6B0F2B]'}
+              >
+                <FileUp className="h-4 w-4" aria-hidden /> {hasList ? 'Edit words' : 'Import words'}
+              </Button>
+              {hasList && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={removing}
+                  onClick={removeList}
+                  className="h-11 sm:h-9 text-red-600 hover:text-red-700"
+                >
+                  {removing ? 'Removing…' : 'Remove list'}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
         <Label htmlFor="session-prophetic">Prophetic prompt</Label>
         {canWrite ? (
           <div className="mt-1 flex flex-col sm:flex-row gap-2">
@@ -98,10 +155,21 @@ export function PropheticPromptCard({
         )}
         {dirty ? (
           <p className="mt-1 text-xs text-amber-700">Unsaved change.</p>
+        ) : hasList ? (
+          <p className="mt-1 text-xs text-gray-500">Not used while an imported word list is set.</p>
         ) : (
           <p className="mt-1 text-xs text-gray-500">{matchHint(saved.prompt, saved.set)}</p>
         )}
         {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        {importing && (
+          <PropheticImportDialog
+            accessToken={accessToken}
+            sessionId={sessionId}
+            current={hasList ? words : null}
+            onClose={() => setImporting(false)}
+            onSaved={onSaved}
+          />
+        )}
       </CardContent>
     </Card>
   )
