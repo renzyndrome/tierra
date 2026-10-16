@@ -26,6 +26,7 @@ import {
   deleteSession,
 } from '../../../server/functions/attendance'
 import { hasPermission } from '../../../lib/auth'
+import { autoCloseDate } from '../../../lib/sessionSchedule'
 import {
   CHECKIN_METHOD_LABELS,
   MATCH_STATUS_LABELS,
@@ -217,7 +218,8 @@ function SessionDetail() {
 
         {info.is_overdue && (
           <div className="mb-4 p-3 bg-amber-50 text-amber-800 rounded-lg text-sm">
-            Service date passed. QR check-in stopped, manual check-in only.
+            Service date passed. QR check-in stopped, manual check-in only. Closes
+            automatically on {formatDate(autoCloseDate(info))}.
           </div>
         )}
 

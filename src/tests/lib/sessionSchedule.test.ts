@@ -6,6 +6,8 @@ import {
   churchToday,
   isSessionOverdue,
   acceptsQrCheckin,
+  addDays,
+  autoCloseDate,
   CHURCH_TIME_ZONE,
 } from '../../lib/sessionSchedule'
 
@@ -57,5 +59,29 @@ describe('acceptsQrCheckin', () => {
 
   it('refuses an open session whose date has passed', () => {
     expect(acceptsQrCheckin({ is_open: true, session_date: '2026-09-20' }, today)).toBe(false)
+  })
+})
+
+describe('autoCloseDate', () => {
+  it('closes a session more than 3 days after its date', () => {
+    // Opened on its own date (Manila), so the date rule decides.
+    expect(autoCloseDate({ session_date: '2026-10-16', opened_at: '2026-10-16T09:00:00Z' })).toBe('2026-10-20')
+    expect(autoCloseDate({ session_date: '2026-10-16', opened_at: null })).toBe('2026-10-20')
+  })
+
+  it('gives a reopened old session 3 more days from the reopen', () => {
+    expect(autoCloseDate({ session_date: '2026-07-21', opened_at: '2026-10-16T02:00:00Z' })).toBe('2026-10-20')
+  })
+
+  it('uses the Manila date of the reopen', () => {
+    // 2026-10-16T20:00Z is Oct 17, 4 AM in Manila.
+    expect(autoCloseDate({ session_date: '2026-10-01', opened_at: '2026-10-16T20:00:00Z' })).toBe('2026-10-21')
+  })
+})
+
+describe('addDays', () => {
+  it('crosses month and year ends', () => {
+    expect(addDays('2026-10-30', 3)).toBe('2026-11-02')
+    expect(addDays('2026-12-31', 1)).toBe('2027-01-01')
   })
 })
