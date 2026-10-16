@@ -4,6 +4,23 @@ Two fields describe "who walks with whom": `member_cell_groups` (this app's
 circles) and `members.discipler_id` (read by Agapay, the discipleship app on the
 same Supabase project). These rules keep them in step.
 
+## Circle form (admin dashboard)
+
+Since 2026-10-16 the create/edit dialog in `src/routes/admin/index.tsx` sends
+only name, description, satellite, leader, active and team. `co_leader_id`,
+`meeting_day`, `meeting_time`, `meeting_location` and `max_members` are left
+out of the payload (not sent as null), so an edit keeps stored values and a new
+circle gets the column defaults (`max_members` 15, the rest NULL). The server
+schema still accepts them, and the co-leader rules below still apply to the
+circles that have one. The circle page still shows stored schedule values.
+
+The circle page (`src/routes/admin/cell-groups/$groupId.tsx`) has no role
+picker any more: Add Member always sends `role: 'member'`, and member rows show
+a Leader/Co-Leader tag instead of a role menu. A role picked there only changed
+`member_cell_groups.role`, never `cell_groups.leader_id`, so a "Leader" added
+there never became the circle's leader. `updateMemberCellGroupRole` stays on
+the server (tested, unused by the UI).
+
 ## Where the rules live
 
 | Concern | Code |

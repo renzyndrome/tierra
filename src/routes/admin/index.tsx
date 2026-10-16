@@ -271,11 +271,6 @@ function AdminDashboard() {
     description: '',
     satellite_id: '',
     leader_id: '',
-    co_leader_id: '',
-    meeting_day: '',
-    meeting_time: '',
-    meeting_location: '',
-    max_members: 12,
     is_active: true,
     // Unticked: a new group is a Quest Circle unless marked as a team.
     is_team: false,
@@ -556,11 +551,6 @@ function AdminDashboard() {
         description: cg.description || '',
         satellite_id: cg.satellite_id || '',
         leader_id: cg.leader_id || '',
-        co_leader_id: cg.co_leader_id || '',
-        meeting_day: cg.meeting_day || '',
-        meeting_time: cg.meeting_time || '',
-        meeting_location: cg.meeting_location || '',
-        max_members: cg.max_members || 12,
         is_active: cg.is_active !== false,
         is_team: cg.is_team === true,
       })
@@ -571,11 +561,6 @@ function AdminDashboard() {
         description: '',
         satellite_id: '',
         leader_id: '',
-        co_leader_id: '',
-        meeting_day: '',
-        meeting_time: '',
-        meeting_location: '',
-        max_members: 12,
         is_active: true,
         is_team: false,
       })
@@ -593,11 +578,9 @@ function AdminDashboard() {
         description: cgForm.description.trim() || null,
         satellite_id: cgForm.satellite_id || null,
         leader_id: cgForm.leader_id || null,
-        co_leader_id: cgForm.co_leader_id || null,
-        meeting_day: (cgForm.meeting_day || null) as any,
-        meeting_time: cgForm.meeting_time || null,
-        meeting_location: cgForm.meeting_location.trim() || null,
-        max_members: cgForm.max_members,
+        // No co-leader, meeting day, time, location or max members: meetings
+        // are scheduled per meeting, not fixed on the circle. Left out of the
+        // payload, so an edit keeps any value already stored.
         is_active: cgForm.is_active,
         is_team: cgForm.is_team,
       }
@@ -3015,92 +2998,28 @@ function AdminDashboard() {
                 {satellites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="cg-leader">Leader</Label>
-                <select
-                  id="cg-leader"
-                  value={cgForm.leader_id}
-                  onChange={(e) => setCGForm(f => ({ ...f, leader_id: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 border rounded-lg text-sm"
-                >
-                  <option value="">None</option>
-                  {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="cg-coleader">Co-Leader</Label>
-                <select
-                  id="cg-coleader"
-                  value={cgForm.co_leader_id}
-                  onChange={(e) => setCGForm(f => ({ ...f, co_leader_id: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 border rounded-lg text-sm"
-                >
-                  <option value="">None</option>
-                  {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="cg-day">Meeting Day</Label>
-                <select
-                  id="cg-day"
-                  value={cgForm.meeting_day}
-                  onChange={(e) => setCGForm(f => ({ ...f, meeting_day: e.target.value }))}
-                  className="mt-1 w-full px-3 py-2 border rounded-lg text-sm"
-                >
-                  <option value="">Not set</option>
-                  {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="cg-time">Meeting Time</Label>
-                <Input
-                  id="cg-time"
-                  type="time"
-                  value={cgForm.meeting_time}
-                  onChange={(e) => setCGForm(f => ({ ...f, meeting_time: e.target.value }))}
-                  className="mt-1"
-                />
-              </div>
+            <div>
+              <Label htmlFor="cg-leader">Leader</Label>
+              <select
+                id="cg-leader"
+                value={cgForm.leader_id}
+                onChange={(e) => setCGForm(f => ({ ...f, leader_id: e.target.value }))}
+                className="mt-1 w-full px-3 py-2 border rounded-lg text-sm"
+              >
+                <option value="">None</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
             </div>
             <div>
-              <Label htmlFor="cg-location">Meeting Location</Label>
-              <Input
-                id="cg-location"
-                value={cgForm.meeting_location}
-                onChange={(e) => setCGForm(f => ({ ...f, meeting_location: e.target.value }))}
-                placeholder="e.g., Leader's home, Church hall..."
-                className="mt-1"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="cg-max">Max Members</Label>
-                <Input
-                  id="cg-max"
-                  type="number"
-                  min={2}
-                  max={50}
-                  value={cgForm.max_members}
-                  onChange={(e) => setCGForm(f => ({ ...f, max_members: parseInt(e.target.value) || 12 }))}
-                  className="mt-1"
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={cgForm.is_active}
+                  onChange={(e) => setCGForm(f => ({ ...f, is_active: e.target.checked }))}
+                  className="rounded border-gray-300"
                 />
-              </div>
-              <div className="flex items-end pb-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={cgForm.is_active}
-                    onChange={(e) => setCGForm(f => ({ ...f, is_active: e.target.checked }))}
-                    className="rounded border-gray-300"
-                  />
-                  <span className="text-sm">Active</span>
-                </label>
-              </div>
+                <span className="text-sm">Active</span>
+              </label>
             </div>
             <div>
               <label htmlFor="cg-team" className="flex items-center gap-2 cursor-pointer">

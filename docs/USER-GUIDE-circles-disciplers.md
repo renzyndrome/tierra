@@ -3,6 +3,18 @@
 Every plain circle member walks with a discipler. The discipler shows on the
 member's profile. Agapay, the discipleship app, reads the same discipler.
 
+## Circle form
+
+Admin → **Circles** → add or edit a circle. Fields: **Name**, **Description**,
+**Satellite**, **Leader**, **Active**, **Team**.
+
+No co-leader, meeting day, meeting time, location or max members on the
+circle. Meetings: scheduled per meeting. Values saved before 2026-10-16 stay
+on the circle and still show on its page.
+
+Circle leader: set only here, in **Leader**. The circle page **Add Member**
+adds members only, and member rows show a **Leader** tag with no role menu.
+
 ## Discipler on a member
 
 - **New member:** Admin → Members → **Add member**. Optional **Discipler**
@@ -58,7 +70,6 @@ follow their own rules (see "Teams").
 | Add a member who walks with someone outside the circle | Refused: "Walks with <name>. Change the discipler first." |
 | Add the circle's leader or co-leader as a member | Refused: "Circle leaders cannot join as members." |
 | Add an archived member | Refused: "Member archived. Restore first." |
-| Change a leader or co-leader to **Member** (circle page role list) | Same rules as an add, same messages. On success: discipler set when empty, added to Agapay. |
 | Change the role of someone no longer in the circle | Refused: "Member not in this Quest Circle." |
 | Remove a member | Member leaves. Discipler cleared when it was the circle leader or co-leader. |
 | Add a removed member again | Member rejoins. |
@@ -85,7 +96,6 @@ a team as a member's circle.
 | Add a member who walks with someone outside the team | Member joins. Discipler unchanged. |
 | Add a member with no discipler | Member joins. No discipler set. Not added to Agapay. |
 | Add the team's leader or co-leader as a member | Refused: "Circle leaders cannot join as members." |
-| Change a leader or co-leader to **Member** | Same rules as an add. No discipler set. |
 | Remove a member | Member leaves. Discipler unchanged. |
 | Change the team's leader | No discipler moved. |
 | Turn the team back on | No member removed. |
@@ -130,7 +140,7 @@ stands even when adding the member to Agapay fails.
 |---|---|
 | Member **Edit** page | "Saved. Agapay enrollment failed. Save again to retry." The form stays open. |
 | **Add member** | "Member created." and "Agapay enrollment failed. Save on the Edit Member page to retry." |
-| Circle page **Add Member**, circle page role list set to **Member**, member profile **Quest Circles** add | "Agapay enrollment failed. Save on the Edit Member page to retry." |
+| Circle page **Add Member**, member profile **Quest Circles** add | "Agapay enrollment failed. Save on the Edit Member page to retry." |
 | Sign-up request **Link record** or **Create record**, and the note under a linked request (auto-linked too) | "Agapay enrollment failed. Save on the Edit Member page to retry.", after any circle note |
 | **Quest Circles** tab after a leader change | "2 Agapay enrollments failed. Save on each member's Edit page to retry." |
 | **Import Members** results | Same count line, below the totals |
