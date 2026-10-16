@@ -112,6 +112,19 @@ Bible verses also shows the translation (e.g. BSB).
 Current list: **Luke 10:38-42** (30 prophetic words, Young Pro, Oct 16). The
 prompt "Luke 10:38-42", or words like "Mary and Martha", selects it.
 
+**What the guest sees:** a small **Checked in** pill, "Welcome to" the service
+and the guest's name, then the word in large serif type with its reference.
+Below it, **Story image**: three designs (**Night**, **Card**, **Light**), each
+a full story-size picture (1080 x 1920) with the word, the reference, the
+service and questlaguna.org.
+
+- **Share image** (phones): opens the phone's share sheet. Instagram, Facebook,
+  Messenger and **Save Image** appear there. A website cannot open the Instagram
+  story editor directly, so the guest picks the app in the share sheet.
+- **Download**: saves the picture. On iPhone, **Share image** then **Save Image**
+  puts it in Photos.
+- The page footer links to **questlaguna.org**.
+
 - Set or change it: open the session, **Prophetic prompt**, then **Save prompt**.
 - The line under the field shows the result:
   - **Word list: ... words.** A prophetic word shows after each QR check-in.

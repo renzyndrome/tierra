@@ -8,7 +8,9 @@
 // prophetic prompt) one verse for the sermon topic.
 
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Check } from 'lucide-react'
+import { StoryShare } from '../../components/StoryShare'
 import { useAuth } from '../../components/AuthProvider'
 import { getCheckinSession, publicCheckIn } from '../../server/functions/attendance'
 import { checkinFormSchema } from '../../lib/validations'
@@ -118,53 +120,66 @@ function CheckinPage() {
           <p className="text-[#F8B4B4] text-sm tracking-wide uppercase">{CHURCH_NAME}</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          {loading || authLoading ? (
-            <div className="p-10 text-center">
-              <div className="w-10 h-10 border-4 border-[#8B1538] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-gray-500">Loading…</p>
-            </div>
-          ) : !info ? (
-            <StateMessage
-              tone="error"
-              title="Invalid check-in link"
-              message="This QR code doesn't match an active service. Please ask a volunteer for help."
-            />
-          ) : !info.isOpen && !result ? (
-            <StateMessage
-              tone="error"
-              title="Check-in is closed"
-              message={`Check-in for ${info.serviceName} is now closed. See you next time!`}
-            />
-          ) : result ? (
-            <SuccessState result={result} serviceName={info.serviceName} />
-          ) : (
-            <div className="p-6">
-              {/* Service header */}
-              <div className="text-center mb-6">
-                <h1 className="text-2xl font-bold text-[#8B1538]">{info.serviceName}</h1>
-                {info.title && <p className="text-gray-500 mt-1">{info.title}</p>}
-                <p className="text-gray-600 mt-1 text-sm">{formatSessionDate(info.sessionDate)}</p>
-                {info.satelliteName && (
-                  <span className="inline-block mt-2 px-3 py-1 bg-[#F8B4B4]/30 text-[#8B1538] rounded-full text-xs font-medium">
-                    {info.satelliteName}
-                  </span>
-                )}
+        {result && info ? (
+          <SuccessState result={result} serviceName={info.serviceName} />
+        ) : (
+          <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+            {loading || authLoading ? (
+              <div className="p-10 text-center">
+                <div className="w-10 h-10 border-4 border-[#8B1538] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-gray-500">Loading…</p>
               </div>
+            ) : !info ? (
+              <StateMessage
+                tone="error"
+                title="Invalid check-in link"
+                message="This QR code doesn't match an active service. Please ask a volunteer for help."
+              />
+            ) : !info.isOpen ? (
+              <StateMessage
+                tone="error"
+                title="Check-in is closed"
+                message={`Check-in for ${info.serviceName} is now closed. See you next time!`}
+              />
+            ) : (
+              <div className="p-6">
+                {/* Service header */}
+                <div className="text-center mb-6">
+                  <h1 className="text-2xl font-bold text-[#8B1538]">{info.serviceName}</h1>
+                  {info.title && <p className="text-gray-500 mt-1">{info.title}</p>}
+                  <p className="text-gray-600 mt-1 text-sm">{formatSessionDate(info.sessionDate)}</p>
+                  {info.satelliteName && (
+                    <span className="inline-block mt-2 px-3 py-1 bg-[#F8B4B4]/30 text-[#8B1538] rounded-full text-xs font-medium">
+                      {info.satelliteName}
+                    </span>
+                  )}
+                </div>
 
-              {isLinkedMember ? (
-                <div className="space-y-4">
-                  <p className="text-center text-gray-700">
-                    You're signed in. Tap below to mark your attendance.
-                  </p>
-                  <button
-                    onClick={submitSelf}
-                    disabled={submitting}
-                    className="w-full py-4 bg-[#8B1538] hover:bg-[#6B0F2B] disabled:opacity-60 text-white rounded-xl font-semibold text-lg transition-colors"
-                  >
-                    {submitting ? 'Checking in…' : "I'm here — Check in"}
-                  </button>
-                  <p className="text-center text-xs text-gray-400">Not you? Use the form below instead.</p>
+                {isLinkedMember ? (
+                  <div className="space-y-4">
+                    <p className="text-center text-gray-700">
+                      You're signed in. Tap below to mark your attendance.
+                    </p>
+                    <button
+                      onClick={submitSelf}
+                      disabled={submitting}
+                      className="w-full py-4 bg-[#8B1538] hover:bg-[#6B0F2B] disabled:opacity-60 text-white rounded-xl font-semibold text-lg transition-colors"
+                    >
+                      {submitting ? 'Checking in…' : "I'm here — Check in"}
+                    </button>
+                    <p className="text-center text-xs text-gray-400">Not you? Use the form below instead.</p>
+                    <GuestForm
+                      name={name}
+                      invitedBy={invitedBy}
+                      email={email}
+                      setName={setName}
+                      setInvitedBy={setInvitedBy}
+                      setEmail={setEmail}
+                      onSubmit={submitGuest}
+                      submitting={submitting}
+                    />
+                  </div>
+                ) : (
                   <GuestForm
                     name={name}
                     invitedBy={invitedBy}
@@ -175,30 +190,27 @@ function CheckinPage() {
                     onSubmit={submitGuest}
                     submitting={submitting}
                   />
-                </div>
-              ) : (
-                <GuestForm
-                  name={name}
-                  invitedBy={invitedBy}
-                  email={email}
-                  setName={setName}
-                  setInvitedBy={setInvitedBy}
-                  setEmail={setEmail}
-                  onSubmit={submitGuest}
-                  submitting={submitting}
-                />
-              )}
+                )}
 
-              {formError && (
-                <p role="alert" className="mt-4 text-center text-sm text-red-600">
-                  {formError}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+                {formError && (
+                  <p role="alert" className="mt-4 text-center text-sm text-red-600">
+                    {formError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <p className="text-center text-white/40 text-xs mt-6">Quest Laguna · Service Attendance</p>
+        <a
+          href="https://questlaguna.org"
+          target="_blank"
+          rel="noopener"
+          className="mt-1 block text-center text-xs font-medium text-[#F8B4B4]/80 hover:text-[#F8B4B4]"
+        >
+          questlaguna.org
+        </a>
       </div>
     </div>
   )
@@ -319,32 +331,65 @@ function GuestForm({
   )
 }
 
-function SuccessState({ result, serviceName }: { result: CheckinResult; serviceName: string }) {
+// The prophetic word is the moment this screen exists for; the check-in itself
+// is confirmed in one compact line above it. Both sit on the page background,
+// no white card.
+const WORD_FONT = { fontFamily: "'Fraunces Variable', ui-serif, Georgia, serif" }
+
+function CheckedInLine({ result, serviceName, large }: { result: CheckinResult; serviceName: string; large: boolean }) {
   const already = result.status === 'already_checked_in'
-  const word = result.propheticWord
   return (
-    <div className="p-8 text-center">
-      <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
-        <svg className="w-11 h-11 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-        </svg>
+    <div role="status" className="text-center text-white">
+      <div className="inline-flex items-center gap-2.5 rounded-full bg-white/10 py-1.5 pl-1.5 pr-4 ring-1 ring-white/15">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400 text-[#1A0A0E]">
+          <Check className="h-4 w-4" strokeWidth={3} aria-hidden />
+        </span>
+        <span className="text-sm font-semibold">{already ? 'Attendance already recorded' : 'Checked in'}</span>
       </div>
-      <h2 className="text-2xl font-bold text-gray-900">Welcome to {serviceName}</h2>
+      <h2
+        className={`mt-5 font-bold tracking-[-0.01em] text-balance ${large ? 'text-3xl' : 'text-[22px] leading-snug'}`}
+      >
+        Welcome to {serviceName}
+      </h2>
       {result.displayName && (
-        <p className="text-lg text-[#8B1538] font-semibold mt-1">{result.displayName}</p>
+        <p className={`mt-1 font-semibold text-[#F8B4B4] ${large ? 'text-lg' : 'text-base'}`}>{result.displayName}</p>
       )}
-      <p className="text-gray-600 mt-3">{already ? 'Attendance already recorded.' : 'Checked in.'}</p>
-      {word && (
-        // Arrives a moment after the welcome; no motion when reduced motion is on.
-        <figure className="mt-6 rounded-xl bg-[#FDF2F4] px-5 py-5 text-left animate-in fade-in slide-in-from-bottom-2 duration-700 delay-500 fill-mode-backwards motion-reduce:animate-none">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#8B1538]">Prophetic word</p>
-          <blockquote className="mt-2 font-serif text-lg leading-relaxed text-gray-900">{word.text}</blockquote>
-          <figcaption className="mt-3 text-sm font-medium text-[#8B1538]">
+    </div>
+  )
+}
+
+function SuccessState({ result, serviceName }: { result: CheckinResult; serviceName: string }) {
+  const word = result.propheticWord
+  const story = useMemo(
+    () =>
+      word
+        ? { text: word.text, reference: word.reference, translation: word.translation, serviceName }
+        : null,
+    [word, serviceName],
+  )
+  if (!word || !story) return <CheckedInLine result={result} serviceName={serviceName} large />
+
+  return (
+    <div>
+      <CheckedInLine result={result} serviceName={serviceName} large={false} />
+      <figure className="word-reveal mt-12 px-1 text-center">
+        <span aria-hidden style={WORD_FONT} className="block h-10 text-[72px] leading-none text-[#F8B4B4]/45">
+          &ldquo;
+        </span>
+        <blockquote style={WORD_FONT} className="mt-2 text-[28px] leading-[1.3] text-[#FFF4F2] text-balance">
+          {word.text}
+        </blockquote>
+        <figcaption className="mt-8 flex items-center justify-center gap-3">
+          <span className="h-px w-10 bg-[#F8B4B4]/35" aria-hidden />
+          <span className="text-sm font-semibold tracking-wide text-[#F8B4B4]">
             {word.reference}
-            {word.translation && <span className="font-normal text-gray-400"> {word.translation}</span>}
-          </figcaption>
-        </figure>
-      )}
+            {word.translation && <span className="ml-1.5 font-normal text-white/60">{word.translation}</span>}
+          </span>
+          <span className="h-px w-10 bg-[#F8B4B4]/35" aria-hidden />
+        </figcaption>
+        <p className="mt-2 text-xs text-white/60">Prophetic word</p>
+      </figure>
+      <StoryShare content={story} logoSrc={LOGO_PATH} />
     </div>
   )
 }
