@@ -1,4 +1,5 @@
-// Save or share the prophetic word as a story image. Three designs are drawn
+// "Save this word": the prophetic word as a phone-size image (fits a social
+// story too), to download or share. Optional, below the word. Three designs are drawn
 // once when this mounts, so the Share tap can open the phone's share sheet at
 // once (Safari only allows it straight from the tap). Browsers cannot open the
 // Instagram story editor directly; the share sheet lists Instagram, Facebook,
@@ -71,9 +72,8 @@ export function StoryShare({ content, logoSrc }: { content: StoryContent; logoSr
   if (failed) return null
 
   return (
-    <section aria-label="Story image" className="mt-12 rounded-2xl bg-white/[0.06] px-4 pb-5 pt-4 ring-1 ring-white/10">
-      <h3 className="text-center text-sm font-semibold text-white">Story image</h3>
-      <div className="mt-3 grid grid-cols-3 gap-3" role="radiogroup" aria-label="Story design">
+    <section aria-label="Save this word" className="rounded-2xl bg-white/[0.06] px-4 pb-5 pt-4 ring-1 ring-white/10">
+      <div className="grid grid-cols-3 gap-3" role="radiogroup" aria-label="Image design">
         {STORY_DESIGNS.map(({ id, label }) => {
           const img = images[id]
           const selected = design === id

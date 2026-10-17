@@ -224,15 +224,25 @@ const PROPHETIC_LIBRARY = propheticWords as PropheticLibrary
 const optionalPropheticPrompt = z.string().trim().max(200).optional().nullable()
 
 // A word list imported for one service (PDF, spreadsheet or paste, parsed and
-// reviewed in the browser). Stored as JSON on the session.
-const propheticWordListSchema = z.object({
-  reference: z.string().trim().min(1, 'Passage reference required.').max(80),
-  translation: z.string().trim().max(20).optional().nullable(),
-  words: z
-    .array(z.string().trim().min(1).max(MAX_WORD_LENGTH, `Each word: ${MAX_WORD_LENGTH} characters or fewer.`))
-    .min(1, 'At least one word required.')
-    .max(MAX_WORDS, `${MAX_WORDS} words or fewer.`),
+// reviewed in the browser). Stored as JSON on the session. A word may carry its
+// own verse reference; the list reference is then needed only for words
+// without one.
+const propheticListWordSchema = z.object({
+  text: z.string().trim().min(1).max(MAX_WORD_LENGTH, `Each word: ${MAX_WORD_LENGTH} characters or fewer.`),
+  reference: z.string().trim().max(80).optional().nullable(),
 })
+const propheticWordListSchema = z
+  .object({
+    reference: z.string().trim().max(80),
+    translation: z.string().trim().max(20).optional().nullable(),
+    words: z
+      .array(propheticListWordSchema)
+      .min(1, 'At least one word required.')
+      .max(MAX_WORDS, `${MAX_WORDS} words or fewer.`),
+  })
+  .refine((list) => list.reference.length > 0 || list.words.every((w) => w.reference), {
+    message: 'Passage reference required.',
+  })
 
 
 // ============================================
@@ -450,7 +460,11 @@ export const setSessionPropheticWords = createServerFn({ method: 'POST' })
     await requirePermission(data.accessToken, 'registration.write')
     const admin = createServerAdminClient()
     const list = data.list
-      ? { reference: data.list.reference, translation: data.list.translation || null, words: data.list.words }
+      ? {
+          reference: data.list.reference,
+          translation: data.list.translation || null,
+          words: data.list.words.map((w) => ({ text: w.text, reference: w.reference || null })),
+        }
       : null
     const { error } = await admin
       .from('service_sessions')

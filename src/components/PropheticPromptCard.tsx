@@ -101,7 +101,8 @@ export function PropheticPromptCard({
           <p className="text-sm font-medium text-gray-900">Word list</p>
           {hasList && words ? (
             <p className="mt-1 text-xs text-gray-500">
-              Imported: {words.reference}, {words.words.length} words. One random word per QR check-in.
+              Imported: {words.reference ? `${words.reference}, ` : ''}
+              {words.words.length} words. One random word per QR check-in.
             </p>
           ) : (
             <p className="mt-1 text-xs text-gray-500">None imported. PDF, Excel, CSV or text, or paste.</p>

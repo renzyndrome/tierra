@@ -308,7 +308,13 @@ test.describe('Admin — Service Attendance', () => {
       // Then one prophetic word for the passage (no Bible translation label).
       await expect(guest.getByText('Prophetic word', { exact: true })).toBeVisible()
       await expect(guest.locator('figcaption')).toHaveText('Luke 10:38-42')
-      // Story image: three designs, downloadable; promotion link in the footer.
+      // The welcome and the word fill the first screen; "Save this word" (three
+      // image designs, downloadable) starts below it; promotion link in the footer.
+      await expect(guest.locator('blockquote')).toBeInViewport()
+      const saveTitle = guest.getByRole('region', { name: 'Save this word' })
+      await expect(saveTitle).not.toBeInViewport()
+      await guest.getByRole('button', { name: 'Save this word' }).click()
+      await expect(saveTitle).toBeInViewport()
       await expect(guest.getByRole('radio')).toHaveCount(3)
       await expect(guest.getByRole('link', { name: /download/i })).toHaveAttribute('href', /^blob:/, {
         timeout: 20_000,

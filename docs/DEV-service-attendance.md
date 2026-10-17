@@ -26,8 +26,10 @@ the data model, and the rules that are easy to break.
   - `opened_at`: set at creation and on every reopen. It restarts the
     automatic-close clock.
   - `prophetic_prompt text`: sermon topic. Picks a built-in list.
-  - `prophetic_words jsonb`: `{reference, translation, words[]}`. A list imported
-    for this service; it wins over the prompt.
+  - `prophetic_words jsonb`: `{reference, translation, words: [{text, reference}]}`.
+    A list imported for this service; it wins over the prompt. A word's own
+    `reference` (verse lists) wins over the list `reference`, which may then be
+    ''. `asWordList` also reads the first format, `words: string[]`.
 - `attendance_records`:
   - `raw_name`, `raw_phone`, `raw_email`, `invited_by`.
   - `match_status`: `auto_matched | pending | confirmed | new_member | ignored`.
@@ -94,16 +96,26 @@ the data model, and the rules that are easy to break.
   - Excel and CSV use SheetJS. Both libraries load through dynamic `import()`
     and never run on the server.
 - **Parser heuristics**:
+  - Verse lists: when 2+ lines start with "Book ch:v[-v] – text"
+    (`VERSE_LINE`), each such line starts a word with its own reference; any
+    other line continues it, capitals included. `splitVerse` also runs on every
+    numbered item and spreadsheet row. Wrapping quote marks are dropped
+    (`unquote`).
   - The heading becomes the reference.
   - Numbered lines and bullets become words; continuation lines are joined.
   - Without numbering, one word per line, joining sentence continuations.
-  - Page numbers, repeats, and lines under 8 characters are dropped.
+  - Page numbers, repeats (same reference and text, any case), and lines under
+    8 characters are dropped.
   - Limits: 200 words, 400 characters each.
   - Fixture: `src/tests/fixtures/prophetic-luke-10-pdf.txt` (text rebuilt from
     the real PDF).
 - **Story image**:
   - 1080x1920 JPEG drawn on a canvas, in three designs.
-  - Text stays inside y ≈ 290–1640, the Instagram story safe area.
+  - Text stays inside y ≈ 290–1640, the Instagram story safe area. `fitText`
+    also caps the text height (680 px, card 600 px), so a long verse shrinks
+    instead of running into the caption and footer.
+  - On the check-in page, the welcome and word fill the first screen
+    (`min-h-svh`); the image section ("Save this word") starts below it.
   - `navigator.share({files})` only when `canShare` allows it; otherwise
     Download. Files are pre-rendered on mount, because Safari requires
     `share()` within the tap.

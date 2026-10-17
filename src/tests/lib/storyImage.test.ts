@@ -2,7 +2,7 @@
 // only in a browser).
 
 import { describe, it, expect } from 'vitest'
-import { wrapLines, fitText, storyFileName } from '../../lib/storyImage'
+import { wrapLines, fitText, storyFileName, LINE_HEIGHT } from '../../lib/storyImage'
 
 // Fixed-width measure: every character is 10 units at size 10.
 const measure = (s: string) => s.length * 10
@@ -35,6 +35,14 @@ describe('fitText', () => {
 
   it('falls back to the minimum size when nothing fits', () => {
     expect(fitText(text, 40, 2, measureAt, 80, 44).size).toBe(44)
+  })
+
+  it('also keeps the text within a height budget (long verses)', () => {
+    const long = `${text} `.repeat(4).trim()
+    const free = fitText(long, 2400, 8, measureAt, 80, 20)
+    const capped = fitText(long, 2400, 8, measureAt, 80, 20, 400)
+    expect(capped.size).toBeLessThan(free.size)
+    expect(capped.lines.length * Math.round(capped.size * LINE_HEIGHT)).toBeLessThanOrEqual(400)
   })
 })
 
