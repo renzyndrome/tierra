@@ -27,6 +27,7 @@ import {
 } from '../../../server/functions/attendance'
 import { hasPermission } from '../../../lib/auth'
 import { autoCloseDate } from '../../../lib/sessionSchedule'
+import { asWordList } from '../../../lib/propheticWord'
 import {
   CHECKIN_METHOD_LABELS,
   MATCH_STATUS_LABELS,
@@ -284,7 +285,7 @@ function SessionDetail() {
           sessionId={sessionId}
           prompt={info.prophetic_prompt ?? null}
           matchedSet={info.prophetic_set ?? null}
-          words={info.prophetic_words ?? null}
+          words={asWordList(info.prophetic_words)}
           canWrite={canWrite}
           onSaved={loadAll}
         />

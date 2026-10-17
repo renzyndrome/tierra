@@ -93,11 +93,29 @@ export function pickPropheticWord(
   return { ...set.verses[index], translation }
 }
 
-/** A service's own word list, imported for that service (JSON on the session). */
+/** One word of an imported list. `reference` is set when the source names a
+ *  verse per word ("Psalm 73:26 - My flesh and my heart may fail..."). */
+export interface PropheticListWord {
+  text: string
+  reference?: string | null
+}
+
+/** A service's own word list, imported for that service (JSON on the session).
+ *  `reference` is the passage for the whole list; it may be '' when every word
+ *  has its own reference. */
 export interface PropheticWordList {
   reference: string
   translation?: string | null
-  words: string[]
+  words: PropheticListWord[]
+}
+
+function asListWord(value: unknown): PropheticListWord | null {
+  // Plain strings: the first stored format, before per-word references.
+  if (typeof value === 'string') return value.trim() ? { text: value, reference: null } : null
+  if (!value || typeof value !== 'object') return null
+  const w = value as { text?: unknown; reference?: unknown }
+  if (typeof w.text !== 'string' || !w.text.trim()) return null
+  return { text: w.text, reference: typeof w.reference === 'string' && w.reference.trim() ? w.reference : null }
 }
 
 /** The stored list when it is well-formed with at least one word, else null. */
@@ -105,7 +123,7 @@ export function asWordList(value: unknown): PropheticWordList | null {
   if (!value || typeof value !== 'object') return null
   const v = value as { reference?: unknown; translation?: unknown; words?: unknown }
   if (typeof v.reference !== 'string' || !Array.isArray(v.words)) return null
-  const words = v.words.filter((w): w is string => typeof w === 'string' && w.trim().length > 0)
+  const words = v.words.map(asListWord).filter((w): w is PropheticListWord => w !== null)
   if (words.length === 0) return null
   return {
     reference: v.reference,
@@ -122,5 +140,6 @@ export function pickFromWordList(
   const list = asWordList(value)
   if (!list) return null
   const index = Math.min(list.words.length - 1, Math.floor(random() * list.words.length))
-  return { reference: list.reference, text: list.words[index], translation: list.translation ?? null }
+  const word = list.words[index]
+  return { reference: word.reference || list.reference, text: word.text, translation: list.translation ?? null }
 }

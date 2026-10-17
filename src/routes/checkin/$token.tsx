@@ -5,17 +5,19 @@
 //     invisible. The email is a matching hint for staff and the address for a
 //     later account invite.
 // After check-in: a welcome to the service, then (when the session has a
-// prophetic prompt) one verse for the sermon topic.
+// prophetic prompt or word list) one prophetic word. The welcome and the word
+// fill the first screen; saving the word as an image sits one scroll below.
 
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Check } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import { StoryShare } from '../../components/StoryShare'
 import { useAuth } from '../../components/AuthProvider'
 import { getCheckinSession, publicCheckIn } from '../../server/functions/attendance'
 import { checkinFormSchema } from '../../lib/validations'
 import { CHURCH_NAME, LOGO_PATH } from '../../lib/constants'
 import type { CheckinResult } from '../../lib/types'
+import type { PropheticWord } from '../../lib/propheticWord'
 
 export const Route = createFileRoute('/checkin/$token')({
   component: CheckinPage,
@@ -112,16 +114,17 @@ function CheckinPage() {
     }
   }
 
+  if (result && info && result.propheticWord) {
+    return <WordScreen result={result} word={result.propheticWord} serviceName={info.serviceName} />
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#1A0A0E] via-[#2D1218] to-[#6B0F2B] px-4 py-10">
       <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-6">
-          <img src={LOGO_PATH} alt={CHURCH_NAME} className="w-16 h-16 rounded-full object-cover mb-3 ring-2 ring-white/20" />
-          <p className="text-[#F8B4B4] text-sm tracking-wide uppercase">{CHURCH_NAME}</p>
-        </div>
+        <Brand />
 
         {result && info ? (
-          <SuccessState result={result} serviceName={info.serviceName} />
+          <CheckedInLine result={result} serviceName={info.serviceName} large />
         ) : (
           <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
             {loading || authLoading ? (
@@ -202,17 +205,34 @@ function CheckinPage() {
           </div>
         )}
 
-        <p className="text-center text-white/40 text-xs mt-6">Quest Laguna · Service Attendance</p>
-        <a
-          href="https://questlaguna.org"
-          target="_blank"
-          rel="noopener"
-          className="mt-1 block text-center text-xs font-medium text-[#F8B4B4]/80 hover:text-[#F8B4B4]"
-        >
-          questlaguna.org
-        </a>
+        <SiteFooter />
       </div>
     </div>
+  )
+}
+
+function Brand() {
+  return (
+    <div className="flex flex-col items-center mb-6">
+      <img src={LOGO_PATH} alt={CHURCH_NAME} className="w-16 h-16 rounded-full object-cover mb-3 ring-2 ring-white/20" />
+      <p className="text-[#F8B4B4] text-sm tracking-wide uppercase">{CHURCH_NAME}</p>
+    </div>
+  )
+}
+
+function SiteFooter() {
+  return (
+    <>
+      <p className="text-center text-white/40 text-xs mt-6">Quest Laguna · Service Attendance</p>
+      <a
+        href="https://questlaguna.org"
+        target="_blank"
+        rel="noopener"
+        className="mt-1 block text-center text-xs font-medium text-[#F8B4B4]/80 hover:text-[#F8B4B4]"
+      >
+        questlaguna.org
+      </a>
+    </>
   )
 }
 
@@ -358,38 +378,64 @@ function CheckedInLine({ result, serviceName, large }: { result: CheckinResult; 
   )
 }
 
-function SuccessState({ result, serviceName }: { result: CheckinResult; serviceName: string }) {
-  const word = result.propheticWord
+// Long verses step down in size so the welcome and the whole word still fit
+// the first screen of a phone.
+function wordSizeClass(text: string): string {
+  if (text.length > 220) return 'text-[21px] leading-[1.35]'
+  if (text.length > 140) return 'text-[24px] leading-[1.32]'
+  return 'text-[28px] leading-[1.3]'
+}
+
+function WordScreen({ result, word, serviceName }: { result: CheckinResult; word: PropheticWord; serviceName: string }) {
+  const saveSection = useRef<HTMLDivElement>(null)
+  const longWord = word.text.length > 220
   const story = useMemo(
-    () =>
-      word
-        ? { text: word.text, reference: word.reference, translation: word.translation, serviceName }
-        : null,
+    () => ({ text: word.text, reference: word.reference, translation: word.translation, serviceName }),
     [word, serviceName],
   )
-  if (!word || !story) return <CheckedInLine result={result} serviceName={serviceName} large />
-
   return (
-    <div>
-      <CheckedInLine result={result} serviceName={serviceName} large={false} />
-      <figure className="word-reveal mt-12 px-1 text-center">
-        <span aria-hidden style={WORD_FONT} className="block h-10 text-[72px] leading-none text-[#F8B4B4]/45">
-          &ldquo;
-        </span>
-        <blockquote style={WORD_FONT} className="mt-2 text-[28px] leading-[1.3] text-[#FFF4F2] text-balance">
-          {word.text}
-        </blockquote>
-        <figcaption className="mt-8 flex items-center justify-center gap-3">
-          <span className="h-px w-10 bg-[#F8B4B4]/35" aria-hidden />
-          <span className="text-sm font-semibold tracking-wide text-[#F8B4B4]">
-            {word.reference}
-            {word.translation && <span className="ml-1.5 font-normal text-white/60">{word.translation}</span>}
-          </span>
-          <span className="h-px w-10 bg-[#F8B4B4]/35" aria-hidden />
-        </figcaption>
-        <p className="mt-2 text-xs text-white/60">Prophetic word</p>
-      </figure>
-      <StoryShare content={story} logoSrc={LOGO_PATH} />
+    <div className="min-h-screen bg-gradient-to-br from-[#1A0A0E] via-[#2D1218] to-[#6B0F2B] px-4">
+      <div className="mx-auto w-full max-w-md">
+        {/* First screen: welcome and word only. The "Save this word" line at
+            its foot heads the image section just below. */}
+        <section className="flex min-h-svh flex-col pt-6">
+          <div className="flex flex-1 flex-col justify-center">
+            <Brand />
+            <CheckedInLine result={result} serviceName={serviceName} large={false} />
+            <figure className={`word-reveal px-1 text-center ${longWord ? 'mt-6' : 'mt-10'}`}>
+              <span aria-hidden style={WORD_FONT} className="block h-10 text-[72px] leading-none text-[#F8B4B4]/45">
+                &ldquo;
+              </span>
+              <blockquote style={WORD_FONT} className={`mt-2 text-[#FFF4F2] text-balance ${wordSizeClass(word.text)}`}>
+                {word.text}
+              </blockquote>
+              <figcaption className={`flex items-center justify-center gap-3 ${longWord ? 'mt-5' : 'mt-8'}`}>
+                <span className="h-px w-10 bg-[#F8B4B4]/35" aria-hidden />
+                <span className="text-sm font-semibold tracking-wide text-[#F8B4B4]">
+                  {word.reference}
+                  {word.translation && <span className="ml-1.5 font-normal text-white/60">{word.translation}</span>}
+                </span>
+                <span className="h-px w-10 bg-[#F8B4B4]/35" aria-hidden />
+              </figcaption>
+              <p className="mt-2 text-xs text-white/60">Prophetic word</p>
+            </figure>
+          </div>
+          <button
+            type="button"
+            onClick={() => saveSection.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="mx-auto mb-3 mt-6 flex flex-col items-center gap-0.5 px-4 py-2 text-xs font-medium text-white/55 hover:text-white/80"
+          >
+            Save this word
+            <ChevronDown className="h-4 w-4" aria-hidden />
+          </button>
+        </section>
+        <div ref={saveSection} className="scroll-mt-16 pt-2">
+          <StoryShare content={story} logoSrc={LOGO_PATH} />
+        </div>
+        <div className="pb-10 pt-4">
+          <SiteFooter />
+        </div>
+      </div>
     </div>
   )
 }

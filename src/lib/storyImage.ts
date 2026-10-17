@@ -52,9 +52,12 @@ export function wrapLines(text: string, maxWidth: number, measure: (s: string) =
   return lines
 }
 
+/** Line height of the word text, as a multiple of its font size. */
+export const LINE_HEIGHT = 1.3
+
 /**
  * Largest font size (stepping down from `max`) whose wrapped text fits within
- * `maxLines` lines. Returns the size and its lines.
+ * `maxLines` lines and `maxHeight` pixels. Returns the size and its lines.
  */
 export function fitText(
   text: string,
@@ -63,10 +66,11 @@ export function fitText(
   measureAt: (size: number, s: string) => number,
   max = 80,
   min = 44,
+  maxHeight = Infinity,
 ): { size: number; lines: string[] } {
   for (let size = max; size >= min; size -= 2) {
     const lines = wrapLines(text, maxWidth, (s) => measureAt(size, s))
-    if (lines.length <= maxLines) return { size, lines }
+    if (lines.length <= maxLines && lines.length * Math.round(size * LINE_HEIGHT) <= maxHeight) return { size, lines }
   }
   return { size: min, lines: wrapLines(text, maxWidth, (s) => measureAt(min, s)) }
 }
@@ -158,8 +162,11 @@ export async function renderStoryImage(content: StoryContent, design: StoryDesig
     ctx.font = `400 ${size}px ${SERIF}`
     return ctx.measureText(s).width
   }
-  const { size, lines } = fitText(content.text, boxWidth, 8, measureAt, design === 'card' ? 68 : 78)
-  const lineHeight = Math.round(size * 1.3)
+  // Text height budget: the caption must stay clear of the footer (1640), and
+  // the card is taller than its text.
+  const maxHeight = design === 'card' ? 600 : 680
+  const { size, lines } = fitText(content.text, boxWidth, 8, measureAt, design === 'card' ? 68 : 78, 40, maxHeight)
+  const lineHeight = Math.round(size * LINE_HEIGHT)
   const textHeight = lines.length * lineHeight
   const captionHeight = 150
   // Room above the text: the quote mark, or the card's top padding.

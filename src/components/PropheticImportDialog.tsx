@@ -7,7 +7,7 @@ import { FileUp, Plus, X } from 'lucide-react'
 import { setSessionPropheticWords } from '../server/functions/attendance'
 import { ACCEPTED_FILES, readPropheticFile } from '../lib/propheticFileReader'
 import { MAX_WORDS, MAX_WORD_LENGTH, parsePropheticText } from '../lib/propheticImport'
-import type { PropheticWordList } from '../lib/propheticWord'
+import type { PropheticListWord, PropheticWordList } from '../lib/propheticWord'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
@@ -30,7 +30,7 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
   const [pasted, setPasted] = useState('')
   const [reading, setReading] = useState(false)
   const [reference, setReference] = useState(current?.reference ?? '')
-  const [words, setWords] = useState<string[]>(current?.words ?? [])
+  const [words, setWords] = useState<PropheticListWord[]>(current?.words ?? [])
   const [warnings, setWarnings] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -51,9 +51,17 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
     }
   }
 
-  const cleanWords = words.map((w) => w.trim()).filter(Boolean)
-  const tooLong = cleanWords.some((w) => w.length > MAX_WORD_LENGTH)
-  const canSave = reference.trim().length > 0 && cleanWords.length > 0 && cleanWords.length <= MAX_WORDS && !tooLong
+  // Verses that carry their own reference ("Psalm 73:26 - ...") get a
+  // reference box each; the list reference is then optional.
+  const perWord = words.some((w) => w.reference)
+  const cleanWords = words
+    .map((w) => ({ text: w.text.trim(), reference: w.reference?.trim() || null }))
+    .filter((w) => w.text)
+  const tooLong = cleanWords.some((w) => w.text.length > MAX_WORD_LENGTH)
+  const hasReference = reference.trim().length > 0 || (cleanWords.length > 0 && cleanWords.every((w) => w.reference))
+  const canSave = hasReference && cleanWords.length > 0 && cleanWords.length <= MAX_WORDS && !tooLong
+  const editWord = (index: number, change: Partial<PropheticListWord>) =>
+    setWords((prev) => prev.map((w, j) => (j === index ? { ...w, ...change } : w)))
 
   const save = async () => {
     if (!accessToken || !canSave) return
@@ -121,17 +129,19 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
                 onChange={(e) => setPasted(e.target.value)}
                 disabled={file !== null}
                 rows={8}
-                placeholder={'LUKE 10:38-42\n1. First word…\n2. Second word…'}
+                placeholder={'LUKE 10:38-42\n1. First word…\n2. Second word…\n\nor one verse per line:\nPsalm 46:1 - God is our refuge…'}
                 className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-base md:text-sm focus:ring-2 focus:ring-[#8B1538] outline-none disabled:bg-gray-50 disabled:text-gray-400"
               />
-              <p className="mt-1 text-xs text-gray-500">Numbered lines, bullets, or one word per line.</p>
+              <p className="mt-1 text-xs text-gray-500">Numbered lines, bullets, one word per line, or one verse per line.</p>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
         ) : (
           <div className="space-y-4">
             <div>
-              <Label htmlFor="prophetic-reference">Passage reference</Label>
+              <Label htmlFor="prophetic-reference">
+                Passage reference{perWord && <span className="font-normal text-gray-400"> (optional)</span>}
+              </Label>
               <Input
                 id="prophetic-reference"
                 value={reference}
@@ -140,6 +150,7 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
                 maxLength={80}
                 className="mt-1 h-11 sm:h-9"
               />
+              {perWord && <p className="mt-1 text-xs text-gray-500">Each verse has its own reference.</p>}
             </div>
             {warnings.length > 0 && (
               <ul className="space-y-1 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -156,15 +167,27 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
                 {words.map((w, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span className="w-6 pt-2 text-right text-xs text-gray-400">{i + 1}</span>
-                    <textarea
-                      value={w}
-                      aria-label={`Word ${i + 1}`}
-                      onChange={(e) => setWords((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}
-                      rows={2}
-                      className={`flex-1 rounded-md border px-3 py-2 text-base md:text-sm focus:ring-2 focus:ring-[#8B1538] outline-none ${
-                        w.trim().length > MAX_WORD_LENGTH ? 'border-red-400' : 'border-gray-300'
-                      }`}
-                    />
+                    <div className="flex-1 space-y-1">
+                      {perWord && (
+                        <Input
+                          value={w.reference ?? ''}
+                          aria-label={`Reference ${i + 1}`}
+                          onChange={(e) => editWord(i, { reference: e.target.value })}
+                          placeholder={reference.trim() || 'Reference'}
+                          maxLength={80}
+                          className="h-11 sm:h-9 font-medium"
+                        />
+                      )}
+                      <textarea
+                        value={w.text}
+                        aria-label={`Word ${i + 1}`}
+                        onChange={(e) => editWord(i, { text: e.target.value })}
+                        rows={2}
+                        className={`w-full rounded-md border px-3 py-2 text-base md:text-sm focus:ring-2 focus:ring-[#8B1538] outline-none ${
+                          w.text.trim().length > MAX_WORD_LENGTH ? 'border-red-400' : 'border-gray-300'
+                        }`}
+                      />
+                    </div>
                     <button
                       type="button"
                       aria-label={`Remove word ${i + 1}`}
@@ -182,7 +205,7 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
                 size="sm"
                 className="mt-2"
                 disabled={words.length >= MAX_WORDS}
-                onClick={() => setWords((prev) => [...prev, ''])}
+                onClick={() => setWords((prev) => [...prev, { text: '', reference: perWord ? '' : null }])}
               >
                 <Plus className="h-4 w-4" aria-hidden /> Add word
               </Button>

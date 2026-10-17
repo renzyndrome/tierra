@@ -112,11 +112,15 @@ Bible verses also shows the translation (e.g. BSB).
 Current list: **Luke 10:38-42** (30 prophetic words, Young Pro, Oct 16). The
 prompt "Luke 10:38-42", or words like "Mary and Martha", selects it.
 
-**What the guest sees:** a small **Checked in** pill, "Welcome to" the service
-and the guest's name, then the word in large serif type with its reference.
-Below it, **Story image**: three designs (**Night**, **Card**, **Light**), each
-a full story-size picture (1080 x 1920) with the word, the reference, the
-service and questlaguna.org.
+**What the guest sees:** the first screen holds only the welcome and the word:
+a small **Checked in** pill, "Welcome to" the service and the guest's name, then
+the word in large serif type with its reference. Long verses get smaller type
+and still fit one phone screen.
+
+At the foot of that screen, **Save this word** points down to the optional
+image section, one short scroll below: three designs (**Night**, **Card**,
+**Light**), each a phone-size picture (1080 x 1920) with the word, the
+reference, the service and questlaguna.org. Also fits a social story.
 
 - **Share image** (phones): opens the phone's share sheet. Instagram, Facebook,
   Messenger and **Save Image** appear there. A website cannot open the Instagram
@@ -131,9 +135,14 @@ service and questlaguna.org.
 2. **Choose file** (PDF, Excel, CSV or text), or paste the words.
 3. Click **Read words**. The app finds the passage heading (e.g. "LUKE 10:38-42"
    becomes "Luke 10:38-42") and each numbered line, bullet, or line.
+   - **Verse lists:** a line that starts with its own reference and a dash,
+     such as "Psalm 46:1-3 – God is our refuge...", keeps that reference. Each
+     verse then shows its own reference after check-in, and the passage
+     reference at the top is optional. Quote marks around a verse are removed.
    - PDF: text PDFs only. A scanned image has no text: paste instead.
    - Excel/CSV: one word per row. A header row and a number column are skipped.
-4. Check the preview: fix the reference, edit or remove a word, **Add word**.
+     A reference column next to the text becomes that row's reference.
+4. Check the preview: fix a reference, edit or remove a word, **Add word**.
    Notes above the list say what was skipped (repeats, short lines).
 5. **Save list**. The card shows **Imported: ..., N words**. Each QR check-in
    now shows one random word from this list.

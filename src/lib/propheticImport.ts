@@ -7,10 +7,15 @@
 //               lines after a number are its wrapped continuation
 //   no numbers -> one word per line, joining a line that only continues the
 //               previous sentence (PDF line wrap)
+//   verse lines -> "Psalm 73:26 - My flesh and my heart may fail...": one word
+//               per line that starts with a reference, which becomes that
+//               word's own reference; other lines are its wrapped text
+
+import type { PropheticListWord } from './propheticWord'
 
 export interface ParsedWordList {
   reference: string
-  words: string[]
+  words: PropheticListWord[]
   warnings: string[]
 }
 
@@ -22,6 +27,9 @@ export const MAX_WORDS = 200
 // A Bible reference: optional 1-3 prefix, one or more book words, chapter, and
 // optional verse range. "Luke 10:38-42", "1 John 4:7-12", "Song of Songs 2".
 const REFERENCE = /^(?:[1-3]\s*)?[A-Za-z]+(?:\s+(?:of\s+)?[A-Za-z]+)?\s+\d{1,3}(?::\d{1,3}(?:\s*[-–—]\s*\d{1,3}(?::\d{1,3})?)?)?$/
+// A line that starts with its own verse reference, then a dash or colon:
+// "Psalm 112:1-3 — Blessed is...", "2 Timothy 4:17 - But the Lord...".
+const VERSE_LINE = /^((?:[1-3]\s*)?[A-Za-z]+(?:\s+(?:of\s+)?[A-Za-z]+)?\s+\d{1,3}:\d{1,3}(?:\s*[-–—]\s*\d{1,3}(?::\d{1,3})?)?)\s*[-–—:]\s+(\S.*)$/
 const NUMBERED = /^\s*(?:\(?\d{1,3}[.):\]]|\d{1,3}\s*[-–]\s)\s*(.*)$/
 const BULLETED = /^\s*[•●▪◦‣·*\-–—]\s+(.*)$/
 const PAGE_NUMBER = /^(?:page\s+)?\d{1,3}(?:\s*(?:of|\/)\s*\d{1,3})?$/i
@@ -54,33 +62,49 @@ function endsSentence(text: string): boolean {
   return /[.!?;:"”’)]$/.test(text)
 }
 
+/** Drops the quote marks around a whole word: “Do not fear.” -> Do not fear.
+ *  A closing mark goes only when no other quote opens inside the text. */
+export function unquote(text: string): string {
+  const opened = /^[“"]/.test(text)
+  let out = text.replace(/^[“"]\s*/, '')
+  if (opened && !/[“"]/.test(out.slice(0, -1))) out = out.replace(/\s*[”"]$/, '')
+  return out
+}
+
+/** Splits a leading verse reference off a word, if it has one. */
+export function splitVerse(text: string): PropheticListWord {
+  const m = clean(text).match(VERSE_LINE)
+  if (!m) return { text: unquote(clean(text)), reference: null }
+  return { text: unquote(m[2]), reference: normalizeReference(m[1]) }
+}
+
 function finish(reference: string, items: string[], dropped: string[]): ParsedWordList {
   const warnings: string[] = [...dropped]
   const seen = new Set<string>()
-  const words: string[] = []
+  const words: PropheticListWord[] = []
   let duplicates = 0
   let short = 0
   let long = 0
   for (const raw of items) {
-    const word = clean(raw)
-    if (word.length < MIN_WORD_LENGTH) {
-      if (word) short++
+    const word = splitVerse(raw)
+    if (word.text.length < MIN_WORD_LENGTH) {
+      if (word.text) short++
       continue
     }
-    const key = word.toLowerCase()
+    const key = `${word.reference ?? ''}|${word.text.toLowerCase()}`
     if (seen.has(key)) {
       duplicates++
       continue
     }
     seen.add(key)
-    if (word.length > MAX_WORD_LENGTH) long++
+    if (word.text.length > MAX_WORD_LENGTH) long++
     words.push(word)
   }
   if (duplicates) warnings.push(`${duplicates} repeated ${duplicates === 1 ? 'word' : 'words'} removed.`)
   if (short) warnings.push(`${short} short ${short === 1 ? 'line' : 'lines'} skipped.`)
   if (long) warnings.push(`${long} ${long === 1 ? 'word is' : 'words are'} over ${MAX_WORD_LENGTH} characters. Shorten before saving.`)
   if (words.length > MAX_WORDS) warnings.push(`Over ${MAX_WORDS} words. Only the first ${MAX_WORDS} are kept.`)
-  if (!reference) warnings.push('No passage reference found. Type it in.')
+  if (!reference && words.some((w) => !w.reference)) warnings.push('No passage reference found. Type it in.')
   if (words.length === 0) warnings.push('No words found. Check the file, or paste the text.')
   return { reference, words: words.slice(0, MAX_WORDS), warnings }
 }
@@ -95,9 +119,25 @@ export function parsePropheticText(raw: string): ParsedWordList {
 
   let reference = ''
   const numberedCount = lines.filter((l) => NUMBERED.test(l) || BULLETED.test(l)).length
+  const verseCount = lines.filter((l) => VERSE_LINE.test(l)).length
   const items: string[] = []
 
-  if (numberedCount >= 2) {
+  if (verseCount >= 2 && numberedCount < 2) {
+    // Each verse line starts a word; any other line continues it (a capital
+    // letter included: "Lord your God..."). Lines before the first verse are
+    // a heading.
+    let current: string | null = null
+    for (const line of lines) {
+      if (VERSE_LINE.test(line)) {
+        if (current !== null) items.push(current)
+        current = line
+        continue
+      }
+      if (current !== null) current = `${current} ${line}`
+      else if (!reference) reference = findReference(line) ?? ''
+    }
+    if (current !== null) items.push(current)
+  } else if (numberedCount >= 2) {
     let current: string | null = null
     for (const line of lines) {
       const m = line.match(NUMBERED) ?? line.match(BULLETED)
@@ -151,7 +191,10 @@ export function parsePropheticRows(rows: unknown[][]): ParsedWordList {
       return
     }
     const numbered = longest.match(NUMBERED)
-    items.push(numbered ? numbered[1] : longest)
+    const text = numbered ? numbered[1] : longest
+    // A reference column next to the text: that row's own verse reference.
+    const refCell = cells.find((c) => c !== longest && REFERENCE.test(c) && c.includes(':'))
+    items.push(refCell ? `${refCell} - ${text}` : text)
   })
   return finish(reference, items, [])
 }
