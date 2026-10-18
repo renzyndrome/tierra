@@ -22,7 +22,7 @@ export interface StoryContent {
 const W = 1080
 const H = 1920
 const SITE = 'questlaguna.org'
-const SERIF = "'Fraunces Variable', ui-serif, Georgia, serif"
+const SERIF = "'Source Serif 4 Variable', ui-serif, Georgia, serif"
 const SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, sans-serif"
 
 const PALETTE = {
@@ -141,8 +141,8 @@ function drawFooter(ctx: CanvasRenderingContext2D, design: StoryDesign) {
 /** Draws the story image and returns it as a JPEG blob. Browser only. */
 export async function renderStoryImage(content: StoryContent, design: StoryDesign, logoSrc: string): Promise<Blob> {
   await Promise.all([
-    document.fonts.load(`400 72px 'Fraunces Variable'`, content.text),
-    document.fonts.load(`400 160px 'Fraunces Variable'`, '“'),
+    document.fonts.load(`400 72px 'Source Serif 4 Variable'`, content.text),
+    document.fonts.load(`400 160px 'Source Serif 4 Variable'`, '“'),
   ]).catch(() => undefined)
   const logo = await loadImage(logoSrc)
 

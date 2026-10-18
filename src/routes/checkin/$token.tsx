@@ -354,7 +354,7 @@ function GuestForm({
 // The prophetic word is the moment this screen exists for; the check-in itself
 // is confirmed in one compact line above it. Both sit on the page background,
 // no white card.
-const WORD_FONT = { fontFamily: "'Fraunces Variable', ui-serif, Georgia, serif" }
+const WORD_FONT = { fontFamily: "'Source Serif 4 Variable', ui-serif, Georgia, serif" }
 
 function CheckedInLine({ result, serviceName, large }: { result: CheckinResult; serviceName: string; large: boolean }) {
   const already = result.status === 'already_checked_in'
@@ -402,11 +402,11 @@ function WordScreen({ result, word, serviceName }: { result: CheckinResult; word
           <div className="flex flex-1 flex-col justify-center">
             <Brand />
             <CheckedInLine result={result} serviceName={serviceName} large={false} />
-            <figure className={`word-reveal px-1 text-center ${longWord ? 'mt-6' : 'mt-10'}`}>
-              <span aria-hidden style={WORD_FONT} className="block h-10 text-[72px] leading-none text-[#F8B4B4]/45">
+            <figure className={`word-reveal px-1 text-center ${longWord ? 'mt-4' : 'mt-6'}`}>
+              <span aria-hidden style={WORD_FONT} className="block h-8 text-[56px] leading-none text-[#F8B4B4]/45">
                 &ldquo;
               </span>
-              <blockquote style={WORD_FONT} className={`mt-2 text-[#FFF4F2] text-balance ${wordSizeClass(word.text)}`}>
+              <blockquote style={WORD_FONT} className={`text-[#FFF4F2] text-balance ${wordSizeClass(word.text)}`}>
                 {word.text}
               </blockquote>
               <figcaption className={`flex items-center justify-center gap-3 ${longWord ? 'mt-5' : 'mt-8'}`}>

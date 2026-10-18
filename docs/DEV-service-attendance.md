@@ -120,8 +120,8 @@ the data model, and the rules that are easy to break.
     Download. Files are pre-rendered on mount, because Safari requires
     `share()` within the tap.
   - A website cannot open the Instagram story editor directly.
-- **Font**: Fraunces Variable is imported in `styles.css` via `@fontsource`. The
-  woff2 files download only when used.
+- **Font**: Source Serif 4 Variable (a plain book serif) is imported in
+  `styles.css` via `@fontsource`. The woff2 files download only when used.
 
 ## Testing
 
