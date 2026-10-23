@@ -16,7 +16,9 @@ import { getSatellites } from '../server/functions/satellites'
 import { hasPermission } from '../lib/auth'
 import { MAIN_SATELLITE_NAME } from '../lib/constants'
 import { AUTO_CLOSE_AFTER_DAYS } from '../lib/sessionSchedule'
-import type { ServiceSessionWithRelations, ServiceType, SatelliteRow } from '../lib/types'
+import type { ServiceSessionWithRelations, ServiceType, SatelliteRow, PropheticWordSetSummary } from '../lib/types'
+import { getPropheticSets } from '../server/functions/propheticSets'
+import { PropheticSetSelect, matchingSet } from './PropheticSetSelect'
 import { Card, CardContent } from './ui/card'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -71,7 +73,9 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
   const [newDate, setNewDate] = useState(todayLocal())
   const [newSatelliteId, setNewSatelliteId] = useState('')
   const [newTitle, setNewTitle] = useState('')
-  const [newPropheticPrompt, setNewPropheticPrompt] = useState('')
+  // Saved word sets; null choice = the set meant for this service and date.
+  const [wordSets, setWordSets] = useState<PropheticWordSetSummary[]>([])
+  const [setChoice, setSetChoice] = useState<string | null>(null)
   const [createBusy, setCreateBusy] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -91,6 +95,12 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
       setSessions(s)
       setServiceTypes(types)
       setSatellites(sats)
+      // Word sets are optional: a failure leaves the dropdown at "None".
+      if (canWrite) {
+        getPropheticSets({ data: { accessToken } })
+          .then(setWordSets)
+          .catch(() => setWordSets([]))
+      }
       // New sessions default to the main satellite until one is picked.
       setNewSatelliteId((prev) => prev || (sats.find((sat) => sat.name === MAIN_SATELLITE_NAME)?.id ?? ''))
       if (types.length > 0 && !newTypeId) setNewTypeId(types[0].id)
@@ -99,7 +109,15 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
     } finally {
       setLoading(false)
     }
-  }, [accessToken, newTypeId])
+  }, [accessToken, newTypeId, canWrite])
+
+  const autoSet = matchingSet(wordSets, newTypeId, newDate)
+  const chosenSetId = setChoice ?? autoSet?.id ?? ''
+  const openCreate = () => {
+    setSetChoice(null)
+    setCreateError('')
+    setShowCreate(true)
+  }
 
   useEffect(() => {
     load()
@@ -117,12 +135,11 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
           sessionDate: newDate,
           satelliteId: newSatelliteId || null,
           title: newTitle.trim() || null,
-          propheticPrompt: newPropheticPrompt.trim() || null,
+          propheticSetId: chosenSetId || null,
         },
       })
       setShowCreate(false)
       setNewTitle('')
-      setNewPropheticPrompt('')
       await load()
       navigate({ to: '/admin/attendance/$sessionId', params: { sessionId: created.id } })
     } catch (err) {
@@ -176,12 +193,15 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
             Service Attendance
           </h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link to="/admin/attendance/analytics">
             <Button variant="outline">View analytics</Button>
           </Link>
+          <Link to="/admin/attendance/words">
+            <Button variant="outline">Prophetic words</Button>
+          </Link>
           {canWrite && (
-            <Button onClick={() => setShowCreate(true)} className="bg-[#8B1538] hover:bg-[#6B0F2B]">
+            <Button onClick={openCreate} className="bg-[#8B1538] hover:bg-[#6B0F2B]">
               Start a session
             </Button>
           )}
@@ -211,7 +231,7 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
           <CardContent className="py-16 text-center">
             <p className="text-gray-500 mb-4">No service sessions yet.</p>
             {canWrite && (
-              <Button onClick={() => setShowCreate(true)} className="bg-[#8B1538] hover:bg-[#6B0F2B]">
+              <Button onClick={openCreate} className="bg-[#8B1538] hover:bg-[#6B0F2B]">
                 Start your first session
               </Button>
             )}
@@ -326,18 +346,12 @@ export function AttendanceManager({ embedded = false }: AttendanceManagerProps) 
               <Label htmlFor="svc-title">Label <span className="text-gray-400 font-normal">(optional)</span></Label>
               <Input id="svc-title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="e.g. Anniversary Sunday" className="mt-1" />
             </div>
-            <div>
-              <Label htmlFor="svc-prophetic">Prophetic prompt <span className="text-gray-400 font-normal">(optional)</span></Label>
-              <Input
-                id="svc-prophetic"
-                value={newPropheticPrompt}
-                onChange={(e) => setNewPropheticPrompt(e.target.value)}
-                placeholder="e.g. The Love of an Extravagant Father"
-                maxLength={200}
-                className="mt-1"
-              />
-              <p className="mt-1 text-xs text-gray-400">Sermon topic. A matching verse shows after QR check-in.</p>
-            </div>
+            <PropheticSetSelect
+              sets={wordSets}
+              value={chosenSetId}
+              onChange={setSetChoice}
+              preselected={setChoice === null && Boolean(autoSet)}
+            />
             {createError && <p className="text-sm text-red-600">{createError}</p>}
           </div>
           <DialogFooter>

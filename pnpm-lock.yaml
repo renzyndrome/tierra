@@ -59,6 +59,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      fflate:
+        specifier: 0.8.2
+        version: 0.8.2
       jspdf:
         specifier: ^4.2.1
         version: 4.2.1

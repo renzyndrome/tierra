@@ -47,12 +47,15 @@ function manilaDate(offsetDays = 0): string {
 
 // Create a labeled session (optionally on a given date) and return the URL of
 // its Manage page, where the browser lands after creation.
-async function createSession(page: Page, label: string, date?: string): Promise<string> {
+async function createSession(page: Page, label: string, date?: string, wordSet?: string): Promise<string> {
   await page.goto('/admin/attendance')
   await page.getByRole('button', { name: /start a session|start your first session/i }).first().click()
   await expect(page.getByRole('dialog')).toBeVisible()
   if (date) await page.locator('#svc-date').fill(date)
   await page.getByLabel(/^label/i).fill(label)
+  // A saved word set for this service and date is preselected; tests start
+  // without one unless they pick it.
+  await page.locator('#svc-word-set').selectOption(wordSet ?? '')
   await page.getByRole('button', { name: /create & open/i }).click()
   await page.waitForURL(/\/admin\/attendance\/[0-9a-f-]{36}/, { timeout: 15_000 })
   // The URL flips before the Manage page renders; wait for its own controls.
@@ -288,12 +291,14 @@ test.describe('Admin — Service Attendance', () => {
     try {
       const token = await readQrToken(page)
 
-      // 0. A prophetic prompt matches the shipped word list.
-      await page.locator('#session-prophetic').fill('Mary and Martha')
-      await page.getByRole('button', { name: /^save prompt$/i }).click()
-      await expect(page.getByText(/^Word list: Luke 10:38-42, \d+ words\./)).toBeVisible({
-        timeout: 15_000,
-      })
+      // 0. A word list for this service, pasted.
+      await page.getByRole('button', { name: /^import words$/i }).click()
+      const words = page.getByRole('dialog')
+      await words.locator('#prophetic-paste').fill('LUKE 10:38-42\n1. Choose the better part today.\n2. Sit at His feet before you serve.')
+      await words.getByRole('button', { name: /^read words$/i }).click()
+      await words.getByRole('button', { name: /^save list$/i }).click()
+      await expect(words).toBeHidden({ timeout: 15_000 })
+      await expect(page.getByText(/^Imported: Luke 10:38-42, 2 words\./)).toBeVisible({ timeout: 15_000 })
 
       // 1. A guest scans the QR in a separate, signed-out browser.
       const guestCtx = await browser.newContext({ baseURL })
@@ -708,11 +713,79 @@ test.describe('Admin — Service Attendance', () => {
 
       // 3. Remove the list: the prompt applies again.
       await page.getByRole('button', { name: /^remove list$/i }).click()
-      await expect(page.getByText('None imported. PDF, Excel, CSV or text, or paste.')).toBeVisible({
+      await expect(page.getByText('None. No prophetic word after QR check-in.')).toBeVisible({
         timeout: 15_000,
       })
     } finally {
       await deleteSessionAt(page, sessionUrl)
+    }
+  })
+
+  test('prophetic word sets: a saved set is preselected for its service and date', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    test.setTimeout(150_000)
+    await loginAsAdmin(page)
+    // A date with no real set: 40 days ahead.
+    const date = manilaDate(40)
+    const title = `E2E SET ${Date.now()}`
+    const setWords = ['Saved set word one for this service.', 'Saved set word two for this service.']
+    let sessionUrl = ''
+
+    // 1. Save a set for the default service and that date.
+    await page.goto('/admin/attendance/words')
+    await page.getByRole('button', { name: /^new word set$/i }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.locator('#prophetic-paste').fill(`Psalm 121\n1. ${setWords[0]}\n2. ${setWords[1]}`)
+    await dialog.getByRole('button', { name: /^read words$/i }).click()
+    await expect(dialog.locator('#set-title')).toHaveValue('Psalm 121')
+    await dialog.locator('#set-title').fill(title)
+    await dialog.locator('#set-service').selectOption({ index: 1 })
+    await dialog.locator('#set-date').fill(date)
+    await dialog.getByRole('button', { name: /^save list$/i }).click()
+    await expect(dialog).toBeHidden({ timeout: 15_000 })
+    const card = page.locator('[data-slot="card"]', { hasText: title })
+    await expect(card).toContainText('2 words')
+
+    try {
+      // 2. Creating a session for that service and date preselects the set.
+      await page.goto('/admin/attendance')
+      await page.getByRole('button', { name: /start a session|start your first session/i }).first().click()
+      await page.locator('#svc-date').fill(date)
+      await expect(page.locator('#svc-word-set option:checked')).toContainText(title)
+      await expect(page.getByText('Set for this service and date. One random word per QR check-in.')).toBeVisible()
+      await page.getByLabel(/^label/i).fill(`E2E SET SESSION ${Date.now()}`)
+      await page.getByRole('button', { name: /create & open/i }).click()
+      await page.waitForURL(/\/admin\/attendance\/[0-9a-f-]{36}/, { timeout: 15_000 })
+      await expect(page.getByRole('button', { name: /delete session/i })).toBeVisible({ timeout: 15_000 })
+      sessionUrl = page.url()
+      await expect(page.getByText(`Set: ${title}, 2 words. One random word per QR check-in.`)).toBeVisible()
+
+      // 3. A guest check-in draws its word from the set.
+      const token = await readQrToken(page)
+      const guestCtx = await browser.newContext({ baseURL })
+      const guest = await guestCtx.newPage()
+      await guest.goto(`/checkin/${token}`)
+      await guest.getByLabel(/your name/i).fill(`E2E Set ${Date.now()}`)
+      await guest.getByRole('button', { name: /^check in$/i }).click()
+      await expect(guest.locator('figcaption')).toHaveText('Psalm 121', { timeout: 15_000 })
+      expect(setWords).toContain((await guest.locator('blockquote').innerText()).trim())
+      await guestCtx.close()
+    } finally {
+      if (sessionUrl) await deleteSessionAt(page, sessionUrl)
+      // 4. Archive, then delete the test set.
+      await page.goto('/admin/attendance/words')
+      const setCard = page.locator('[data-slot="card"]', { hasText: title })
+      await setCard.getByRole('button', { name: /^archive$/i }).click()
+      await expect(setCard).toHaveCount(0, { timeout: 15_000 })
+      await page.getByRole('tab', { name: /^archived$/i }).click()
+      const remove = setCard.getByRole('button', { name: /^delete$/i })
+      await expect(remove).toBeEnabled({ timeout: 15_000 })
+      page.once('dialog', (d) => d.accept())
+      await remove.click()
+      await expect(setCard).toHaveCount(0, { timeout: 15_000 })
     }
   })
 

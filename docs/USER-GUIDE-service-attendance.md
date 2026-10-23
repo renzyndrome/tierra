@@ -46,9 +46,9 @@ Do this once per service, on the day of the service.
    - **Date** — the date of the service (defaults to today).
    - **Satellite** *(optional)* — choose the campus, or leave as **All / Main**.
    - **Label** *(optional)* — a note shown beside the session, e.g. "Anniversary Sunday".
-   - **Prophetic prompt** *(optional)*: the sermon topic or passage, e.g.
-     "Luke 10:38-42". After a QR check-in, one matching prophetic word shows.
-     See **Prophetic word** in section 3.
+   - **Prophetic words** *(optional)*: a saved word set. The set saved for this
+     service and date is already selected. After a QR check-in, one random word
+     from it shows. See **Prophetic word** in section 3.
 4. Click to create. The new session appears at the top of the list with a green
    **Open** badge.
 
@@ -105,12 +105,9 @@ check in. Reopen the session if you closed it too early.
 ### Prophetic word (after QR check-in)
 
 After a QR check-in the screen shows **Welcome to** and the service name. When the
-session has a prophetic prompt with a matching word list, a **Prophetic word**
-follows: one random entry from that list, with its passage reference. A list of
-Bible verses also shows the translation (e.g. BSB).
-
-Current list: **Luke 10:38-42** (30 prophetic words, Young Pro, Oct 16). The
-prompt "Luke 10:38-42", or words like "Mary and Martha", selects it.
+session has a word list, a **Prophetic word** follows: one random entry from that
+list, with its passage reference. A list without a reference shows "Prophetic
+word" in its place. A list of Bible verses also shows the translation (e.g. NIV).
 
 **What the guest sees:** the first screen holds only the welcome and the word:
 a small **Checked in** pill, "Welcome to" the service and the guest's name, then
@@ -129,28 +126,53 @@ reference, the service and questlaguna.org. Also fits a social story.
   puts it in Photos.
 - The page footer links to **questlaguna.org**.
 
-**Import the words for a service (recommended):** each service has its own list.
+**Prophetic word sets (recommended):** save each service's words ahead of time.
 
-1. Open the session. On the Prophetic card, **Word list**, click **Import words**.
-2. **Choose file** (PDF, Excel, CSV or text), or paste the words.
+1. **Service Attendance**, then **Prophetic words**, then **New word set**.
+2. **Choose file** or paste the words (steps below), then **Read words**.
+3. Above the words: **Title**, **Service** and **Date** of the service.
+4. **Save list**.
+- A new session for that service and date starts with the set already selected
+  in **Prophetic words**. Choose another set, or **None**, if needed.
+- An existing session: on its Prophetic words card, choose the set, then
+  **Use set** (or **Replace with set**).
+- The session keeps its own copy: editing a set later changes no past service.
+- **Archive** hides an old set from the dropdown. Archived sets can be restored
+  or deleted.
+
+**Blank templates:** for one fixed layout, use the **Excel** or **Word** template
+(links in the import window). Fill in the passage reference (optional), then one
+word or verse per row; a reference per row only for a list of different verses.
+
+**Import the words (file or paste):** on a word set, or straight onto one session
+(**Import words** on its Prophetic words card).
+
+1. Open **New word set**, or **Import words** on the session.
+2. **Choose file** (PDF, Word, Excel, CSV or text), or paste the words.
 3. Click **Read words**. The app finds the passage heading (e.g. "LUKE 10:38-42"
    becomes "Luke 10:38-42") and each numbered line, bullet, or line.
    - **Verse lists:** a line that starts with its own reference and a dash,
      such as "Psalm 46:1-3 – God is our refuge...", keeps that reference. Each
      verse then shows its own reference after check-in, and the passage
      reference at the top is optional. Quote marks around a verse are removed.
-   - PDF: text PDFs only. A scanned image has no text: paste instead.
+   - PDF: text PDFs only. A scanned image has no text: paste instead. Two
+     columns on a page are read left column first, then right.
+   - Word (.docx): numbered or bulleted paragraphs become words; the template's
+     table is read row by row. An old .doc file: save it as .docx first.
    - Excel/CSV: one word per row. A header row and a number column are skipped.
      A reference column next to the text becomes that row's reference.
 4. Check the preview: fix a reference, edit or remove a word, **Add word**.
-   Notes above the list say what was skipped (repeats, short lines).
-5. **Save list**. The card shows **Imported: ..., N words**. Each QR check-in
-   now shows one random word from this list.
-- **Edit words** reopens the list. **Remove list** goes back to the prompt.
+   Notes above the list say what was skipped (repeats, short lines). The passage
+   reference is optional.
+5. **Save list**. A session's card shows **Imported: ..., N words** (or **Set:
+   ..., N words** for a set). Each QR check-in shows one random word.
+- **Edit words** reopens a session's list. **Remove list** clears it.
 - Nothing is uploaded: the file is read on the device. Only the words are saved.
 
-**Prophetic prompt (built-in lists):** used only when no list is imported.
-- Set or change it: open the session, **Prophetic prompt**, then **Save prompt**.
+**Prophetic prompt (older sessions only):** sessions created before word sets
+may carry a prompt (sermon topic). Its field shows only on those sessions; it is
+used only when the session has no word list.
+- Change it: open the session, **Prophetic prompt**, then **Save prompt**.
 - The line under the field shows the result:
   - **Word list: ... words.** A prophetic word shows after each QR check-in.
   - **No word list for this prompt.** No word shows. Use the topic name of an
@@ -159,8 +181,6 @@ reference, the service and questlaguna.org. Also fits a social story.
 - Matching ignores capital letters and punctuation. A prompt with a key word of a
   list (e.g. "Father", "love", "grace") also matches that list.
 - Manual check-ins show no verse.
-
-Current verse lists: **The Love of an Extravagant Father** (135 verses).
 
 ---
 

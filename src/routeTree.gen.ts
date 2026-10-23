@@ -46,6 +46,7 @@ import { Route as AdminMembersNewRouteImport } from './routes/admin/members/new'
 import { Route as AdminInventoryRequestsRouteImport } from './routes/admin/inventory/requests'
 import { Route as AdminInventoryItemIdRouteImport } from './routes/admin/inventory/$itemId'
 import { Route as AdminCellGroupsGroupIdRouteImport } from './routes/admin/cell-groups/$groupId'
+import { Route as AdminAttendanceWordsRouteImport } from './routes/admin/attendance/words'
 import { Route as AdminAttendanceAnalyticsRouteImport } from './routes/admin/attendance/analytics'
 import { Route as AdminAttendanceSessionIdRouteImport } from './routes/admin/attendance/$sessionId'
 import { Route as AdminMembersMemberIdEditRouteImport } from './routes/admin/members/$memberId/edit'
@@ -241,6 +242,11 @@ const AdminCellGroupsGroupIdRoute = AdminCellGroupsGroupIdRouteImport.update({
   path: '/admin/cell-groups/$groupId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAttendanceWordsRoute = AdminAttendanceWordsRouteImport.update({
+  id: '/admin/attendance/words',
+  path: '/admin/attendance/words',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminAttendanceAnalyticsRoute =
   AdminAttendanceAnalyticsRouteImport.update({
     id: '/admin/attendance/analytics',
@@ -282,6 +288,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileIndexRoute
   '/admin/attendance/$sessionId': typeof AdminAttendanceSessionIdRoute
   '/admin/attendance/analytics': typeof AdminAttendanceAnalyticsRoute
+  '/admin/attendance/words': typeof AdminAttendanceWordsRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
   '/admin/inventory/$itemId': typeof AdminInventoryItemIdRoute
   '/admin/inventory/requests': typeof AdminInventoryRequestsRoute
@@ -324,6 +331,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileIndexRoute
   '/admin/attendance/$sessionId': typeof AdminAttendanceSessionIdRoute
   '/admin/attendance/analytics': typeof AdminAttendanceAnalyticsRoute
+  '/admin/attendance/words': typeof AdminAttendanceWordsRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
   '/admin/inventory/$itemId': typeof AdminInventoryItemIdRoute
   '/admin/inventory/requests': typeof AdminInventoryRequestsRoute
@@ -367,6 +375,7 @@ export interface FileRoutesById {
   '/profile/': typeof ProfileIndexRoute
   '/admin/attendance/$sessionId': typeof AdminAttendanceSessionIdRoute
   '/admin/attendance/analytics': typeof AdminAttendanceAnalyticsRoute
+  '/admin/attendance/words': typeof AdminAttendanceWordsRoute
   '/admin/cell-groups/$groupId': typeof AdminCellGroupsGroupIdRoute
   '/admin/inventory/$itemId': typeof AdminInventoryItemIdRoute
   '/admin/inventory/requests': typeof AdminInventoryRequestsRoute
@@ -411,6 +420,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/admin/attendance/$sessionId'
     | '/admin/attendance/analytics'
+    | '/admin/attendance/words'
     | '/admin/cell-groups/$groupId'
     | '/admin/inventory/$itemId'
     | '/admin/inventory/requests'
@@ -453,6 +463,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/admin/attendance/$sessionId'
     | '/admin/attendance/analytics'
+    | '/admin/attendance/words'
     | '/admin/cell-groups/$groupId'
     | '/admin/inventory/$itemId'
     | '/admin/inventory/requests'
@@ -495,6 +506,7 @@ export interface FileRouteTypes {
     | '/profile/'
     | '/admin/attendance/$sessionId'
     | '/admin/attendance/analytics'
+    | '/admin/attendance/words'
     | '/admin/cell-groups/$groupId'
     | '/admin/inventory/$itemId'
     | '/admin/inventory/requests'
@@ -538,6 +550,7 @@ export interface RootRouteChildren {
   ProfileIndexRoute: typeof ProfileIndexRoute
   AdminAttendanceSessionIdRoute: typeof AdminAttendanceSessionIdRoute
   AdminAttendanceAnalyticsRoute: typeof AdminAttendanceAnalyticsRoute
+  AdminAttendanceWordsRoute: typeof AdminAttendanceWordsRoute
   AdminCellGroupsGroupIdRoute: typeof AdminCellGroupsGroupIdRoute
   AdminInventoryItemIdRoute: typeof AdminInventoryItemIdRoute
   AdminInventoryRequestsRoute: typeof AdminInventoryRequestsRoute
@@ -820,6 +833,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCellGroupsGroupIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/attendance/words': {
+      id: '/admin/attendance/words'
+      path: '/admin/attendance/words'
+      fullPath: '/admin/attendance/words'
+      preLoaderRoute: typeof AdminAttendanceWordsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/attendance/analytics': {
       id: '/admin/attendance/analytics'
       path: '/admin/attendance/analytics'
@@ -866,6 +886,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileIndexRoute: ProfileIndexRoute,
   AdminAttendanceSessionIdRoute: AdminAttendanceSessionIdRoute,
   AdminAttendanceAnalyticsRoute: AdminAttendanceAnalyticsRoute,
+  AdminAttendanceWordsRoute: AdminAttendanceWordsRoute,
   AdminCellGroupsGroupIdRoute: AdminCellGroupsGroupIdRoute,
   AdminInventoryItemIdRoute: AdminInventoryItemIdRoute,
   AdminInventoryRequestsRoute: AdminInventoryRequestsRoute,

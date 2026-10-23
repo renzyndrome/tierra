@@ -15,17 +15,28 @@ the data model, and the rules that are easy to break.
 | Session schedule: church date, overdue, automatic close | `src/lib/sessionSchedule.ts` |
 | Prophetic words: library, picking | `src/lib/propheticWord.ts`, `src/content/propheticWords.json` |
 | Prophetic import: parser (pure), browser file reader | `src/lib/propheticImport.ts`, `src/lib/propheticFileReader.ts` |
+| Prophetic word sets: server, page, dropdown | `src/server/functions/propheticSets.ts` (+ `_propheticSetStore.ts`), `src/routes/admin/attendance/words.tsx`, `src/components/PropheticSetSelect.tsx` |
+| Word list validation (shared) | `src/lib/propheticSchemas.ts` |
+| Import templates (blank Excel and Word) | `public/templates/prophetic-words-template.{xlsx,docx}` |
 | Story image (canvas, browser only) | `src/lib/storyImage.ts`, `src/components/StoryShare.tsx` |
 | Admin pages | `src/routes/admin/attendance/{index,$sessionId,analytics}.tsx` |
 | Public pages | `src/routes/checkin/$token.tsx`, `src/routes/display/$token.tsx` |
 
 ## Data model (public schema, RLS on, service-role only)
 
-- `service_types`, `service_sessions`, `attendance_records`.
+- `service_types`, `service_sessions`, `attendance_records`, `prophetic_word_sets`.
+- `prophetic_word_sets` (2026-10-23): `title`, `service_type_id`, `service_date`,
+  `words jsonb` (same shape as a session list), `is_archived`. The create dialog
+  preselects the one set whose service type and date match (`matchingSet`; two
+  matches preselect nothing). Picking a set copies its words onto the session
+  and sets `service_sessions.prophetic_set_id` (display only). A direct edit or
+  removal of the session list clears `prophetic_set_id`. Deleting a set keeps
+  the session copies (FK `ON DELETE SET NULL`).
 - `service_sessions`:
   - `opened_at`: set at creation and on every reopen. It restarts the
     automatic-close clock.
-  - `prophetic_prompt text`: sermon topic. Picks a built-in list.
+  - `prophetic_prompt text`: legacy sermon topic. Picks a built-in list. The
+    create dialog no longer sets it; the session card shows it only when set.
   - `prophetic_words jsonb`: `{reference, translation, words: [{text, reference}]}`.
     A list imported for this service; it wins over the prompt. A word's own
     `reference` (verse lists) wins over the list `reference`, which may then be
@@ -96,6 +107,19 @@ the data model, and the rules that are easy to break.
   - Excel and CSV use SheetJS. Both libraries load through dynamic `import()`
     and never run on the server.
 - **Parser heuristics**:
+  - Reference is optional. Without one, the check-in screen and the story image
+    show "Prophetic word" in its place.
+  - PDF columns: `pdfItemsToText` splits lines at gaps over 24 pt
+    (`SEGMENT_GAP`), then `findColumnSplit` looks for an empty vertical gutter
+    (wide headings ignored). Left column first, then right; headings across the
+    page first. A reference | text table (rows paired side by side, no numbered
+    items on the right) stays in row order.
+  - Word (.docx): `readDocx` unzips `word/document.xml` (fflate, dynamic import);
+    `docxXmlToContent` (DOMParser) marks auto-numbered or bulleted paragraphs
+    with "• ". Tables: rows go to `parsePropheticRows`, paragraphs only supply a
+    reference. Old .doc: an error asks for .docx.
+  - Template label rows: "Passage reference" and "Translation" with the value in
+    the next cell; header cells such as "Reference (optional)" are skipped.
   - Verse lists: when 2+ lines start with "Book ch:v[-v] – text"
     (`VERSE_LINE`), each such line starts a word with its own reference; any
     other line continues it, capitals included. `splitVerse` also runs on every

@@ -412,12 +412,13 @@ function WordScreen({ result, word, serviceName }: { result: CheckinResult; word
               <figcaption className={`flex items-center justify-center gap-3 ${longWord ? 'mt-5' : 'mt-8'}`}>
                 <span className="h-px w-10 bg-[#F8B4B4]/35" aria-hidden />
                 <span className="text-sm font-semibold tracking-wide text-[#F8B4B4]">
-                  {word.reference}
+                  {/* A list without a passage reference: the label takes its place. */}
+                  {word.reference || 'Prophetic word'}
                   {word.translation && <span className="ml-1.5 font-normal text-white/60">{word.translation}</span>}
                 </span>
                 <span className="h-px w-10 bg-[#F8B4B4]/35" aria-hidden />
               </figcaption>
-              <p className="mt-2 text-xs text-white/60">Prophetic word</p>
+              {word.reference && <p className="mt-2 text-xs text-white/60">Prophetic word</p>}
             </figure>
           </div>
           <button

@@ -29,7 +29,8 @@ import {
   type PropheticLibrary,
   type PropheticWordList,
 } from '../../lib/propheticWord'
-import { MAX_WORDS, MAX_WORD_LENGTH } from '../../lib/propheticImport'
+import { propheticWordListSchema } from '../../lib/propheticSchemas'
+import { loadSetWords, storedWordList } from './_propheticSetStore'
 import propheticWords from '../../content/propheticWords.json'
 import {
   mergeMatchCandidates,
@@ -223,26 +224,6 @@ const PROPHETIC_LIBRARY = propheticWords as PropheticLibrary
 // Optional sermon topic typed by an admin; '' and whitespace mean none.
 const optionalPropheticPrompt = z.string().trim().max(200).optional().nullable()
 
-// A word list imported for one service (PDF, spreadsheet or paste, parsed and
-// reviewed in the browser). Stored as JSON on the session. A word may carry its
-// own verse reference; the list reference is then needed only for words
-// without one.
-const propheticListWordSchema = z.object({
-  text: z.string().trim().min(1).max(MAX_WORD_LENGTH, `Each word: ${MAX_WORD_LENGTH} characters or fewer.`),
-  reference: z.string().trim().max(80).optional().nullable(),
-})
-const propheticWordListSchema = z
-  .object({
-    reference: z.string().trim().max(80),
-    translation: z.string().trim().max(20).optional().nullable(),
-    words: z
-      .array(propheticListWordSchema)
-      .min(1, 'At least one word required.')
-      .max(MAX_WORDS, `${MAX_WORDS} words or fewer.`),
-  })
-  .refine((list) => list.reference.length > 0 || list.words.every((w) => w.reference), {
-    message: 'Passage reference required.',
-  })
 
 
 // ============================================
@@ -279,6 +260,8 @@ const createSessionSchema = z.object({
   satelliteId: z.string().uuid().optional().nullable(),
   title: z.string().max(120).optional().nullable(),
   propheticPrompt: optionalPropheticPrompt,
+  // A saved word set: its words are copied onto the new session.
+  propheticSetId: z.string().uuid().optional().nullable(),
 })
 
 export const createSession = createServerFn({ method: 'POST' })
@@ -286,6 +269,7 @@ export const createSession = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<ServiceSession> => {
     const caller = await requirePermission(data.accessToken, 'registration.write')
     const admin = createServerAdminClient()
+    const setWords = data.propheticSetId ? await loadSetWords(admin, data.propheticSetId) : null
 
     const { data: session, error } = await admin
       .from('service_sessions')
@@ -295,8 +279,9 @@ export const createSession = createServerFn({ method: 'POST' })
         satellite_id: data.satelliteId ?? null,
         title: data.title ?? null,
         // Written only when given, so sessions still start before the
-        // prophetic_prompt migration is applied.
+        // prophetic_prompt / prophetic_set_id migrations are applied.
         ...(data.propheticPrompt ? { prophetic_prompt: data.propheticPrompt } : {}),
+        ...(setWords ? { prophetic_words: setWords, prophetic_set_id: data.propheticSetId } : {}),
         created_by: caller.userId,
         // qr_token + is_open use DB defaults (random token, open).
       })
@@ -399,7 +384,19 @@ export const getSessionDetail = createServerFn({ method: 'GET' })
     })
     const c = ((counts ?? []) as { checkin_count: number; pending_count: number }[])[0]
     const row = session as ServiceSessionWithRelations
+    // The saved set the word list came from (title for the card). A failed
+    // read only hides the title.
+    let wordSet: { id: string; title: string } | null = null
+    if (row.prophetic_set_id) {
+      const { data: set } = await admin
+        .from('prophetic_word_sets')
+        .select('id, title')
+        .eq('id', row.prophetic_set_id)
+        .maybeSingle()
+      wordSet = (set as { id: string; title: string } | null) ?? null
+    }
     return {
+      word_set: wordSet,
       ...row,
       checkin_count: Number(c?.checkin_count ?? 0),
       pending_count: Number(c?.pending_count ?? 0),
@@ -459,16 +456,11 @@ export const setSessionPropheticWords = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<{ success: boolean }> => {
     await requirePermission(data.accessToken, 'registration.write')
     const admin = createServerAdminClient()
-    const list = data.list
-      ? {
-          reference: data.list.reference,
-          translation: data.list.translation || null,
-          words: data.list.words.map((w) => ({ text: w.text, reference: w.reference || null })),
-        }
-      : null
+    const list = data.list ? storedWordList(data.list) : null
+    // An edited or removed list no longer matches its saved set.
     const { error } = await admin
       .from('service_sessions')
-      .update({ prophetic_words: list })
+      .update({ prophetic_words: list, prophetic_set_id: null })
       .eq('id', data.sessionId)
     if (error) {
       console.error('Error saving prophetic words:', error)
