@@ -1,11 +1,17 @@
 // Reads an uploaded prophetic-word file in the browser (nothing is uploaded):
-// PDF via pdf.js, Excel/CSV via SheetJS, plain text as is. Both libraries are
-// loaded only when a file is read, so they stay out of the SSR bundle and the
-// rest of the app.
+// PDF via pdf.js, Excel/CSV via SheetJS, Word (.docx) via fflate (unzip) and
+// DOMParser, plain text as is. The libraries are loaded only when a file is
+// read, so they stay out of the SSR bundle and the rest of the app.
 
-import { parsePropheticRows, parsePropheticText, pdfItemsToText, type ParsedWordList } from './propheticImport'
+import {
+  parsePropheticDocx,
+  parsePropheticRows,
+  parsePropheticText,
+  pdfItemsToText,
+  type ParsedWordList,
+} from './propheticImport'
 
-export const ACCEPTED_FILES = '.pdf,.xlsx,.xls,.csv,.txt'
+export const ACCEPTED_FILES = '.pdf,.docx,.xlsx,.xls,.csv,.txt'
 const MAX_FILE_BYTES = 10 * 1024 * 1024
 
 async function readPdf(file: File): Promise<string> {
@@ -36,6 +42,16 @@ async function readPdf(file: File): Promise<string> {
   }
 }
 
+async function readDocx(file: File): Promise<string> {
+  const { unzipSync } = await import('fflate')
+  const files = unzipSync(new Uint8Array(await file.arrayBuffer()), {
+    filter: (f) => f.name === 'word/document.xml',
+  })
+  const xml = files['word/document.xml']
+  if (!xml) throw new Error('Not a Word document. Save it as .docx, or paste the text.')
+  return new TextDecoder().decode(xml)
+}
+
 async function readSheet(file: File): Promise<unknown[][]> {
   const XLSX = await import('xlsx')
   const book = XLSX.read(await file.arrayBuffer(), { type: 'array' })
@@ -56,6 +72,8 @@ export async function readPropheticFile(file: File): Promise<ParsedWordList> {
   if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')) {
     return parsePropheticRows(await readSheet(file))
   }
+  if (name.endsWith('.docx')) return parsePropheticDocx(await readDocx(file))
+  if (name.endsWith('.doc')) throw new Error('Old Word format (.doc). Save it as .docx, or paste the text.')
   if (name.endsWith('.txt')) return parsePropheticText(await file.text())
-  throw new Error('File type not supported. Use PDF, Excel, CSV or text.')
+  throw new Error('File type not supported. Use PDF, Word, Excel, CSV or text.')
 }

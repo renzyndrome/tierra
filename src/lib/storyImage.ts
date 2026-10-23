@@ -213,7 +213,9 @@ export async function renderStoryImage(content: StoryContent, design: StoryDesig
   const capY = y + 40
   ctx.font = `700 38px ${SANS}`
   ctx.fillStyle = p.accent
-  const ref = content.translation ? `${content.reference} ${content.translation}` : content.reference
+  // A list without a passage reference: "Prophetic word" takes its place.
+  const label = content.reference || 'Prophetic word'
+  const ref = content.translation ? `${label} ${content.translation}` : label
   ctx.fillText(ref, W / 2, capY)
   const refWidth = ctx.measureText(ref).width
   ctx.strokeStyle = p.rule
@@ -226,7 +228,7 @@ export async function renderStoryImage(content: StoryContent, design: StoryDesig
   ctx.stroke()
   ctx.font = `500 30px ${SANS}`
   ctx.fillStyle = p.muted
-  ctx.fillText(`Prophetic word · ${content.serviceName}`, W / 2, capY + 54)
+  ctx.fillText(content.reference ? `Prophetic word · ${content.serviceName}` : content.serviceName, W / 2, capY + 54)
 
   drawFooter(ctx, design)
 

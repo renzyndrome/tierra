@@ -1,12 +1,13 @@
-// Import a prophetic word list for one service: choose a PDF, Excel, CSV or
-// text file, or paste the text. The file is read in the browser and parsed
+// Import a prophetic word list: choose a PDF, Word, Excel, CSV or text file, or
+// paste the text. The file is read in the browser and parsed
 // (src/lib/propheticImport.ts); staff review and edit every word before saving.
+// Used for one session's list and for saved word sets (which add their own
+// fields, e.g. title and service, through `extra`).
 
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { FileUp, Plus, X } from 'lucide-react'
-import { setSessionPropheticWords } from '../server/functions/attendance'
 import { ACCEPTED_FILES, readPropheticFile } from '../lib/propheticFileReader'
-import { MAX_WORDS, MAX_WORD_LENGTH, parsePropheticText } from '../lib/propheticImport'
+import { MAX_WORDS, MAX_WORD_LENGTH, parsePropheticText, type ParsedWordList } from '../lib/propheticImport'
 import type { PropheticListWord, PropheticWordList } from '../lib/propheticWord'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -14,22 +15,43 @@ import { Label } from './ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog'
 import { SCROLLING_DIALOG_CLASS } from './formClasses'
 
+// Blank import templates (public/templates): one fixed layout staff can fill in.
+export const PROPHETIC_TEMPLATES = [
+  { label: 'Excel', href: '/templates/prophetic-words-template.xlsx' },
+  { label: 'Word', href: '/templates/prophetic-words-template.docx' },
+]
+
 interface PropheticImportDialogProps {
-  accessToken: string | undefined
-  sessionId: string
-  // The service's current list, edited in place when given.
+  title: string
+  // The current list, edited in place when given.
   current: PropheticWordList | null
   onClose: () => void
-  onSaved: () => Promise<void>
+  // Saves the reviewed list; a thrown Error's message shows in the dialog.
+  onSave: (list: PropheticWordList) => Promise<void>
+  // Extra fields above the list (e.g. a set's title and service).
+  extra?: ReactNode
+  // False while the extra fields are incomplete.
+  extraValid?: boolean
+  // Called after a file or paste is read (e.g. to suggest a title).
+  onRead?: (parsed: ParsedWordList, fileName: string | null) => void
 }
 
-export function PropheticImportDialog({ accessToken, sessionId, current, onClose, onSaved }: PropheticImportDialogProps) {
+export function PropheticImportDialog({
+  title,
+  current,
+  onClose,
+  onSave,
+  extra,
+  extraValid = true,
+  onRead,
+}: PropheticImportDialogProps) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [step, setStep] = useState<'source' | 'preview'>(current ? 'preview' : 'source')
   const [file, setFile] = useState<File | null>(null)
   const [pasted, setPasted] = useState('')
   const [reading, setReading] = useState(false)
   const [reference, setReference] = useState(current?.reference ?? '')
+  const [translation, setTranslation] = useState<string | null>(current?.translation ?? null)
   const [words, setWords] = useState<PropheticListWord[]>(current?.words ?? [])
   const [warnings, setWarnings] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
@@ -41,8 +63,10 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
     try {
       const parsed = file ? await readPropheticFile(file) : parsePropheticText(pasted)
       setReference(parsed.reference)
+      setTranslation(parsed.translation ?? null)
       setWords(parsed.words)
       setWarnings(parsed.warnings)
+      onRead?.(parsed, file?.name ?? null)
       setStep('preview')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'File not read. Paste the text instead.')
@@ -58,20 +82,16 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
     .map((w) => ({ text: w.text.trim(), reference: w.reference?.trim() || null }))
     .filter((w) => w.text)
   const tooLong = cleanWords.some((w) => w.text.length > MAX_WORD_LENGTH)
-  const hasReference = reference.trim().length > 0 || (cleanWords.length > 0 && cleanWords.every((w) => w.reference))
-  const canSave = hasReference && cleanWords.length > 0 && cleanWords.length <= MAX_WORDS && !tooLong
+  const canSave = extraValid && cleanWords.length > 0 && cleanWords.length <= MAX_WORDS && !tooLong
   const editWord = (index: number, change: Partial<PropheticListWord>) =>
     setWords((prev) => prev.map((w, j) => (j === index ? { ...w, ...change } : w)))
 
   const save = async () => {
-    if (!accessToken || !canSave) return
+    if (!canSave) return
     setSaving(true)
     setError('')
     try {
-      await setSessionPropheticWords({
-        data: { accessToken, sessionId, list: { reference: reference.trim(), translation: current?.translation ?? null, words: cleanWords } },
-      })
-      await onSaved()
+      await onSave({ reference: reference.trim(), translation, words: cleanWords })
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Word list not saved. Retry.')
@@ -84,7 +104,7 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
     <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
       <DialogContent className={`${SCROLLING_DIALOG_CLASS} sm:max-w-2xl`}>
         <DialogHeader>
-          <DialogTitle>{current ? 'Edit word list' : 'Import prophetic words'}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
         {step === 'source' ? (
@@ -106,7 +126,7 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
                 <Button type="button" variant="outline" className="h-11 sm:h-9" onClick={() => fileInput.current?.click()}>
                   <FileUp className="h-4 w-4" aria-hidden /> Choose file
                 </Button>
-                <span className="text-sm text-gray-500">{file ? file.name : 'PDF, Excel, CSV or text'}</span>
+                <span className="text-sm text-gray-500">{file ? file.name : 'PDF, Word, Excel, CSV or text'}</span>
                 {file && (
                   <button
                     type="button"
@@ -134,13 +154,25 @@ export function PropheticImportDialog({ accessToken, sessionId, current, onClose
               />
               <p className="mt-1 text-xs text-gray-500">Numbered lines, bullets, one word per line, or one verse per line.</p>
             </div>
+            <p className="text-xs text-gray-500">
+              Blank template:{' '}
+              {PROPHETIC_TEMPLATES.map((t, i) => (
+                <span key={t.href}>
+                  {i > 0 && ' · '}
+                  <a href={t.href} download className="font-medium text-[#8B1538] underline">
+                    {t.label}
+                  </a>
+                </span>
+              ))}
+            </p>
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
         ) : (
           <div className="space-y-4">
+            {extra}
             <div>
               <Label htmlFor="prophetic-reference">
-                Passage reference{perWord && <span className="font-normal text-gray-400"> (optional)</span>}
+                Passage reference <span className="font-normal text-gray-400">(optional)</span>
               </Label>
               <Input
                 id="prophetic-reference"

@@ -1105,6 +1105,8 @@ export interface ServiceSession {
   prophetic_prompt?: string | null
   // Word list imported for this service; wins over the prompt when set.
   prophetic_words?: PropheticWordList | null
+  // The saved set the word list was copied from; null when imported directly.
+  prophetic_set_id?: string | null
   qr_token: string
   is_open: boolean
   opened_at: string | null
@@ -1122,6 +1124,7 @@ export interface ServiceSessionInsert {
   title?: string | null
   prophetic_prompt?: string | null
   prophetic_words?: PropheticWordList | null
+  prophetic_set_id?: string | null
   qr_token?: string
   is_open?: boolean
   created_by?: string | null
@@ -1133,8 +1136,47 @@ export interface ServiceSessionUpdate {
   title?: string | null
   prophetic_prompt?: string | null
   prophetic_words?: PropheticWordList | null
+  prophetic_set_id?: string | null
   is_open?: boolean
   closed_at?: string | null
+}
+
+// A word list saved ahead of a service (prophetic_word_sets). Picking it for a
+// session copies `words` onto service_sessions.prophetic_words.
+export interface PropheticWordSet {
+  id: string
+  title: string
+  service_type_id: string | null
+  service_date: string | null
+  words: PropheticWordList
+  is_archived: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PropheticWordSetInsert {
+  title: string
+  service_type_id?: string | null
+  service_date?: string | null
+  words: PropheticWordList
+  is_archived?: boolean
+  created_by?: string | null
+}
+
+export type PropheticWordSetUpdate = Partial<PropheticWordSetInsert> & { updated_at?: string }
+
+// A set in lists and dropdowns: no word texts.
+export interface PropheticWordSetSummary {
+  id: string
+  title: string
+  service_type_id: string | null
+  service_type_name: string | null
+  service_date: string | null
+  reference: string
+  word_count: number
+  is_archived: boolean
+  updated_at: string
 }
 
 export interface ServiceSessionWithRelations extends ServiceSession {
@@ -1148,6 +1190,8 @@ export interface ServiceSessionWithRelations extends ServiceSession {
   // Verse list the prophetic prompt matches (session detail only). Computed
   // server-side, not a column.
   prophetic_set?: { topic: string; verse_count: number } | null
+  // The saved word set the session's list came from (session detail only).
+  word_set?: { id: string; title: string } | null
 }
 
 export interface AttendanceRecord {
@@ -1431,6 +1475,11 @@ export type Database = {
         Row: ServiceSession
         Insert: ServiceSessionInsert
         Update: ServiceSessionUpdate
+      }
+      prophetic_word_sets: {
+        Row: PropheticWordSet
+        Insert: PropheticWordSetInsert
+        Update: PropheticWordSetUpdate
       }
       attendance_records: {
         Row: AttendanceRecord

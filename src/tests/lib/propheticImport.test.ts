@@ -11,6 +11,7 @@ import {
   parsePropheticRows,
   parsePropheticText,
   pdfItemsToText,
+  parsePropheticDocx,
   splitVerse,
   unquote,
   type ParsedWordList,
@@ -75,7 +76,7 @@ describe('parsePropheticText', () => {
     expect(texts(parsed)).toEqual(['A word that repeats itself.', 'Another full prophetic word.'])
     expect(parsed.warnings).toContain('1 repeated word removed.')
     expect(parsed.warnings).toContain('1 short line skipped.')
-    expect(parsed.warnings).toContain('No passage reference found. Type it in.')
+    expect(parsed.warnings).toContain('No passage reference found. Optional.')
   })
 
   it('says when nothing was found', () => {
@@ -167,6 +168,128 @@ describe('parsePropheticRows (Excel / CSV)', () => {
 
   it('strips numbering typed into the same cell', () => {
     expect(texts(parsePropheticRows([['1. A numbered word in one cell.']]))).toEqual(['A numbered word in one cell.'])
+  })
+})
+
+describe('pdfItemsToText: two columns', () => {
+  // A two-column numbered list, like a Word page exported to PDF: the right
+  // column's lines sit between the left column's baselines.
+  const item = (str: string, x: number, y: number, width = 200) => ({ str, x, y, width, height: 11 })
+  const items = [
+    item('Main Scripture: Nehemiah 2:17–18 : “No man is an island.', 18, 757, 570),
+    item('17.', 360, 726, 14),
+    item('The higher you rise, the more you need', 378, 726),
+    item('1.', 54, 696, 8),
+    item('God never intended you to build your future', 72, 696, 216),
+    item('humility and accountability.', 378, 706),
+    item('without Him.', 72, 676, 60),
+    item('18.', 360, 685, 14),
+    item('Allow wise and faithful people to help.', 378, 685),
+    item('2.', 54, 655, 8),
+    item('No achievement is worth pursuing.', 72, 655),
+  ]
+
+  it('reads the left column, then the right one, heading first', () => {
+    const parsed = parsePropheticText(pdfItemsToText(items))
+    expect(parsed.reference).toBe('Nehemiah 2:17-18')
+    expect(texts(parsed)).toEqual([
+      'God never intended you to build your future without Him.',
+      'No achievement is worth pursuing.',
+      'The higher you rise, the more you need humility and accountability.',
+      'Allow wise and faithful people to help.',
+    ])
+  })
+
+  it('keeps a one-column list with a wide hanging indent in order', () => {
+    // Numbers far left of the text, on a slightly different baseline.
+    const list = [1, 2, 3, 4].flatMap((n) => [
+      item(`${n}.`, 54, 700 - n * 30 + 3, 8),
+      item(`Word number ${n} of this list.`, 100, 700 - n * 30),
+    ])
+    expect(texts(parsePropheticText(pdfItemsToText(list)))).toEqual([
+      'Word number 1 of this list.',
+      'Word number 2 of this list.',
+      'Word number 3 of this list.',
+      'Word number 4 of this list.',
+    ])
+  })
+
+  it('keeps a reference | text table in row order', () => {
+    const table = [
+      item('Psalm 46:1', 54, 700, 60),
+      item('God is our refuge and strength.', 200, 700),
+      item('Isaiah 40:31', 54, 680, 60),
+      item('They shall renew their strength.', 200, 680),
+      item('Joshua 24:15', 54, 660, 60),
+      item('We will serve the Lord.', 200, 660),
+    ]
+    expect(pdfItemsToText(table).split('\n')[0]).toBe('Psalm 46:1 God is our refuge and strength.')
+  })
+})
+
+describe('Word documents (.docx)', () => {
+  const doc = (body: string) =>
+    `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`
+  const p = (text: string, listed = false) =>
+    `<w:p>${listed ? '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' : ''}<w:r><w:t>${text}</w:t></w:r></w:p>`
+  const row = (...cells: string[]) => `<w:tr>${cells.map((c) => `<w:tc>${p(c)}</w:tc>`).join('')}</w:tr>`
+
+  it('reads auto-numbered paragraphs as words, the title as a heading', () => {
+    const parsed = parsePropheticDocx(
+      doc(p('Prophetic Words') + p('God sees you in the quiet places.', true) + p('You are not forgotten by the Father.', true)),
+    )
+    expect(parsed.reference).toBe('')
+    expect(texts(parsed)).toEqual(['God sees you in the quiet places.', 'You are not forgotten by the Father.'])
+  })
+
+  it('skips numbering switched off (numId 0) and reads content controls', () => {
+    const off = '<w:p><w:pPr><w:numPr><w:numId w:val="0"/></w:numPr></w:pPr><w:r><w:t>Heading with numbering off</w:t></w:r></w:p>'
+    const sdt = `<w:sdt><w:sdtContent>${p('A word inside a content control.', true)}${p('Another word in the control.', true)}</w:sdtContent></w:sdt>`
+    const parsed = parsePropheticDocx(doc(off + sdt))
+    expect(texts(parsed)).toEqual(['A word inside a content control.', 'Another word in the control.'])
+  })
+
+  it('prefers the paragraphs over a letterhead table', () => {
+    const letterhead = `<w:tbl>${row('Quest Laguna', 'Sunday service')}${row('Prepared by the prayer team', '')}</w:tbl>`
+    const parsed = parsePropheticDocx(
+      doc(letterhead + p('First prophetic word of the list.', true) + p('Second prophetic word of the list.', true) + p('Third prophetic word of the list.', true)),
+    )
+    expect(texts(parsed)).toEqual([
+      'First prophetic word of the list.',
+      'Second prophetic word of the list.',
+      'Third prophetic word of the list.',
+    ])
+  })
+
+  it('reads the template table with its reference and translation rows', () => {
+    const parsed = parsePropheticDocx(
+      doc(
+        p('Prophetic words template') +
+          `<w:tbl>${row('Passage reference', 'Nehemiah 2:17–18')}${row('Translation (optional)', '')}</w:tbl>` +
+          `<w:tbl>${row('No.', 'Reference (optional)', 'Prophetic word or verse')}${row('1', '', 'Build with God as your foundation.')}${row('2', 'Psalm 127:1', 'Unless the Lord builds the house, the builders labor in vain.')}</w:tbl>`,
+      ),
+    )
+    expect(parsed.reference).toBe('Nehemiah 2:17-18')
+    expect(parsed.translation).toBeNull()
+    expect(parsed.words).toEqual([
+      { reference: null, text: 'Build with God as your foundation.' },
+      { reference: 'Psalm 127:1', text: 'Unless the Lord builds the house, the builders labor in vain.' },
+    ])
+  })
+})
+
+describe('parsePropheticRows: template labels', () => {
+  it('takes the reference and translation from their label rows', () => {
+    const parsed = parsePropheticRows([
+      ['Passage reference', 'JOHN 6:1-14'],
+      ['Translation (optional)', 'NIV'],
+      [],
+      ['No.', 'Reference (optional)', 'Prophetic word or verse'],
+      [1, '', 'Give Jesus what you have.'],
+    ])
+    expect(parsed.reference).toBe('John 6:1-14')
+    expect(parsed.translation).toBe('NIV')
+    expect(texts(parsed)).toEqual(['Give Jesus what you have.'])
   })
 })
 

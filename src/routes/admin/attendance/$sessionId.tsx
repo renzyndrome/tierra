@@ -286,6 +286,7 @@ function SessionDetail() {
           prompt={info.prophetic_prompt ?? null}
           matchedSet={info.prophetic_set ?? null}
           words={asWordList(info.prophetic_words)}
+          wordSet={info.word_set ?? null}
           canWrite={canWrite}
           onSaved={loadAll}
         />
