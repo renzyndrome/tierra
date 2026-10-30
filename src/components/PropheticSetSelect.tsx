@@ -10,11 +10,21 @@ function shortDate(date: string): string {
   return Number.isNaN(d.getTime()) ? date : d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
 }
 
-/** One dropdown line: "Young Pro: Nehemiah 2:17-18 · 30 words · Oct 23". */
+/** One dropdown line: "Young Pro: Nehemiah 2:17-18 · 30 words · Oct 23". The
+ *  date is left out when the title already has it. */
 export function formatSetOption(set: PropheticWordSetSummary): string {
-  return [set.title, `${set.word_count} words`, set.service_date ? shortDate(set.service_date) : null]
+  const date = set.service_date ? shortDate(set.service_date) : null
+  return [set.title, `${set.word_count} words`, date && !set.title.includes(date) ? date : null]
     .filter(Boolean)
     .join(' · ')
+}
+
+/** A set title from its service, date and topic (passage or heading):
+ *  "Young Pro: Oct 30, Rest is holy". Any part may be empty. */
+export function suggestSetTitle(serviceName: string | null, date: string, topic: string): string {
+  const service = (serviceName ?? '').replace(/\s+service$/i, '').trim()
+  const rest = [date ? shortDate(date) : '', topic.trim()].filter(Boolean).join(', ')
+  return (service && rest ? `${service}: ${rest}` : service || rest).slice(0, 120)
 }
 
 /** The set saved for this service type and date, if exactly one fits. */

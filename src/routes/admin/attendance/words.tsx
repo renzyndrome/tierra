@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../../../components/AuthProvider'
 import { AdminRoute } from '../../../components/ProtectedRoute'
 import { PropheticImportDialog } from '../../../components/PropheticImportDialog'
+import { suggestSetTitle } from '../../../components/PropheticSetSelect'
 import { Card, CardContent } from '../../../components/ui/card'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'
@@ -257,27 +258,38 @@ interface SetDialogProps {
 
 function SetDialog({ accessToken, editing, serviceTypes, onClose, onSaved }: SetDialogProps) {
   const [title, setTitle] = useState(editing.title)
+  // A new set's title follows its service, date and topic until staff type
+  // their own. An existing set keeps its saved title.
+  const [titleTyped, setTitleTyped] = useState(Boolean(editing.setId))
+  const [topic, setTopic] = useState({ text: '', fileName: '' })
   const [serviceTypeId, setServiceTypeId] = useState(editing.serviceTypeId)
   const [serviceDate, setServiceDate] = useState(editing.serviceDate)
   const field = 'mt-1 h-11 sm:h-9 w-full rounded-md border border-gray-300 bg-white px-3 text-base md:text-sm focus:ring-2 focus:ring-[#8B1538] outline-none'
+  const serviceName = serviceTypes.find((t) => t.id === serviceTypeId)?.name ?? null
+  const shownTitle = titleTyped
+    ? title
+    : suggestSetTitle(serviceName, serviceDate, topic.text) || topic.fileName.slice(0, 120)
 
   return (
     <PropheticImportDialog
       title={editing.setId ? 'Edit word set' : 'New word set'}
       current={editing.list}
       onClose={onClose}
-      extraValid={title.trim().length > 0}
+      extraValid={shownTitle.trim().length > 0}
       onRead={(parsed, fileName) => {
-        // Suggest a title from the passage, else the file name.
-        if (title.trim()) return
-        setTitle((parsed.reference || fileName?.replace(/\.[^.]+$/, '') || '').slice(0, 120))
+        // Title topic: the passage, else the heading; the file name only when
+        // nothing else is known.
+        setTopic({
+          text: parsed.reference || parsed.heading || '',
+          fileName: fileName?.replace(/\.[^.]+$/, '') ?? '',
+        })
       }}
       onSave={async (list) => {
         await savePropheticSet({
           data: {
             accessToken,
             setId: editing.setId,
-            title: title.trim(),
+            title: shownTitle.trim(),
             serviceTypeId: serviceTypeId || null,
             serviceDate: serviceDate || null,
             list,
@@ -291,9 +303,12 @@ function SetDialog({ accessToken, editing, serviceTypes, onClose, onSaved }: Set
             <Label htmlFor="set-title">Title</Label>
             <Input
               id="set-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Young Pro: Nehemiah 2:17-18"
+              value={shownTitle}
+              onChange={(e) => {
+                setTitle(e.target.value)
+                setTitleTyped(true)
+              }}
+              placeholder="e.g. Young Pro: Oct 30, Nehemiah 2:17-18"
               maxLength={120}
               className="mt-1 h-11 sm:h-9"
             />

@@ -15,6 +15,9 @@ import type { PropheticListWord } from './propheticWord'
 
 export interface ParsedWordList {
   reference: string
+  // The heading above the list when it is not a reference (e.g. the sermon
+  // theme). Used to suggest a set title.
+  heading?: string
   // Bible translation, from a template's "Translation" row; null when none.
   translation?: string | null
   words: PropheticListWord[]
@@ -123,9 +126,19 @@ export function parsePropheticText(raw: string): ParsedWordList {
     .filter((l) => l && !PAGE_NUMBER.test(l))
 
   let reference = ''
+  let heading = ''
   const numberedCount = lines.filter((l) => NUMBERED.test(l) || BULLETED.test(l)).length
   const verseCount = lines.filter((l) => VERSE_LINE.test(l)).length
   const items: string[] = []
+  // Heading lines above the first word. A PDF repeats them at the top of each
+  // page: there they are skipped, not joined to the last word of the page before.
+  const headings = new Set<string>()
+  const readHeading = (line: string) => {
+    headings.add(line.toLowerCase())
+    const ref = findReference(line)
+    if (ref) reference ||= ref
+    else if (!heading && !HEADER_CELL.test(line)) heading = line.replace(/[.\s]+$/, '')
+  }
 
   if (verseCount >= 2 && numberedCount < 2) {
     // Each verse line starts a word; any other line continues it (a capital
@@ -138,8 +151,8 @@ export function parsePropheticText(raw: string): ParsedWordList {
         current = line
         continue
       }
-      if (current !== null) current = `${current} ${line}`
-      else if (!reference) reference = findReference(line) ?? ''
+      if (current === null) readHeading(line)
+      else if (!headings.has(line.toLowerCase())) current = `${current} ${line}`
     }
     if (current !== null) items.push(current)
   } else if (numberedCount >= 2) {
@@ -151,13 +164,9 @@ export function parsePropheticText(raw: string): ParsedWordList {
         current = m[1]
         continue
       }
-      const ref = findReference(line)
-      if (ref && current === null && !reference) {
-        reference = ref
-        continue
-      }
       // Heading text before the first item; wrapped text after it.
-      if (current !== null) current = `${current} ${line}`
+      if (current === null) readHeading(line)
+      else if (!headings.has(line.toLowerCase())) current = `${current} ${line}`
     }
     if (current !== null) items.push(current)
   } else {
@@ -175,7 +184,8 @@ export function parsePropheticText(raw: string): ParsedWordList {
       }
     }
   }
-  return finish(reference, items, [])
+  const parsed = finish(reference, items, [])
+  return heading ? { ...parsed, heading } : parsed
 }
 
 /** Parses spreadsheet rows (first sheet) into a word list: one word per row,
