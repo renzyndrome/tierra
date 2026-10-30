@@ -130,7 +130,9 @@ reference, the service and questlaguna.org. Also fits a social story.
 
 1. **Service Attendance**, then **Prophetic words**, then **New word set**.
 2. **Choose file** or paste the words (steps below), then **Read words**.
-3. Above the words: **Title**, **Service** and **Date** of the service.
+3. Above the words: **Title**, **Service** and **Date** of the service. The
+   title fills in from the service, the date and the passage or heading, for
+   example "Young Pro: Oct 30, Nehemiah 2:17-18". Type over it to change it.
 4. **Save list**.
 - A new session for that service and date starts with the set already selected
   in **Prophetic words**. Choose another set, or **None**, if needed.

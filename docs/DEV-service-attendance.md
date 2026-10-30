@@ -125,7 +125,15 @@ the data model, and the rules that are easy to break.
     other line continues it, capitals included. `splitVerse` also runs on every
     numbered item and spreadsheet row. Wrapping quote marks are dropped
     (`unquote`).
-  - The heading becomes the reference.
+  - The heading becomes the reference. A heading that is not a reference comes
+    back as `heading` (generic "Prophetic words" lines excluded). Heading lines
+    above the first word are remembered: the same line later (a PDF repeats it
+    on each page) is skipped, not joined to the last word of the page before.
+  - Set title: `suggestSetTitle` (`PropheticSetSelect.tsx`) builds
+    "Young Pro: Oct 30, <reference or heading>" from the dialog's service, date
+    and the parsed topic; it follows those fields until staff type a title.
+    An edited set keeps its saved title. `formatSetOption` drops the date when
+    the title already holds it.
   - Numbered lines and bullets become words; continuation lines are joined.
   - Without numbering, one word per line, joining sentence continuations.
   - Page numbers, repeats (same reference and text, any case), and lines under

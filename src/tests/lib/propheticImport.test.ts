@@ -82,6 +82,39 @@ describe('parsePropheticText', () => {
   it('says when nothing was found', () => {
     expect(parsePropheticText('   ').warnings).toContain('No words found. Check the file, or paste the text.')
   })
+
+  it('skips a heading repeated at the top of the next page', () => {
+    const parsed = parsePropheticText(
+      'Quiet is a gift.\n• First word that wraps onto\nthe next line.\n• Last word of page one ends here.\nQuiet is a gift.\n• First word of page two.',
+    )
+    expect(texts(parsed)).toEqual([
+      'First word that wraps onto the next line.',
+      'Last word of page one ends here.',
+      'First word of page two.',
+    ])
+    expect(parsed.heading).toBe('Quiet is a gift')
+    expect(parsed.reference).toBe('')
+  })
+
+  it('skips a repeated reference heading too, and keeps no heading for it', () => {
+    const parsed = parsePropheticText('LUKE 10:38-42\n1. Word one on page one.\nLUKE 10:38-42\n2. Word two on page two.')
+    expect(texts(parsed)).toEqual(['Word one on page one.', 'Word two on page two.'])
+    expect(parsed.reference).toBe('Luke 10:38-42')
+    expect(parsed.heading).toBeUndefined()
+  })
+
+  it('does not take a generic "Prophetic words" line as the heading', () => {
+    const parsed = parsePropheticText('Prophetic Words\n1. Word one for the list.\n2. Word two for the list.')
+    expect(parsed.heading).toBeUndefined()
+  })
+
+  it('skips a repeated heading in a verse list', () => {
+    const parsed = parsePropheticText(
+      'Strength verses\nPsalm 27:14 - Wait for the Lord; be strong.\nStrength verses\nNehemiah 8:10 - The joy of the Lord is your strength.',
+    )
+    expect(texts(parsed)).toEqual(['Wait for the Lord; be strong.', 'The joy of the Lord is your strength.'])
+    expect(parsed.heading).toBe('Strength verses')
+  })
 })
 
 describe('verse lists: one verse per line, each with its own reference', () => {
