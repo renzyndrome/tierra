@@ -9,11 +9,12 @@ import { asWordList, type PropheticWordList } from '../../lib/propheticWord'
 
 /** The stored form of a list: trimmed, empty per-word references as null. */
 export function storedWordList(list: z.infer<typeof propheticWordListSchema>): PropheticWordList {
-  return {
+  const stored: PropheticWordList = {
     reference: list.reference,
     translation: list.translation || null,
     words: list.words.map((w) => ({ text: w.text, reference: w.reference || null })),
   }
+  return list.kind === 'message' ? { ...stored, kind: 'message' } : stored
 }
 
 /** A set's words for copying onto a session; throws when the set is missing. */

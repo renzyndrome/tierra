@@ -2,7 +2,8 @@
 // import a file (PDF, Word, Excel, CSV, text) or paste, review the words, and
 // give the set a title and the service and date it is for. The create-session
 // dialog preselects the set for that service and date; picking a set copies its
-// words onto the session.
+// words onto the session. A set can instead hold one welcome message, shown in
+// full after check-in (e.g. for a retreat).
 
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useState } from 'react'
@@ -10,6 +11,7 @@ import { useAuth } from '../../../components/AuthProvider'
 import { AdminRoute } from '../../../components/ProtectedRoute'
 import { PropheticImportDialog } from '../../../components/PropheticImportDialog'
 import { suggestSetTitle } from '../../../components/PropheticSetSelect'
+import { WelcomeMessageDialog } from '../../../components/WelcomeMessageDialog'
 import { Card, CardContent } from '../../../components/ui/card'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'
@@ -45,6 +47,7 @@ function formatDate(date: string | null): string {
 // The set being edited: null fields for a new set.
 interface Editing {
   setId: string | null
+  kind: 'words' | 'message'
   title: string
   serviceTypeId: string
   serviceDate: string
@@ -108,6 +111,7 @@ function PropheticSetsPage() {
       if (!full) throw new Error('Word set not found.')
       setEditing({
         setId: set.id,
+        kind: set.kind,
         title: set.title,
         serviceTypeId: set.service_type_id ?? '',
         serviceDate: set.service_date ?? '',
@@ -138,12 +142,24 @@ function PropheticSetsPage() {
             </p>
           </div>
           {canWrite && (
-            <Button
-              onClick={() => setEditing({ setId: null, title: '', serviceTypeId: '', serviceDate: '', list: null })}
-              className="bg-[#8B1538] hover:bg-[#6B0F2B]"
-            >
-              New word set
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setEditing({ setId: null, kind: 'message', title: '', serviceTypeId: '', serviceDate: '', list: null })
+                }
+              >
+                New welcome message
+              </Button>
+              <Button
+                onClick={() =>
+                  setEditing({ setId: null, kind: 'words', title: '', serviceTypeId: '', serviceDate: '', list: null })
+                }
+                className="bg-[#8B1538] hover:bg-[#6B0F2B]"
+              >
+                New word set
+              </Button>
+            </div>
           )}
         </div>
 
@@ -184,7 +200,7 @@ function PropheticSetsPage() {
                       {[
                         set.service_type_name ?? 'Any service',
                         formatDate(set.service_date),
-                        `${set.word_count} words`,
+                        set.kind === 'message' ? 'Welcome message' : `${set.word_count} words`,
                         set.reference || null,
                       ]
                         .filter(Boolean)
@@ -264,11 +280,53 @@ function SetDialog({ accessToken, editing, serviceTypes, onClose, onSaved }: Set
   const [topic, setTopic] = useState({ text: '', fileName: '' })
   const [serviceTypeId, setServiceTypeId] = useState(editing.serviceTypeId)
   const [serviceDate, setServiceDate] = useState(editing.serviceDate)
-  const field = 'mt-1 h-11 sm:h-9 w-full rounded-md border border-gray-300 bg-white px-3 text-base md:text-sm focus:ring-2 focus:ring-[#8B1538] outline-none'
   const serviceName = serviceTypes.find((t) => t.id === serviceTypeId)?.name ?? null
+  const isMessage = editing.kind === 'message'
   const shownTitle = titleTyped
     ? title
-    : suggestSetTitle(serviceName, serviceDate, topic.text) || topic.fileName.slice(0, 120)
+    : isMessage
+      ? suggestSetTitle(serviceName, serviceDate, 'Welcome message')
+      : suggestSetTitle(serviceName, serviceDate, topic.text) || topic.fileName.slice(0, 120)
+  const save = async (list: PropheticWordList) => {
+    await savePropheticSet({
+      data: {
+        accessToken,
+        setId: editing.setId,
+        title: shownTitle.trim(),
+        serviceTypeId: serviceTypeId || null,
+        serviceDate: serviceDate || null,
+        list,
+      },
+    })
+    await onSaved()
+  }
+  const extra = (
+    <SetFields
+      title={shownTitle}
+      onTitle={(value) => {
+        setTitle(value)
+        setTitleTyped(true)
+      }}
+      serviceTypeId={serviceTypeId}
+      onServiceType={setServiceTypeId}
+      serviceDate={serviceDate}
+      onServiceDate={setServiceDate}
+      serviceTypes={serviceTypes}
+    />
+  )
+
+  if (isMessage) {
+    return (
+      <WelcomeMessageDialog
+        title={editing.setId ? 'Edit welcome message' : 'New welcome message'}
+        current={editing.list?.words[0]?.text ?? ''}
+        onClose={onClose}
+        extraValid={shownTitle.trim().length > 0}
+        onSave={save}
+        extra={extra}
+      />
+    )
+  }
 
   return (
     <PropheticImportDialog
@@ -284,63 +342,67 @@ function SetDialog({ accessToken, editing, serviceTypes, onClose, onSaved }: Set
           fileName: fileName?.replace(/\.[^.]+$/, '') ?? '',
         })
       }}
-      onSave={async (list) => {
-        await savePropheticSet({
-          data: {
-            accessToken,
-            setId: editing.setId,
-            title: shownTitle.trim(),
-            serviceTypeId: serviceTypeId || null,
-            serviceDate: serviceDate || null,
-            list,
-          },
-        })
-        await onSaved()
-      }}
-      extra={
-        <div className="grid gap-3 rounded-md bg-gray-50 p-3 sm:grid-cols-3">
-          <div className="sm:col-span-3">
-            <Label htmlFor="set-title">Title</Label>
-            <Input
-              id="set-title"
-              value={shownTitle}
-              onChange={(e) => {
-                setTitle(e.target.value)
-                setTitleTyped(true)
-              }}
-              placeholder="e.g. Young Pro: Oct 30, Nehemiah 2:17-18"
-              maxLength={120}
-              className="mt-1 h-11 sm:h-9"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="set-service">Service</Label>
-            <select
-              id="set-service"
-              value={serviceTypeId}
-              onChange={(e) => setServiceTypeId(e.target.value)}
-              className={field}
-            >
-              <option value="">Any service</option>
-              {serviceTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="set-date">Date</Label>
-            <Input
-              id="set-date"
-              type="date"
-              value={serviceDate}
-              onChange={(e) => setServiceDate(e.target.value)}
-              className="mt-1 h-11 sm:h-9"
-            />
-          </div>
-        </div>
-      }
+      onSave={save}
+      extra={extra}
     />
+  )
+}
+
+interface SetFieldsProps {
+  title: string
+  onTitle: (value: string) => void
+  serviceTypeId: string
+  onServiceType: (id: string) => void
+  serviceDate: string
+  onServiceDate: (date: string) => void
+  serviceTypes: ServiceType[]
+}
+
+// Title, service and date of a set, above its words or message.
+function SetFields({
+  title,
+  onTitle,
+  serviceTypeId,
+  onServiceType,
+  serviceDate,
+  onServiceDate,
+  serviceTypes,
+}: SetFieldsProps) {
+  const field = 'mt-1 h-11 sm:h-9 w-full rounded-md border border-gray-300 bg-white px-3 text-base md:text-sm focus:ring-2 focus:ring-[#8B1538] outline-none'
+  return (
+    <div className="grid gap-3 rounded-md bg-gray-50 p-3 sm:grid-cols-3">
+      <div className="sm:col-span-3">
+        <Label htmlFor="set-title">Title</Label>
+        <Input
+          id="set-title"
+          value={title}
+          onChange={(e) => onTitle(e.target.value)}
+          placeholder="e.g. Young Pro: Oct 30, Nehemiah 2:17-18"
+          maxLength={120}
+          className="mt-1 h-11 sm:h-9"
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <Label htmlFor="set-service">Service</Label>
+        <select id="set-service" value={serviceTypeId} onChange={(e) => onServiceType(e.target.value)} className={field}>
+          <option value="">Any service</option>
+          {serviceTypes.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <Label htmlFor="set-date">Date</Label>
+        <Input
+          id="set-date"
+          type="date"
+          value={serviceDate}
+          onChange={(e) => onServiceDate(e.target.value)}
+          className="mt-1 h-11 sm:h-9"
+        />
+      </div>
+    </div>
   )
 }

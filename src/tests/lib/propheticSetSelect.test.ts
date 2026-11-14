@@ -13,6 +13,7 @@ const set = (id: string, typeId: string | null, date: string | null, title = `Se
   service_date: date,
   reference: '',
   word_count: 30,
+  kind: 'words',
   is_archived: false,
   updated_at: '2026-10-23T00:00:00Z',
 })
@@ -37,6 +38,14 @@ describe('formatSetOption', () => {
       'Young Pro: Nehemiah 2:17-18 · 30 words · Oct 23',
     )
     expect(formatSetOption(set('c', null, null, 'Undated'))).toBe('Undated · 30 words')
+  })
+
+  it('names a welcome message instead of a word count', () => {
+    const message = { ...set('m', 'qrp', '2026-11-14', 'Retreat welcome'), kind: 'message' as const, word_count: 1 }
+    expect(formatSetOption(message)).toBe('Retreat welcome · Welcome message · Nov 14')
+    expect(formatSetOption({ ...message, title: 'Quest Retreat Prep: Nov 14, Welcome message' })).toBe(
+      'Quest Retreat Prep: Nov 14, Welcome message',
+    )
   })
 
   it('leaves out the date when the title already has it', () => {

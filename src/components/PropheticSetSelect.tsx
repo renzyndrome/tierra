@@ -14,7 +14,8 @@ function shortDate(date: string): string {
  *  date is left out when the title already has it. */
 export function formatSetOption(set: PropheticWordSetSummary): string {
   const date = set.service_date ? shortDate(set.service_date) : null
-  return [set.title, `${set.word_count} words`, date && !set.title.includes(date) ? date : null]
+  const size = set.kind === 'message' ? (set.title.includes('Welcome message') ? null : 'Welcome message') : `${set.word_count} words`
+  return [set.title, size, date && !set.title.includes(date) ? date : null]
     .filter(Boolean)
     .join(' · ')
 }
@@ -47,6 +48,9 @@ interface PropheticSetSelectProps {
 }
 
 export function PropheticSetSelect({ sets, value, onChange, preselected }: PropheticSetSelectProps) {
+  const after = sets.find((s) => s.id === value)?.kind === 'message'
+    ? 'Welcome message after QR check-in.'
+    : 'One random word per QR check-in.'
   return (
     <div>
       <Label htmlFor="svc-word-set">
@@ -68,8 +72,8 @@ export function PropheticSetSelect({ sets, value, onChange, preselected }: Proph
       <p className="mt-1 text-xs text-gray-400">
         {value
           ? preselected
-            ? 'Set for this service and date. One random word per QR check-in.'
-            : 'One random word per QR check-in.'
+            ? `Set for this service and date. ${after}`
+            : after
           : sets.length
             ? 'No prophetic word after QR check-in.'
             : 'No saved word sets. Add them under Prophetic words.'}

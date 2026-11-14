@@ -721,6 +721,78 @@ test.describe('Admin — Service Attendance', () => {
     }
   })
 
+  test('welcome message: a saved message shows in full after check-in', async ({ page, browser, baseURL }) => {
+    test.setTimeout(150_000)
+    await loginAsAdmin(page)
+    // A date with no real set: 41 days ahead.
+    const date = manilaDate(41)
+    const title = `E2E MESSAGE ${Date.now()}`
+    const message = 'WELCOME, E2E GUESTS!\n\nFirst line of the message.\nSecond line, same paragraph.\n\nLast paragraph.'
+    let sessionUrl = ''
+
+    // 1. Save a welcome message for the default service and that date.
+    await page.goto('/admin/attendance/words')
+    await page.getByRole('button', { name: /^new welcome message$/i }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.locator('#set-service').selectOption({ index: 1 })
+    await dialog.locator('#set-date').fill(date)
+    await expect(dialog.locator('#set-title')).toHaveValue(/Welcome message$/)
+    await dialog.locator('#set-title').fill(title)
+    await dialog.locator('#welcome-message').fill(message)
+    await dialog.getByRole('button', { name: /^save message$/i }).click()
+    await expect(dialog).toBeHidden({ timeout: 15_000 })
+    const card = page.locator('[data-slot="card"]', { hasText: title })
+    await expect(card).toContainText('Welcome message')
+
+    try {
+      // 2. A session for that service and date starts with the message.
+      await page.goto('/admin/attendance')
+      await page.getByRole('button', { name: /start a session|start your first session/i }).first().click()
+      await page.locator('#svc-date').fill(date)
+      await expect(page.locator('#svc-word-set option:checked')).toContainText(title)
+      await expect(page.getByText('Set for this service and date. Welcome message after QR check-in.')).toBeVisible()
+      await page.getByLabel(/^label/i).fill(`E2E MESSAGE SESSION ${Date.now()}`)
+      await page.getByRole('button', { name: /create & open/i }).click()
+      await page.waitForURL(/\/admin\/attendance\/[0-9a-f-]{36}/, { timeout: 15_000 })
+      await expect(page.getByRole('button', { name: /delete session/i })).toBeVisible({ timeout: 15_000 })
+      sessionUrl = page.url()
+      await expect(page.getByText(`Set: ${title}. Welcome message after QR check-in`)).toBeVisible()
+      await expect(page.getByRole('button', { name: /edit message/i })).toBeVisible()
+
+      // 3. A guest check-in shows the whole message: heading, then paragraphs.
+      const token = await readQrToken(page)
+      const guestCtx = await browser.newContext({ baseURL })
+      const guest = await guestCtx.newPage()
+      await guest.goto(`/checkin/${token}`)
+      await guest.getByLabel(/your name/i).fill(`E2E Message ${Date.now()}`)
+      await guest.getByRole('button', { name: /^check in$/i }).click()
+      const shown = guest.getByTestId('welcome-message')
+      await expect(shown).toBeVisible({ timeout: 15_000 })
+      await expect(shown.locator('p').first()).toHaveText('WELCOME, E2E GUESTS!')
+      await expect(shown).toContainText('Second line, same paragraph.')
+      await expect(guest.getByText('Save this word')).toHaveCount(0)
+      if (process.env.E2E_SCREENSHOT_DIR) {
+        // After the 1.45 s fade-in (word-reveal).
+        await guest.waitForTimeout(1600)
+        await guest.screenshot({ path: `${process.env.E2E_SCREENSHOT_DIR}/welcome-message-checkin.png` })
+      }
+      await guestCtx.close()
+    } finally {
+      if (sessionUrl) await deleteSessionAt(page, sessionUrl)
+      // 4. Archive, then delete the test message.
+      await page.goto('/admin/attendance/words')
+      const setCard = page.locator('[data-slot="card"]', { hasText: title })
+      await setCard.getByRole('button', { name: /^archive$/i }).click()
+      await expect(setCard).toHaveCount(0, { timeout: 15_000 })
+      await page.getByRole('tab', { name: /^archived$/i }).click()
+      const remove = setCard.getByRole('button', { name: /^delete$/i })
+      await expect(remove).toBeEnabled({ timeout: 15_000 })
+      page.once('dialog', (d) => d.accept())
+      await remove.click()
+      await expect(setCard).toHaveCount(0, { timeout: 15_000 })
+    }
+  })
+
   test('prophetic word sets: a saved set is preselected for its service and date', async ({
     page,
     browser,

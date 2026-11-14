@@ -30,6 +30,8 @@ export interface PropheticLibrary {
 
 export interface PropheticWord extends PropheticVerse {
   translation: string | null
+  // 'message': a welcome message shown in full, not a prophetic word.
+  kind?: 'message'
 }
 
 // Words too common to signal a topic.
@@ -107,6 +109,9 @@ export interface PropheticWordList {
   reference: string
   translation?: string | null
   words: PropheticListWord[]
+  // 'message': one welcome message (words[0].text, line breaks kept) shown to
+  // everyone after check-in, in place of a random prophetic word.
+  kind?: 'message'
 }
 
 function asListWord(value: unknown): PropheticListWord | null {
@@ -121,16 +126,18 @@ function asListWord(value: unknown): PropheticListWord | null {
 /** The stored list when it is well-formed with at least one word, else null. */
 export function asWordList(value: unknown): PropheticWordList | null {
   if (!value || typeof value !== 'object') return null
-  const v = value as { reference?: unknown; translation?: unknown; words?: unknown }
+  const v = value as { reference?: unknown; translation?: unknown; words?: unknown; kind?: unknown }
   if (typeof v.reference !== 'string' || !Array.isArray(v.words)) return null
   const words = v.words.map(asListWord).filter((w): w is PropheticListWord => w !== null)
   if (words.length === 0) return null
-  return {
+  const list: PropheticWordList = {
     reference: v.reference,
     translation: typeof v.translation === 'string' && v.translation ? v.translation : null,
     words,
   }
+  return v.kind === 'message' ? { ...list, kind: 'message', words: words.slice(0, 1) } : list
 }
+
 
 /** One random word from a service's own list, or null for no usable list. */
 export function pickFromWordList(
@@ -139,7 +146,16 @@ export function pickFromWordList(
 ): PropheticWord | null {
   const list = asWordList(value)
   if (!list) return null
+  if (list.kind === 'message') return { reference: '', text: list.words[0].text, translation: null, kind: 'message' }
   const index = Math.min(list.words.length - 1, Math.floor(random() * list.words.length))
   const word = list.words[index]
   return { reference: word.reference || list.reference, text: word.text, translation: list.translation ?? null }
+}
+
+/** A welcome message split into paragraphs (blank lines). A short first
+ *  paragraph, with more after it, reads as the heading. */
+export function messageParts(text: string): { heading: string | null; paragraphs: string[] } {
+  const parts = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
+  const heading = parts.length > 1 && parts[0].length <= 60 ? parts[0] : null
+  return { heading, paragraphs: heading ? parts.slice(1) : parts }
 }

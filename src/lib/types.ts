@@ -1175,6 +1175,8 @@ export interface PropheticWordSetSummary {
   service_date: string | null
   reference: string
   word_count: number
+  // 'message': a welcome message instead of prophetic words.
+  kind: 'words' | 'message'
   is_archived: boolean
   updated_at: string
 }
