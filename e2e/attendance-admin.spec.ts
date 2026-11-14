@@ -136,7 +136,9 @@ async function loginAsAdmin(page: Page) {
   await page.locator('#email').fill(ADMIN_EMAIL)
   await page.locator('#password').fill(ADMIN_PASSWORD)
   await page.getByRole('button', { name: /sign in|log in|continue/i }).click()
-  await page.waitForURL(/\/admin/, { timeout: 15_000 })
+  // Match the path, not the whole URL: the live host (admin.questlaguna.org)
+  // already contains "/admin" right after "https:/".
+  await page.waitForURL((url) => url.pathname.startsWith('/admin'), { timeout: 15_000 })
 }
 
 test.beforeEach(async () => {
