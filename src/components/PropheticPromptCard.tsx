@@ -3,6 +3,7 @@
 // is imported straight onto this session (PDF, Word, spreadsheet or paste).
 // Older sessions may still carry a prompt (sermon topic) that picks a built-in
 // list from src/content/propheticWords.json; that field shows only for them.
+// A welcome message set (kind 'message') shows one message instead of a word.
 
 import { useState, useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
@@ -12,6 +13,7 @@ import { applyPropheticSetToSession, getPropheticSets } from '../server/function
 import type { PropheticWordList } from '../lib/propheticWord'
 import type { PropheticWordSetSummary } from '../lib/types'
 import { PropheticImportDialog } from './PropheticImportDialog'
+import { WelcomeMessageDialog } from './WelcomeMessageDialog'
 import { formatSetOption } from './PropheticSetSelect'
 import { Card, CardContent } from './ui/card'
 import { Button } from './ui/button'
@@ -41,6 +43,9 @@ function matchHint(prompt: string, set: PropheticSetSummary): string {
 }
 
 function listHint(words: PropheticWordList, wordSet: { title: string } | null): string {
+  if (words.kind === 'message') {
+    return `${wordSet ? `Set: ${wordSet.title}. ` : ''}Welcome message after QR check-in, in place of a prophetic word.`
+  }
   const count = `${words.words.length} words. One random word per QR check-in.`
   if (wordSet) return `Set: ${wordSet.title}, ${count}`
   return `Imported: ${words.reference ? `${words.reference}, ` : ''}${count}`
@@ -59,6 +64,7 @@ export function PropheticPromptCard({
   const [importing, setImporting] = useState(false)
   const [removing, setRemoving] = useState(false)
   const hasList = Boolean(words && words.words.length > 0)
+  const isMessage = words?.kind === 'message'
   const [value, setValue] = useState(prompt ?? '')
   const [saved, setSaved] = useState({ prompt: prompt ?? '', set: matchedSet })
   const [busy, setBusy] = useState(false)
@@ -180,7 +186,7 @@ export function PropheticPromptCard({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => setImporting(true)} className="h-11 sm:h-9">
-                <FileUp className="h-4 w-4" aria-hidden /> {hasList ? 'Edit words' : 'Import words'}
+                <FileUp className="h-4 w-4" aria-hidden /> {isMessage ? 'Edit message' : hasList ? 'Edit words' : 'Import words'}
               </Button>
               {hasList && (
                 <Button
@@ -233,7 +239,19 @@ export function PropheticPromptCard({
           </div>
         )}
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        {importing && (
+        {importing && isMessage && words && (
+          <WelcomeMessageDialog
+            title="Edit welcome message"
+            current={words.words[0]?.text ?? ''}
+            onClose={() => setImporting(false)}
+            onSave={async (list) => {
+              if (!accessToken) throw new Error('Signed out. Sign in again.')
+              await setSessionPropheticWords({ data: { accessToken, sessionId, list } })
+              await onSaved()
+            }}
+          />
+        )}
+        {importing && !isMessage && (
           <PropheticImportDialog
             title={hasList ? 'Edit word list' : 'Import prophetic words'}
             current={hasList ? words : null}

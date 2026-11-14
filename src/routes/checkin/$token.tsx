@@ -17,7 +17,7 @@ import { getCheckinSession, publicCheckIn } from '../../server/functions/attenda
 import { checkinFormSchema } from '../../lib/validations'
 import { CHURCH_NAME, LOGO_PATH } from '../../lib/constants'
 import type { CheckinResult } from '../../lib/types'
-import type { PropheticWord } from '../../lib/propheticWord'
+import { messageParts, type PropheticWord } from '../../lib/propheticWord'
 
 export const Route = createFileRoute('/checkin/$token')({
   component: CheckinPage,
@@ -115,7 +115,11 @@ function CheckinPage() {
   }
 
   if (result && info && result.propheticWord) {
-    return <WordScreen result={result} word={result.propheticWord} serviceName={info.serviceName} />
+    return result.propheticWord.kind === 'message' ? (
+      <MessageScreen result={result} text={result.propheticWord.text} serviceName={info.serviceName} />
+    ) : (
+      <WordScreen result={result} word={result.propheticWord} serviceName={info.serviceName} />
+    )
   }
 
   return (
@@ -433,6 +437,39 @@ function WordScreen({ result, word, serviceName }: { result: CheckinResult; word
         <div ref={saveSection} className="scroll-mt-16 pt-2">
           <StoryShare content={story} logoSrc={LOGO_PATH} />
         </div>
+        <div className="pb-10 pt-4">
+          <SiteFooter />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// A welcome message (e.g. for a retreat) in place of a prophetic word: the same
+// first screen, the whole message with its line breaks, no image to save.
+function MessageScreen({ result, text, serviceName }: { result: CheckinResult; text: string; serviceName: string }) {
+  const { heading, paragraphs } = messageParts(text)
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#1A0A0E] via-[#2D1218] to-[#6B0F2B] px-4">
+      <div className="mx-auto w-full max-w-md">
+        <section className="flex min-h-svh flex-col pt-6">
+          <div className="flex flex-1 flex-col justify-center pb-6">
+            <Brand />
+            <CheckedInLine result={result} serviceName={serviceName} large={false} />
+            <div className="word-reveal mt-7 px-1 text-center" data-testid="welcome-message">
+              {heading && (
+                <p className="text-xl font-bold leading-snug tracking-wide text-[#F8B4B4] text-balance">{heading}</p>
+              )}
+              <div className={`space-y-4 text-[17px] leading-relaxed text-[#FFF4F2] ${heading ? 'mt-4' : ''}`}>
+                {paragraphs.map((p, i) => (
+                  <p key={i} className="whitespace-pre-line text-pretty">
+                    {p}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
         <div className="pb-10 pt-4">
           <SiteFooter />
         </div>

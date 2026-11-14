@@ -37,6 +37,7 @@ function summarize(row: SetRow): PropheticWordSetSummary {
     service_date: row.service_date,
     reference: list?.reference ?? '',
     word_count: list?.words.length ?? 0,
+    kind: list?.kind === 'message' ? 'message' : 'words',
     is_archived: row.is_archived,
     updated_at: row.updated_at,
   }

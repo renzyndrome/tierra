@@ -142,6 +142,19 @@ reference, the service and questlaguna.org. Also fits a social story.
 - **Archive** hides an old set from the dropdown. Archived sets can be restored
   or deleted.
 
+**Welcome message (retreats and special services):** one message for everyone,
+in place of a random prophetic word.
+
+1. **Service Attendance**, then **Prophetic words**, then **New welcome message**.
+2. **Title**, **Service** and **Date**, then the **Message**. Blank lines split
+   paragraphs. A short first paragraph shows as the heading.
+3. **Save message**. A new session for that service and date starts with it.
+- After QR check-in, the guest sees the whole message. No image to save.
+- On a session page, **Edit message** changes that session's copy only.
+
+**Limited services:** Quest Retreat Prep and Quest Retreat - Life Encounter are
+listed after the regular services. They are hidden again after the retreat.
+
 **Blank templates:** for one fixed layout, use the **Excel** or **Word** template
 (links in the import window). Fill in the passage reference (optional), then one
 word or verse per row; a reference per row only for a list of different verses.

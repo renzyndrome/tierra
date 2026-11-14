@@ -38,6 +38,16 @@ the data model, and the rules that are easy to break.
   - `prophetic_prompt text`: legacy sermon topic. Picks a built-in list. The
     create dialog no longer sets it; the session card shows it only when set.
   - `prophetic_words jsonb`: `{reference, translation, words: [{text, reference}]}`.
+    Optional `kind: 'message'` (2026-11-14): a welcome message, one text in
+    `words[0].text` (line breaks kept, up to `MAX_MESSAGE_LENGTH` 1000 chars;
+    words stay at 400). `asWordList` keeps the kind; `pickFromWordList` returns
+    the whole message with `kind: 'message'`; the check-in page renders
+    `MessageScreen` (paragraphs via `messageParts`, no story image). Same jsonb
+    on `prophetic_word_sets`; no schema change. Editor: `WelcomeMessageDialog`.
+- Limited services (2026-11-14): `service_types` rows with no `default_day` and
+  `sort_order` 10+ (Quest Retreat Prep, Quest Retreat - Life Encounter). Retire
+  one with `is_active = false`; its sessions stay. Record:
+  `supabase/2026-11-14_retreat_services.sql` (gitignored).
     A list imported for this service; it wins over the prompt. A word's own
     `reference` (verse lists) wins over the list `reference`, which may then be
     ''. `asWordList` also reads the first format, `words: string[]`.
